@@ -8,11 +8,14 @@ final class PluginManager: ObservableObject {
     static let shared = PluginManager()
     static let disabledIdentifiersDefaultsKey = "plugins.disabledIdentifiers"
     static let preferencesDefaultsKey = "plugins.preferences.v1"
+    static let safeModeDefaultsKey = "plugins.safeMode"
 
     @Published private(set) var installedPlugins: [InstalledPlugin] = []
     @Published private(set) var bundledPlugins: [PluginPackageInspection] = []
     @Published private(set) var loadIssues: [PluginLoadIssue] = []
     @Published private(set) var preferencesByIdentifier: [String: PluginPreferences] = [:]
+    @Published private(set) var isSafeModeEnabled: Bool
+    @Published private(set) var permissionRevision = UUID()
 
     let pluginsDirectory: URL
 
@@ -21,6 +24,7 @@ final class PluginManager: ObservableObject {
     private let validator: PluginPackageValidator
     private let now: () -> Date
     private let bundledPluginsDirectory: URL?
+    private let permissionStore: PluginPermissionStore
 
     init(
         pluginsDirectory: URL? = nil,
@@ -35,6 +39,8 @@ final class PluginManager: ObservableObject {
         self.defaults = defaults
         self.now = now
         self.bundledPluginsDirectory = bundledPluginsDirectory
+        permissionStore = PluginPermissionStore(defaults: defaults)
+        isSafeModeEnabled = defaults.bool(forKey: Self.safeModeDefaultsKey)
         validator = PluginPackageValidator(
             fileManager: fileManager,
             hostVersion: hostVersion
@@ -52,14 +58,72 @@ final class PluginManager: ObservableObject {
         }
         preferencesByIdentifier = Self.loadPreferences(from: defaults)
         refresh()
+        permissionStore.migrateExistingInstallations(installedPlugins)
     }
 
     var enabledPlugins: [InstalledPlugin] {
-        installedPlugins.filter(\.isEnabled)
+        isSafeModeEnabled ? [] : installedPlugins.filter(\.isEnabled)
     }
 
     var enabledActionCount: Int {
-        enabledPlugins.reduce(0) { $0 + $1.manifest.actions.count }
+        enabledPlugins.reduce(0) { count, plugin in
+            count + plugin.manifest.actions.filter {
+                isAuthorized(pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest, actionID: $0.id)
+            }.count
+        }
+    }
+
+    func isAuthorized(pluginIdentifier: String, manifestDigest: String, actionID: String) -> Bool {
+        guard !isSafeModeEnabled,
+              let plugin = installedPlugins.first(where: {
+                  $0.id == pluginIdentifier && $0.manifestDigest == manifestDigest && $0.isEnabled
+              }),
+              let action = plugin.manifest.actions.first(where: { $0.id == actionID }),
+              permissionStore.hasReviewedManifest(identifier: plugin.id, digest: manifestDigest),
+              Set(plugin.manifest.capabilities).isSuperset(of: action.requiredCapabilities) else { return false }
+        return action.requiredCapabilities.allSatisfy {
+            permissionStore.isGranted($0, identifier: plugin.id, digest: manifestDigest)
+        }
+    }
+
+    func isRuntimeAuthorized(pluginIdentifier: String, manifestDigest: String) -> Bool {
+        guard !isSafeModeEnabled,
+              let plugin = installedPlugins.first(where: {
+                  $0.id == pluginIdentifier && $0.manifestDigest == manifestDigest && $0.isEnabled
+              }),
+              let runtime = plugin.manifest.runtime,
+              runtime.capabilities.contains(.backgroundExecution),
+              permissionStore.hasReviewedManifest(identifier: plugin.id, digest: manifestDigest),
+              Set(plugin.manifest.capabilities).isSuperset(of: runtime.capabilities) else { return false }
+        return runtime.capabilities.allSatisfy {
+            permissionStore.isGranted($0, identifier: plugin.id, digest: manifestDigest)
+        }
+    }
+
+    /// The toggle reports the stored per-capability choice even while the
+    /// plugin or emergency safe mode is disabled. Execution uses isAuthorized.
+    func isCapabilityGranted(_ capability: PluginCapability, for identifier: String) -> Bool {
+        guard let plugin = installedPlugins.first(where: { $0.id == identifier }),
+              plugin.manifest.capabilities.contains(capability) else { return false }
+        return permissionStore.isGranted(capability, identifier: identifier, digest: plugin.manifestDigest)
+    }
+
+    func setCapabilityGranted(_ capability: PluginCapability, granted: Bool, identifier: String) throws {
+        guard let plugin = installedPlugins.first(where: { $0.id == identifier }) else {
+            throw PluginSystemError.pluginNotFound(identifier)
+        }
+        guard plugin.manifest.capabilities.contains(capability) else {
+            throw PluginSystemError.actionUnavailable("the plug-in did not declare this capability")
+        }
+        try permissionStore.setGranted(capability, granted: granted, identifier: identifier, digest: plugin.manifestDigest)
+        permissionRevision = UUID()
+    }
+
+    func setSafeModeEnabled(_ enabled: Bool) {
+        guard isSafeModeEnabled != enabled else { return }
+        isSafeModeEnabled = enabled
+        defaults.set(enabled, forKey: Self.safeModeDefaultsKey)
+        permissionRevision = UUID()
     }
 
     var availableBundledPlugins: [PluginPackageInspection] {
@@ -187,7 +251,12 @@ final class PluginManager: ObservableObject {
             )
             try fileManager.moveItem(at: temporary, to: namedStagingPackage)
             temporaryExists = false
-            _ = try validator.inspectInstalledPackage(at: namedStagingPackage)
+            let stagedInspection = try validator.inspectInstalledPackage(at: namedStagingPackage)
+            guard stagedInspection.package.manifest == inspection.manifest,
+                  stagedInspection.package.manifestDigest == inspection.manifestDigest else {
+                throw PluginSystemError.packageChanged
+            }
+            try requireTrustedBundledIdentityIfNeeded(stagedInspection.package)
 
             if alreadyExists {
                 try? fileManager.removeItem(at: backup)
@@ -209,6 +278,11 @@ final class PluginManager: ObservableObject {
         } catch {
             throw PluginSystemError.installationFailed(error.localizedDescription)
         }
+        permissionStore.discardApprovals {
+            $0 != inspection.manifest.identifier && !fileManager.fileExists(atPath: packageURL(for: $0).path)
+        }
+        permissionStore.approveReviewedManifest(inspection.manifest, digest: inspection.manifestDigest)
+        permissionRevision = UUID()
         refresh()
     }
 
@@ -291,6 +365,11 @@ final class PluginManager: ObservableObject {
         defaults.set(Array(disabled).sorted(), forKey: Self.disabledIdentifiersDefaultsKey)
         preferencesByIdentifier.removeValue(forKey: identifier)
         persistPreferences()
+        permissionStore.remove(identifier: identifier)
+        // A later package claiming the same unverified community identifier
+        // must not inherit text cached by the removed publisher's script.
+        defaults.removeObject(forKey: "plugins.scriptData.v1." + identifier)
+        permissionRevision = UUID()
         refresh()
     }
 
@@ -423,6 +502,8 @@ final class PluginManager: ObservableObject {
                 true
             case .documentCommand, .showText, .copyText, .openURL:
                 false
+            case .appearancePanel, .notesPanel, .pageClipPanel, .relatedDocumentsPanel, .hoverTranslationPanel, .scriptPanel:
+                false
             }
         }
         // `dev.hwattakpdf.*` is the identity namespace used by the three
@@ -441,7 +522,7 @@ final class PluginManager: ObservableObject {
                 && $0.manifestDigest == inspection.manifestDigest
         }) else {
             throw PluginSystemError.invalidPackage(
-                "reserved HwattakPDF identities and web panel plug-ins must exactly match a HwattakPDF bundled package"
+                "reserved EmberPDF identities and web panel plug-ins must exactly match an EmberPDF bundled package"
             )
         }
     }

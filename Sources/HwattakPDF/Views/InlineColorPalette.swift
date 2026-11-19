@@ -53,6 +53,16 @@ struct InlineColorPalette: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($isHexFocused)
                     .onSubmit(commitHexInput)
+                    .onChange(of: hexInput) { _, value in
+                        // A complete custom color must be ready before an
+                        // enclosing Apply button fires, even if focus has not
+                        // left this field. Keep partial edits and caret intact.
+                        let hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+                        guard isHexFocused, digits.count == 6,
+                              let color = Self.color(forHex: hex) else { return }
+                        selection = color
+                    }
                     .onChange(of: isHexFocused) { _, focused in
                         if !focused { commitHexInput() }
                     }
@@ -71,7 +81,11 @@ struct InlineColorPalette: View {
             .font(.caption)
         }
         .onAppear { hexInput = currentHex }
-        .onChange(of: currentHex) { _, value in hexInput = value }
+        .onChange(of: currentHex) { _, value in
+            // Normalizing case or adding '#' while typing moves the caret and
+            // can overwrite a partial edit with the previous selected color.
+            if !isHexFocused { hexInput = value }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .accessibilityIdentifier("inline-color-palette")
@@ -139,7 +153,9 @@ struct InlineColorPalette: View {
             set: { value in
                 var components = [rgbColor.redComponent, rgbColor.greenComponent, rgbColor.blueComponent]
                 components[index] = CGFloat(value / 255)
+                isHexFocused = false
                 selection = NSColor(srgbRed: components[0], green: components[1], blue: components[2], alpha: 1)
+                hexInput = currentHex
             }
         )
     }

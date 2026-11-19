@@ -111,7 +111,21 @@ enum PDFRegionTextRecognizer {
         return PDFRegionTextSnapshot(image: image, imageToPage: pageToImage.inverted())
     }
 
-    static func recognize(_ snapshot: PDFRegionTextSnapshot) async throws -> [PDFRegionTextFragment] {
+    static func recognize(_ snapshot: PDFRegionTextSnapshot,
+                          textDrag: PDFVisualTextDrag? = nil) async throws -> [PDFRegionTextFragment] {
+        let lines = try await recognizeLines(snapshot)
+        if let textDrag {
+            return textDrag.fragments(from: lines, imageToPage: snapshot.imageToPage)
+        }
+        // Preserve Vision's reading order for an explicit rectangular region.
+        return lines.map { PDFRegionTextFragment(text: $0.text,
+            bounds: $0.bounds.applying(snapshot.imageToPage)) }
+    }
+
+    /// Cache only value-type text/geometry, never a bitmap or live PDFKit page.
+    /// A damaged page is recognized once so subsequent pointer updates can be
+    /// resolved immediately without re-running OCR for each drag rectangle.
+    static func recognizeLines(_ snapshot: PDFRegionTextSnapshot) async throws -> [PDFVisualTextLine] {
         try Task.checkCancellation()
         let cancellation = PDFRegionRecognitionCancellation()
         let worker = Task.detached(priority: .userInitiated) {
@@ -124,43 +138,38 @@ enum PDFRegionTextRecognizer {
                 cancellation.register(request)
                 defer { cancellation.unregister() }
                 try Task.checkCancellation()
-                let handler = VNImageRequestHandler(
-                    cgImage: snapshot.image,
-                    orientation: .up,
-                    options: [:]
-                )
+                let handler = VNImageRequestHandler(cgImage: snapshot.image, orientation: .up, options: [:])
                 try handler.perform([request])
                 try Task.checkCancellation()
-                let imageRect = CGRect(
-                    x: 0, y: 0,
-                    width: snapshot.image.width,
-                    height: snapshot.image.height
-                )
-                // Vision returns observations in reading order. Keep that order
-                // instead of sorting page coordinates, which would break /Rotate.
-                return (request.results ?? []).prefix(2_048).compactMap { observation -> PDFRegionTextFragment? in
-                    guard let candidate = observation.topCandidates(1).first else { return nil }
-                    let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { return nil }
-                    let normalized = observation.boundingBox
-                    let pixelBounds = CGRect(
-                        x: normalized.minX * imageRect.width,
-                        y: normalized.minY * imageRect.height,
-                        width: normalized.width * imageRect.width,
-                        height: normalized.height * imageRect.height
-                    ).intersection(imageRect)
-                    guard isUsable(pixelBounds) else { return nil }
-                    return PDFRegionTextFragment(
-                        text: text,
-                        bounds: pixelBounds.applying(snapshot.imageToPage)
-                    )
+                let imageRect = CGRect(x: 0, y: 0, width: snapshot.image.width, height: snapshot.image.height)
+                func pixels(_ normalized: CGRect) -> CGRect {
+                    CGRect(x: normalized.minX * imageRect.width,
+                           y: normalized.minY * imageRect.height,
+                           width: normalized.width * imageRect.width,
+                           height: normalized.height * imageRect.height).intersection(imageRect)
+                }
+                return (request.results ?? []).prefix(2_048).compactMap { observation -> PDFVisualTextLine? in
+                    guard let candidate = observation.topCandidates(1).first,
+                          !candidate.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+                    let text = candidate.string
+                    let bounds = pixels(observation.boundingBox)
+                    guard isUsable(bounds) else { return nil }
+                    let characterBounds: [CGRect?] = text.indices.map { index in
+                        guard !text[index].isWhitespace,
+                              let observation = try? candidate.boundingBox(for: index..<text.index(after: index)) else {
+                            return nil
+                        }
+                        let box = pixels(observation.boundingBox)
+                        return isUsable(box) ? box : nil
+                    }
+                    return PDFVisualTextLine(text: text, bounds: bounds, characterBounds: characterBounds)
                 }
             }
         }
         return try await withTaskCancellationHandler {
-            let fragments = try await worker.value
+            let lines = try await worker.value
             try Task.checkCancellation()
-            return fragments
+            return lines
         } onCancel: {
             worker.cancel()
             cancellation.cancel()
@@ -173,7 +182,7 @@ enum PDFRegionTextRecognizer {
             && !rect.isNull && !rect.isEmpty
     }
 
-    private static func displayTransform(cropBox: CGRect, rotation: Int) -> CGAffineTransform {
+    static func displayTransform(cropBox: CGRect, rotation: Int) -> CGAffineTransform {
         switch ((rotation % 360) + 360) % 360 {
         case 0:
             return CGAffineTransform(translationX: -cropBox.minX, y: -cropBox.minY)

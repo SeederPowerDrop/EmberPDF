@@ -32,6 +32,7 @@ struct AIAssistantMessage: Identifiable, Equatable {
     let id: UUID
     let role: AIAssistantRole
     let text: String
+    let images: [AIResponseImage]
     let citations: [AISourceCitation]
     let localCitations: [AILocalContextCitation]
     let providerName: String?
@@ -43,6 +44,7 @@ struct AIAssistantMessage: Identifiable, Equatable {
         id: UUID = UUID(),
         role: AIAssistantRole,
         text: String,
+        images: [AIResponseImage] = [],
         citations: [AISourceCitation] = [],
         localCitations: [AILocalContextCitation] = [],
         providerName: String? = nil,
@@ -51,6 +53,7 @@ struct AIAssistantMessage: Identifiable, Equatable {
         self.id = id
         self.role = role
         self.text = EncodedTextLimiter.limit(text, budget: Self.textBudget).text
+        self.images = AIResponseImage.bounded(images)
         // Normal network responses are checked by AIService. Keep the value
         // model safe as well because tests, offline adapters, and future plug-ins
         // can inject AICompletionResponse directly into the session.
@@ -217,23 +220,18 @@ final class AIAssistantSessionModel: ObservableObject {
         maximumCharacters: maximumUserPromptCharacters
     )
     static let storedConversationBudget = EncodedTextBudget(
-        maximumCharacters: 200_000
+        maximumCharacters: 500_000
     )
+    static let maximumStoredConversationMessages = 100
+    // One already accepted question/response may cross the soft boundary. It
+    // finishes visibly, then further sends stop instead of removing old turns.
+    static let restoredConversationBudget = EncodedTextBudget(
+        maximumCharacters: 500_000 + maximumUserPromptCharacters + AIAssistantMessage.maximumTextCharacters
+    )
+    static let maximumConversationImageBytes = 8 * 1_024 * 1_024
     static let transmittedConversationBudget = EncodedTextBudget(
         maximumCharacters: 60_000
     )
-
-    private struct ConversationProviderScope: Equatable {
-        let credentialScope: AIAPIKeyScope
-        let normalizedEndpoint: String
-
-        init(configuration: AIProviderConfiguration) {
-            credentialScope = AIAPIKeyScope(configuration: configuration)
-            normalizedEndpoint = AIEndpointPolicy.normalizedEndpoint(
-                configuration.baseURL
-            )
-        }
-    }
 
     private struct ContextPreparationSnapshot {
         let action: AIQuickAction?
@@ -244,6 +242,7 @@ final class AIAssistantSessionModel: ObservableObject {
         let requestedPageIndices: [Int]
         let configuration: AIProviderConfiguration
         let hasAPIKey: Bool
+        let requiresTransmissionConfirmation: Bool
         let allowsWebSearch: Bool
         let allowsMCPTools: Bool
         let conversation: [AIChatTurn]
@@ -292,6 +291,19 @@ final class AIAssistantSessionModel: ObservableObject {
     @Published var allowsWebSearch = false
     @Published var allowsMCPTools = false
     @Published private(set) var messages: [AIAssistantMessage] = []
+    @Published private(set) var conversations: [AIConversationSummary] = []
+    @Published private(set) var activeConversationID = UUID()
+    @Published private(set) var isConversationHistoryPersistent = false
+    @Published private(set) var historyErrorMessage: String?
+    private var conversationRecords: [AIConversationRecord] = []
+    private var deletedConversationIDs: Set<UUID> = []
+    private var liveConversationMessages: [UUID: [AIAssistantMessage]] = [:]
+    private var historyStore: (any AIConversationHistoryPersisting)?
+    private var historyDocumentURL: URL?
+    private var historyReadFailed = false
+    private var historyStorageLimitReached = false
+    static let maximumConversationCount = 100
+
     @Published private(set) var relatedPDFResults: [PDFRelatedDocumentResult] = []
     @Published var pendingConsent: AITransmissionConsent?
     @Published private(set) var mcpApprovalSession: AIMCPApprovalSession?
@@ -309,7 +321,7 @@ final class AIAssistantSessionModel: ObservableObject {
     /// Prevents a conversation produced by one provider/configuration from
     /// being forwarded after the global provider changed while this tab was
     /// inactive and therefore had no sidebar observing that change.
-    private var conversationProviderScope: ConversationProviderScope?
+    private var conversationProviderScope: AIConversationProviderScope?
 
     init(
         complete: @escaping CompleteHandler = { request, configuration in
@@ -391,7 +403,8 @@ final class AIAssistantSessionModel: ObservableObject {
         workspace: PDFWorkspaceState,
         documentCollection: MultiDocumentWorkspaceState?,
         configuration: AIProviderConfiguration,
-        hasAPIKey: Bool
+        hasAPIKey: Bool,
+        requiresTransmissionConfirmation: Bool = true
     ) {
         // These switches authorize one request only. Capture them below into
         // an immutable preparation/consent snapshot, then always return the UI
@@ -410,6 +423,10 @@ final class AIAssistantSessionModel: ObservableObject {
             )
             return
         }
+
+        guard canAppendConversationTurn() else { return }
+        if conversationRecords.allSatisfy({ $0.id != activeConversationID }),
+           !canCreateConversation() { return }
 
         let contextScope: PDFAIContextScope
         let requestedPageIndices: [Int]
@@ -474,12 +491,12 @@ final class AIAssistantSessionModel: ObservableObject {
             return
         }
 
-        let requestedProviderScope = ConversationProviderScope(
+        let requestedProviderScope = AIConversationProviderScope(
             configuration: configuration
         )
-        if let conversationProviderScope,
+        if !messages.isEmpty,
            conversationProviderScope != requestedProviderScope {
-            clearConversation()
+            guard beginNewConversation(preservingPrompt: true) else { return }
         }
         conversationProviderScope = requestedProviderScope
         errorMessage = nil
@@ -505,6 +522,7 @@ final class AIAssistantSessionModel: ObservableObject {
             requestedPageIndices: requestedPageIndices,
             configuration: configuration,
             hasAPIKey: hasAPIKey,
+            requiresTransmissionConfirmation: requiresTransmissionConfirmation,
             allowsWebSearch: allowsWebSearch,
             allowsMCPTools: allowsMCPTools,
             conversation: conversationTurns(),
@@ -555,6 +573,14 @@ final class AIAssistantSessionModel: ObservableObject {
         defer { resetOptionalToolChoices() }
         guard let consent = pendingConsent else { return }
         pendingConsent = nil
+        submit(consent)
+    }
+
+    /// Both transmission modes use the same validated, immutable request
+    /// snapshot. Skipping the preview changes only the confirmation step;
+    /// optional tools and later MCP approvals keep their per-request behavior.
+    private func submit(_ consent: AITransmissionConsent) {
+        resetOptionalToolChoices()
         let localCitations = consent.context.sources.map {
             AILocalContextCitation(
                 citationID: $0.citationID,
@@ -609,6 +635,10 @@ final class AIAssistantSessionModel: ObservableObject {
                 uniquelyMatchesConfiguredServer(request, in: session.configuration)
             })
         else { return }
+        guard canAppendConversationTurn() else {
+            cancelActiveRequest()
+            return
+        }
         let decisions = session.requests.compactMap { request -> AIMCPApprovalDecision? in
             guard let approved = mcpApprovalDecisions[request.approvalRequestID] else { return nil }
             return AIMCPApprovalDecision(
@@ -663,7 +693,7 @@ final class AIAssistantSessionModel: ObservableObject {
         phase = .idle
     }
 
-    func clearConversation() {
+    private func clearCurrentPresentation() {
         cancelActiveRequest()
         pendingConsent = nil
         mcpApprovalSession = nil
@@ -675,25 +705,264 @@ final class AIAssistantSessionModel: ObservableObject {
         phase = .idle
     }
 
-    func providerDidChange() {
-        cancelActiveRequest()
+    /// Clear only the selected conversation; saved conversations remain available.
+    func clearConversation() {
+        clearCurrentPresentation()
+        persistCurrentConversation()
+        activeConversationID = UUID()
         conversationProviderScope = nil
-        pendingConsent = nil
-        mcpApprovalSession = nil
-        mcpApprovalDecisions = [:]
-        resetOptionalToolChoices()
-        // Conversation is provider-specific and may contain proprietary model
-        // output. Do not forward it silently after switching providers.
-        messages = []
+        writeHistory()
+    }
+
+    var activeConversationTitle: String {
+        conversationRecords.first(where: { $0.id == activeConversationID })?.title
+            ?? L10n.string("ai.history.untitled", defaultValue: "새 대화")
+    }
+
+    func clearHistoryError() { historyErrorMessage = nil }
+
+    @discardableResult
+    func startNewConversation() -> Bool { beginNewConversation(preservingPrompt: false) }
+
+    private func canCreateConversation() -> Bool {
+        guard conversationRecords.count < Self.maximumConversationCount else {
+            historyErrorMessage = L10n.string("ai.history.error.limit", defaultValue: "PDF 하나에 대화를 100개까지 보관할 수 있습니다. 필요 없는 대화를 삭제한 뒤 새 대화를 시작해 주세요.")
+            return false
+        }
+        return true
+    }
+
+    private func beginNewConversation(preservingPrompt: Bool) -> Bool {
+        guard canCreateConversation() else { return false }
+        if messages.isEmpty, conversationRecords.allSatisfy({ $0.id != activeConversationID }) {
+            cancelActiveRequest()
+            if !preservingPrompt { prompt = "" }
+            return true
+        }
+        persistCurrentConversation()
+        clearCurrentPresentation()
+        activeConversationID = UUID()
+        conversationProviderScope = nil
+        if !preservingPrompt { prompt = "" }
+        writeHistory()
+        return true
+    }
+
+    @discardableResult
+    func openConversation(id: UUID) -> Bool {
+        guard id != activeConversationID,
+              let record = conversationRecords.first(where: { $0.id == id }) else { return false }
+        persistCurrentConversation()
+        clearCurrentPresentation()
+        activeConversationID = record.id
+        conversationProviderScope = record.providerScope
+        messages = liveConversationMessages[id] ?? record.messages.compactMap(\.restored)
+        prompt = ""
+        scrollAnchor = messages.last?.id.uuidString
+        writeHistory()
+        return true
+    }
+
+    @discardableResult
+    func renameConversation(id: UUID, title: String) -> Bool {
+        let title = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
+        guard !title.isEmpty,
+              let index = conversationRecords.firstIndex(where: { $0.id == id }) else { return false }
+        conversationRecords[index].title = title
+        conversationRecords[index].hasCustomTitle = true
+        conversationRecords[index].modifiedAt = Date()
+        refreshConversationSummaries()
+        writeHistory()
+        return true
+    }
+
+    @discardableResult
+    func deleteConversation(id: UUID) -> Bool {
+        guard conversationRecords.contains(where: { $0.id == id }) else { return false }
+        if id == activeConversationID {
+            clearCurrentPresentation()
+            activeConversationID = UUID()
+            conversationProviderScope = nil
+            prompt = ""
+        }
+        conversationRecords.removeAll { $0.id == id }
+        deletedConversationIDs.insert(id)
+        liveConversationMessages[id] = nil
+        refreshConversationSummaries()
+        writeHistory()
+        return true
+    }
+
+    @discardableResult
+    func deleteMessage(id: UUID) -> Bool {
+        guard messages.contains(where: { $0.id == id }) else { return false }
+        cancelActiveRequest()
+        messages.removeAll { $0.id == id }
         errorMessage = nil
-        phase = .idle
+        scrollAnchor = messages.last?.id.uuidString
+        persistCurrentConversation()
+        if messages.isEmpty {
+            activeConversationID = UUID()
+            conversationProviderScope = nil
+            writeHistory()
+        }
+        return true
+    }
+
+    func providerDidChange() {
+        // Keep readable history while preventing it from being forwarded to a
+        // different configured destination. The next request also checks scope.
+        _ = beginNewConversation(preservingPrompt: true)
+        cancelActiveRequest()
     }
 
     func documentDidChange() {
-        clearConversation()
+        persistCurrentConversation()
+        clearCurrentPresentation()
+        historyStore = nil
+        historyDocumentURL = nil
+        historyReadFailed = false
+        historyStorageLimitReached = false
+        isConversationHistoryPersistent = false
+        historyErrorMessage = nil
+        conversationRecords = []
+        deletedConversationIDs = []
+        liveConversationMessages = [:]
+        conversations = []
+        activeConversationID = UUID()
+        conversationProviderScope = nil
         prompt = ""
         scope = .currentPage
         selectedPageIndices = []
+    }
+
+    /// Called only for a successfully loaded PDF. Encrypted or unknown PDFs
+    /// retain their conversation in memory and never read/write a disk archive.
+    func bindConversationHistory(
+        documentURL: URL,
+        isEncrypted: Bool,
+        store: any AIConversationHistoryPersisting
+    ) {
+        let identity = documentURL.standardizedFileURL.resolvingSymlinksInPath()
+        if historyDocumentURL == identity {
+            if isEncrypted {
+                historyStore = nil
+                isConversationHistoryPersistent = false
+            }
+            return
+        }
+        if historyDocumentURL != nil { documentDidChange() }
+        // The workspace invalidates old document state before binding a new
+        // identity. A first opt-in may already contain an unsaved conversation.
+        historyDocumentURL = identity
+        guard !isEncrypted else { return }
+        historyStore = store
+        isConversationHistoryPersistent = true
+        do {
+            if let archive = try store.load(documentURL: identity) {
+                guard archive.conversations.count <= Self.maximumConversationCount,
+                      Set(archive.conversations.map(\.id)).count == archive.conversations.count,
+                      archive.conversations.allSatisfy(Self.isValidHistoryRecord) else {
+                    throw AIConversationHistoryError.invalidArchive
+                }
+                deletedConversationIDs = archive.deletedConversationIDs
+                conversationRecords = archive.conversations.filter { !deletedConversationIDs.contains($0.id) }
+                if messages.isEmpty,
+                   let savedID = archive.activeConversationID,
+                   let record = conversationRecords.first(where: { $0.id == savedID }) {
+                    activeConversationID = savedID
+                    conversationProviderScope = record.providerScope
+                    messages = record.messages.compactMap(\.restored)
+                    scrollAnchor = messages.last?.id.uuidString
+                }
+                refreshConversationSummaries()
+            }
+            if !messages.isEmpty { persistCurrentConversation() }
+        } catch {
+            // A corrupt archive must not be overwritten by an empty/new chat.
+            historyReadFailed = true
+            historyErrorMessage = AIConversationHistoryError.invalidArchive.localizedDescription
+        }
+    }
+
+    private func persistCurrentConversation() {
+        let existing = conversationRecords.first(where: { $0.id == activeConversationID })
+        if messages.isEmpty {
+            liveConversationMessages[activeConversationID] = nil
+            if existing != nil { deletedConversationIDs.insert(activeConversationID) }
+            conversationRecords.removeAll { $0.id == activeConversationID }
+        } else {
+            liveConversationMessages[activeConversationID] = messages
+            let automaticTitle = String((messages.first(where: { $0.role == .user })?.text
+                ?? L10n.string("ai.history.untitled", defaultValue: "새 대화"))
+                .split(whereSeparator: \.isWhitespace).joined(separator: " ").prefix(80))
+            let record = AIConversationRecord(
+                id: activeConversationID,
+                title: existing?.hasCustomTitle == true ? existing!.title : automaticTitle,
+                hasCustomTitle: existing?.hasCustomTitle ?? false,
+                modifiedAt: Date(), providerScope: conversationProviderScope,
+                messages: messages.map(AIConversationRecord.ArchivedMessage.init)
+            )
+            if let index = conversationRecords.firstIndex(where: { $0.id == activeConversationID }) {
+                conversationRecords[index] = record
+            } else if canCreateConversation() {
+                conversationRecords.append(record)
+            } else {
+                return
+            }
+        }
+        refreshConversationSummaries()
+        writeHistory()
+    }
+
+    private static func isValidHistoryRecord(_ record: AIConversationRecord) -> Bool {
+        guard record.messages.count <= maximumStoredConversationMessages + 1,
+              Set(record.messages.map(\.id)).count == record.messages.count,
+              !EncodedTextLimiter.limit(record.title, budget: EncodedTextBudget(maximumCharacters: 120)).wasTruncated,
+              record.providerScope?.normalizedEndpoint.utf8.count ?? 0 <= 8_192 else { return false }
+        guard record.messages.reduce(0, { $0 + $1.images.reduce(0) { $0 + ($1.data?.count ?? 0) } })
+                <= maximumConversationImageBytes * 2 else { return false }
+        var remaining = restoredConversationBudget
+        for message in record.messages {
+            guard AIAssistantRole(rawValue: message.role) != nil,
+                  !EncodedTextLimiter.limit(message.text, budget: AIAssistantMessage.textBudget).wasTruncated,
+                  !EncodedTextLimiter.limit(message.text, budget: remaining).wasTruncated else { return false }
+            remaining = remaining.remaining(after: message.text)
+        }
+        return true
+    }
+
+    private func refreshConversationSummaries() {
+        conversations = conversationRecords.sorted { $0.modifiedAt > $1.modifiedAt }.map {
+            AIConversationSummary(id: $0.id, title: $0.title, modifiedAt: $0.modifiedAt,
+                messageCount: $0.messages.count,
+                providerName: $0.messages.last(where: { $0.providerName != nil })?.providerName)
+        }
+    }
+
+    private func writeHistory() {
+        let archive = AIConversationArchive(
+            activeConversationID: activeConversationID,
+            conversations: conversationRecords,
+            deletedConversationIDs: deletedConversationIDs
+        )
+        do {
+            // Encrypted/in-memory chats have the same memory ceiling. One
+            // accepted response may finish over it, then further sends stop
+            // until the user removes records; earlier messages are never cut.
+            guard try JSONEncoder().encode(archive).count <= AIConversationHistoryStore.maximumArchiveBytes else {
+                throw AIConversationHistoryError.archiveTooLarge
+            }
+            historyStorageLimitReached = false
+            guard !historyReadFailed else { return }
+            if let historyStore, let historyDocumentURL {
+                try historyStore.save(archive, documentURL: historyDocumentURL)
+            }
+            historyErrorMessage = nil
+        } catch {
+            if case AIConversationHistoryError.archiveTooLarge = error { historyStorageLimitReached = true }
+            historyErrorMessage = error.localizedDescription
+        }
     }
 
     private func finishContextPreparation(
@@ -769,7 +1038,7 @@ final class AIAssistantSessionModel: ObservableObject {
         let useMCP = preparation.allowsMCPTools
             && configuration.capabilities.supportsRemoteMCP
             && !configuration.remoteMCPServers.isEmpty
-        pendingConsent = AITransmissionConsent(
+        let consent = AITransmissionConsent(
             action: preparation.action,
             prompt: preparation.prompt,
             systemPrompt: preparation.systemPrompt,
@@ -782,7 +1051,14 @@ final class AIAssistantSessionModel: ObservableObject {
             conversation: preparation.conversation,
             draftApplicationTarget: preparation.draftApplicationTarget
         )
-        phase = .awaitingConsent
+        if preparation.requiresTransmissionConfirmation {
+            pendingConsent = consent
+            phase = .awaitingConsent
+        } else {
+            // Never publish a pending sheet for automatic transmission, even
+            // briefly: SwiftUI observes pendingConsent independently of phase.
+            submit(consent)
+        }
     }
 
     private func finishContextPreparationWithError(
@@ -880,11 +1156,12 @@ final class AIAssistantSessionModel: ObservableObject {
             response.text,
             budget: AIAssistantMessage.textBudget
         ).text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
+        if !text.isEmpty || !response.images.isEmpty {
             appendMessage(
                 AIAssistantMessage(
                     role: .assistant,
                     text: text,
+                    images: response.images,
                     citations: response.citations,
                     localCitations: localCitations,
                     providerName: response.provider.displayName,
@@ -1011,10 +1288,23 @@ final class AIAssistantSessionModel: ObservableObject {
 
     private func appendMessage(_ message: AIAssistantMessage) {
         messages.append(message)
-        while messages.count > 24 || storedConversationExceedsBudget {
-            messages.removeFirst()
-        }
         scrollAnchor = message.id.uuidString
+        persistCurrentConversation()
+    }
+
+    private func canAppendConversationTurn() -> Bool {
+        if historyStorageLimitReached {
+            historyErrorMessage = AIConversationHistoryError.archiveTooLarge.localizedDescription
+            return false
+        }
+        guard messages.count < Self.maximumStoredConversationMessages,
+              !storedConversationExceedsBudget,
+              messages.reduce(0, { $0 + $1.images.reduce(0) { $0 + ($1.data?.count ?? 0) } })
+                < Self.maximumConversationImageBytes else {
+            errorMessage = L10n.string("ai.history.error.conversation_full", defaultValue: "이 대화가 보관 한도에 도달했습니다. 기존 내용은 유지되며, 새 대화를 시작하면 계속 질문할 수 있습니다.")
+            return false
+        }
+        return true
     }
 
     private var storedConversationExceedsBudget: Bool {
@@ -1028,9 +1318,9 @@ final class AIAssistantSessionModel: ObservableObject {
             utf8Bytes += message.text.utf8.count
             utf16CodeUnits += message.text.utf16.count
         }
-        return characters > budget.maximumCharacters
-            || utf8Bytes > budget.maximumUTF8Bytes
-            || utf16CodeUnits > budget.maximumUTF16CodeUnits
+        return characters >= budget.maximumCharacters
+            || utf8Bytes >= budget.maximumUTF8Bytes
+            || utf16CodeUnits >= budget.maximumUTF16CodeUnits
     }
 
     private func conversationTurns() -> [AIChatTurn] {
@@ -1039,11 +1329,14 @@ final class AIAssistantSessionModel: ObservableObject {
             case .user:
                 AIChatTurn(role: .user, content: message.text)
             case .assistant:
-                AIChatTurn(role: .assistant, content: message.text)
+                AIChatTurn(role: .assistant, content: message.text.replacingOccurrences(
+                    of: #"!\[([^\]]*)\]\(\s*<?data:image/[^\s)>]+>?\s*\)"#,
+                    with: "$1", options: [.regularExpression, .caseInsensitive]
+                ))
             case .notice:
                 nil
             }
-        }
+        }.filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         var result: [AIChatTurn] = []
         var remaining = Self.transmittedConversationBudget
         for turn in candidates.suffix(12).reversed() {
@@ -1063,6 +1356,9 @@ final class AIAssistantSessionModel: ObservableObject {
             remaining = remaining.remaining(after: limited.text)
             if limited.wasTruncated { break }
         }
+        // Removing a question must not send its orphaned answer as the first
+        // turn. The current prompt always supplies the next valid user turn.
+        while result.first?.role == .assistant { result.removeFirst() }
         return result
     }
 

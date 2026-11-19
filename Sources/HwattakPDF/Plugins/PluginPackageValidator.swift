@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import CryptoKit
+import Darwin
 import Foundation
 
 struct PluginPackageValidator {
@@ -12,7 +13,8 @@ struct PluginPackageValidator {
         "README.md",
         "LICENSE",
         "LICENSE.md",
-        "icon.png"
+        "icon.png",
+        "main.js"
     ]
 
     private let fileManager: FileManager
@@ -32,12 +34,9 @@ struct PluginPackageValidator {
 
     func inspectInstalledPackage(at packageURL: URL) throws -> InstalledPackageInspection {
         let inspection = try inspectPackage(at: packageURL, isInstalledPackage: true)
-        let recordURL = packageURL.appendingPathComponent(Self.installationRecordFileName)
-        let recordData = try boundedData(
-            at: recordURL,
-            maximumBytes: Self.maximumInstallationRecordBytes,
-            label: Self.installationRecordFileName
-        )
+        guard let recordData = inspection.filePayloads[Self.installationRecordFileName] else {
+            throw PluginSystemError.invalidPackage("installation record is missing")
+        }
         let record: PluginInstallationRecord
         do {
             let decoder = JSONDecoder()
@@ -78,6 +77,17 @@ struct PluginPackageValidator {
         guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true else {
             throw PluginSystemError.invalidPackage("package must be a real directory, not a link")
         }
+        // Pin the inspected package directory. Later leaf reads use openat so
+        // renaming/replacing the pathname cannot redirect them into another
+        // directory. O_NOFOLLOW also closes a root-link replacement race.
+        let directoryDescriptor = sourceURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return Int32(-1) }
+            return open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        }
+        guard directoryDescriptor >= 0 else {
+            throw PluginSystemError.invalidPackage("package directory cannot be opened safely")
+        }
+        defer { close(directoryDescriptor) }
 
         let maximumFiles = HwattakPluginLimits.maximumPackageFileCount
             + (isInstalledPackage ? 1 : 0)
@@ -153,6 +163,8 @@ struct PluginPackageValidator {
             switch name {
             case Self.manifestFileName:
                 perFileLimit = HwattakPluginLimits.maximumManifestBytes
+            case "main.js":
+                perFileLimit = 128 * 1_024
             case Self.installationRecordFileName:
                 perFileLimit = Self.maximumInstallationRecordBytes
             default:
@@ -163,9 +175,10 @@ struct PluginPackageValidator {
             }
 
             let capturedData: Data?
-            if !isInstalledPackage || name == Self.manifestFileName {
-                let data = try boundedData(
-                    at: entry,
+            if !isInstalledPackage || name == Self.manifestFileName || name == Self.installationRecordFileName || name == "main.js" {
+                let data = try Self.boundedRegularFileData(
+                    directoryDescriptor: directoryDescriptor,
+                    filename: name,
                     maximumBytes: perFileLimit,
                     label: name
                 )
@@ -201,8 +214,8 @@ struct PluginPackageValidator {
             totalBytes = newTotal
 
             // Installed auxiliary files never affect behavior and need not be
-            // retained in memory at launch. Source installation captures every
-            // allowed byte so the later commit cannot race a source mutation.
+            // retained. Capture manifest + record through the same pinned
+            // directory; source installation captures every allowed byte.
             if let capturedData {
                 payloads[name] = capturedData
             }
@@ -218,6 +231,17 @@ struct PluginPackageValidator {
             }
         }
         let manifest = try manifestValidator.decodeAndValidate(manifestData)
+        let scripts = manifest.actions.filter { $0.output == .scriptPanel }
+        if !scripts.isEmpty || manifest.runtime != nil {
+            guard let source = payloads["main.js"], !source.isEmpty,
+                  source.count <= 128 * 1_024, String(data: source, encoding: .utf8) != nil,
+                  scripts.allSatisfy({ $0.scriptSHA256 == Self.sha256Hex(source) }),
+                  manifest.runtime.map({ $0.sha256 == Self.sha256Hex(source) }) ?? true else {
+                throw PluginSystemError.invalidPackage("main.js does not match its reviewed digest or size/encoding limit")
+            }
+        } else if payloads["main.js"] != nil {
+            throw PluginSystemError.invalidPackage("main.js requires a schema 5 scriptPanel action or schema 6 runtime")
+        }
         return PluginPackageInspection(
             sourceURL: sourceURL,
             manifest: manifest,
@@ -228,26 +252,49 @@ struct PluginPackageValidator {
         )
     }
 
-    private func boundedData(
-        at url: URL,
+    static func boundedRegularFileData(
+        directoryDescriptor: Int32,
+        filename: String,
         maximumBytes: Int,
         label: String
     ) throws -> Data {
-        let data: Data
-        do {
-            // Read at most one byte beyond the ceiling. `Data(contentsOf:)`
-            // would allocate the entire file before we could re-check its
-            // length if an untrusted package grew after metadata preflight.
-            // A copied bounded snapshot also closes the review/install TOCTOU
-            // gap that a memory-mapped value would leave open.
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            let readLimit = maximumBytes == Int.max ? Int.max : maximumBytes + 1
-            data = try handle.read(upToCount: readLimit) ?? Data()
-        } catch {
+        guard !filename.isEmpty, filename != ".", filename != "..",
+              !filename.contains("/"), !filename.contains("\0"), maximumBytes >= 0 else {
+            throw PluginSystemError.invalidPackage("invalid package file name")
+        }
+        // Nonblocking opens prevent a regular-file-to-FIFO swap from hanging
+        // the UI; fstat examines the opened object, not stale URL metadata.
+        let descriptor = openat(directoryDescriptor, filename, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else {
             throw PluginSystemError.invalidPackage("\(label) cannot be read")
         }
-        guard data.count <= maximumBytes else {
+        defer { close(descriptor) }
+        var before = stat()
+        guard fstat(descriptor, &before) == 0,
+              (before.st_mode & S_IFMT) == S_IFREG,
+              before.st_size >= 0, before.st_size <= maximumBytes else {
+            throw PluginSystemError.invalidPackage("\(label) must be a bounded regular file")
+        }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16_384)
+        while true {
+            let count = Darwin.read(descriptor, &buffer, buffer.count)
+            if count < 0, errno == EINTR { continue }
+            guard count >= 0 else { throw PluginSystemError.invalidPackage("\(label) cannot be read") }
+            if count == 0 { break }
+            guard count <= maximumBytes - data.count else {
+                throw PluginSystemError.invalidPackage("\(label) changed while it was being read")
+            }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        var after = stat()
+        guard fstat(descriptor, &after) == 0,
+              before.st_dev == after.st_dev, before.st_ino == after.st_ino,
+              before.st_size == after.st_size, after.st_size == data.count,
+              before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec,
+              before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+              before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
+              before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else {
             throw PluginSystemError.invalidPackage("\(label) changed while it was being read")
         }
         return data

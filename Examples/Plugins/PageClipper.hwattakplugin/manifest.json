@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 4,
+  "identifier": "org.emberpdf.examples.page-clipper",
+  "displayName": "Page Clipper",
+  "version": "1.0.0",
+  "author": "EmberPDF community examples",
+  "description": "Crop the current page and transfer a PNG image to another app.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "pageImage",
+    "clipboardWrite",
+    "fileExport"
+  ],
+  "actions": [
+    {
+      "id": "open-panel",
+      "title": "Clip the current page",
+      "output": "pageClipPanel",
+      "template": ""
+    }
+  ]
+}
+

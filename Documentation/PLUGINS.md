@@ -1,13 +1,12 @@
-# HwattakPDF 플러그인 설치와 형식 참조
+# EmberPDF 플러그인 설치와 형식 참조
 
-처음 제작한다면 [제작 가이드](PLUGIN-DEVELOPMENT.md)에서 시작한다. [English](PLUGIN-DEVELOPMENT.en.md) · [schema 3 명령](PLUGIN-HOST-API.md) · [보안](PLUGIN-SECURITY.md) · [호환성/확장 제안](PLUGIN-COMPATIBILITY.md) · [예제 지도](../Examples/Plugins/README.md). 이 문서는 기존 설치 관리와 schema 1·2의 상세 형식을 유지한다.
+> 현재 대상: **0.9.0 (build 90)** · 배포 전 검증 중. 아래 이전 빌드 기록은 이력이며, 최종 설치·지원 범위는 [품질 검사 기록](QUALITY_REPORT.md)을 확인하세요.
 
-> 0.9.0 배포 경계: 앱 번들에는 번역 도우미·웹 브라우저와 문서 명령 플러그인 3종의 검토본을 포함한다. YouTube 학습 manifest는 보안 검토용 소스 전용 예제이고 호스트 지원 코드는 활성화할 번들 검토본 없이 대기한다. 앱 개인정보처리방침·이용약관·사전 동의와 상시 정책 링크를 완성하기 전에는 공식 기본 플러그인으로 배포·설치하지 않는다.
+처음 제작한다면 [제작 가이드](PLUGIN-DEVELOPMENT.md)에서 시작한다. [English](PLUGIN-DEVELOPMENT.en.md) · [호스트·실행형 SDK API](PLUGIN-HOST-API.md) · [보안](PLUGIN-SECURITY.md) · [호환성/확장 제안](PLUGIN-COMPATIBILITY.md) · [예제 지도](../Examples/Plugins/README.md). 이 문서는 공통 설치 관리, schema 1·2의 기존 형식과 schema 3~6 확장을 함께 설명한다.
 
-HwattakPDF 0.9.0 (build 20)은 manifest schema 1·2·3을 함께 지원한다. 모든 스키마는
-네이티브 번들·JavaScript·Wasm 같은 **패키지 코드를 실행하지 않는다**.
-`.hwattakplugin`의 `manifest.json`을 호스트 앱이 엄격하게 검증하고, 사용자가 메뉴에서
-고른 순간에만 제한된 host action을 실행한다.
+> 0.9.0 배포 경계: 아래 표의 검토본과 커뮤니티 예제를 패키징한다. YouTube 학습 manifest는 보안 검토용 소스 전용 예제이고 호스트 지원 코드는 활성화할 번들 검토본 없이 대기한다. 앱 개인정보처리방침·이용약관·사전 동의와 상시 정책 링크를 완성하기 전에는 공식 기본 플러그인으로 배포·설치하지 않는다.
+
+EmberPDF **0.9.0 (build 89) 확장 소스**는 schema 1~6을 읽는다. schema 1~4는 패키지 코드를 실행하지 않는 선언형 계약이다. schema 5는 검토한 `main.js`를 별도 JavaScriptCore helper에서 실행하고 호스트가 승인된 API만 중계한다. schema 5는 action을 열 때 시작한다. schema 6 runtime은 사용자가 설치·활성화하고 ‘앱을 사용하는 동안 동작’ 권한을 승인하면 각 창에서 자동 시작하며, PDF가 없어도 명령과 UI를 제공한다. 빌드·시험 결과와 배포 여부는 실제 산출물 기준으로 확인한다.
 
 - schema 1(v1)은 기존 선언형 텍스트 템플릿과 `showText`·`copyText`·`openURL`을 그대로
   지원한다. 패키지는 백그라운드 작업, 셸, Keychain, 원본 PDF 바이트, 직접 네트워크
@@ -18,10 +17,16 @@ HwattakPDF 0.9.0 (build 20)은 manifest schema 1·2·3을 함께 지원한다. �
   JavaScript를 사용한다. 따라서 v1의 “직접 네트워크 없음” 경계를 v2 원격 웹 세션까지
   확대해 해석하면 안 된다.
 
-- schema 3은 현재 문서에 하이라이트·밑줄을 추가하고 펜·모드·페이지 이동을 요청한다. 일반 커뮤니티 패키지도 사용할 수 있으며 새 코드를 실행하지 않는다. [명령 참조](PLUGIN-HOST-API.md).
+- schema 3은 현재 문서에 하이라이트·밑줄을 추가하고 펜·모드·페이지 이동을 요청한다. 일반 커뮤니티 패키지도 사용할 수 있으며 새 코드를 실행하지 않는다.
+- schema 4는 읽기 색상, Markdown 노트, PNG 클립, 관련 PDF, 커서 번역 등 호스트 소유 패널을 선언한다. 다섯 패널은 확장 사용 예시이며 생태계의 최종 기능 목록이 아니다.
+- schema 5는 JavaScript 로직, 네이티브 UI 구성, 명령 등록, 현재 패널의 문서 이벤트, 플러그인별 로컬 설정을 제공한다. Node.js·DOM·직접 파일/네트워크/셸 API는 없다. [SDK 참조](PLUGIN-HOST-API.md#실행형-sdk--schema-56), [타입 선언](PluginSDK/emberpdf.d.ts), [Reading Lab 예제](../Examples/Plugins/ReadingLab.hwattakplugin/manifest.json)를 따른다.
+
+- schema 6은 창 수명의 독립적인 확장이다. 패널을 닫거나 탭·워크스페이스를 전환해도 명령·이벤트 처리가 유지된다. 플러그인·창별 별도 실행기를 사용하며 앱 전체 상한은 8개다. [Research Trail 예제](../Examples/Plugins/ResearchTrail.hwattakplugin/README.md)와 [schema 6 개발 가이드](PLUGIN-DEVELOPMENT.md#1-먼저-완성된-예제를-실행하세요)를 참고한다.
 
 이 문서는 현재 `Sources/HwattakPDF/Plugins/`와 `Views/PluginPanelHostView.swift` 구현의
-schema 1·2 규칙과 공통 관리 기능을 설명한다. schema 3의 문서 명령, ⇧⌘P 팔레트, 필압 입력과 직접 만드는 예제는 [문서 명령 API 가이드](PLUGIN-HOST-API.md)에 있다.
+schema 1·2 기존 규칙과 공통 관리 기능을 설명한다. schema 3 문서 명령, schema 4 패널, schema 5·6 SDK와 직접 만드는 예제는 [호스트 API 가이드](PLUGIN-HOST-API.md)에 있다.
+
+build 28은 앱 본문 편집에 PDFium을 추가합니다. 기존 schema 1~6의 권한 계약을 따르며 플러그인에 PDFium native handle이나 본문 엔진 직접 API를 노출하지 않습니다. 본문 기능과 검증 상태는 [본문 편집 기록](PDF-BODY-TEXT-2026-10-07.md)을 확인하세요.
 
 ## 사용자 가이드
 
@@ -57,16 +62,23 @@ allowlist는 앱이 검토한 패널 선택지와 공식 이름의 사칭을 막
 
 ### 0.9.0 기본 플러그인 검토 및 설치
 
-0.9.0 (build 20) 앱 번들은 다음 다섯 검토본을 포함하지만 자동 설치하거나 자동
-활성화하지 않는다.
+0.9.0 build 36 패키징 목록에는 다음 13개 검토본/예제가 있다. 번들 포함만으로 설치하지 않는다. schema 4~6 커뮤니티 예제도 일반 설치 검증과 사용자 검토를 통과한다. 사용자가 설치·활성화하고 권한을 승인한 schema 6 확장은 각 창에서 자동 시작한다.
 
 | 기본 플러그인 | 식별자 | 분리된 핵심 권한 |
 | --- | --- | --- |
 | 번역 도우미 | `dev.hwattakpdf.plugins.translation-companion` | `translationService`와 선택한 입력에 따른 `selectedText` 또는 `currentPageText`; ChatGPT·Claude 흐름 때문에 `clipboardWrite`도 명시 |
+| 페이지 번역 | `dev.hwattakpdf.plugins.page-translator` | `currentPageText`, `translationService`, `clipboardWrite` |
 | 웹 브라우저 | `dev.hwattakpdf.plugins.web-browser` | `embeddedWebBrowser` |
 | Study Markup | `dev.hwattakpdf.plugins.study-markup` | `annotationWrite` |
 | Tablet Tools | `dev.hwattakpdf.plugins.tablet-tools` | `toolControl`, `workspaceNavigation` |
 | Reading Navigation | `dev.hwattakpdf.plugins.reading-navigation` | `workspaceNavigation` |
+| Reading Colors | `org.emberpdf.examples.reading-colors` | `appearanceWrite` |
+| Markdown Notebook | `org.emberpdf.examples.markdown-notebook` | `notesWrite`, `fileReadWrite`, `documentMetadata`, `selectedText` |
+| Page Clipper | `org.emberpdf.examples.page-clipper` | `pageImage`, `clipboardWrite`, `fileExport` |
+| Related Documents | `org.emberpdf.examples.related-documents` | `openDocumentsRead`, `currentPageText`, `workspaceNavigation` |
+| Hover Translator | `org.emberpdf.examples.hover-translator` | `hoverText`, `localTranslation` |
+| Reading Lab · 독서 실험실 | `org.emberpdf.examples.reading-lab` | `documentMetadata`, `currentPageText`, `notesWrite`, `pluginStorage` |
+| Research Trail · 읽기 여정 | `org.emberpdf.examples.research-trail` | `backgroundExecution`, `documentMetadata`, `pluginStorage` |
 
 `Examples/Plugins/YouTubeStudy.hwattakplugin`은 소스 검토용 예제다. 0.9.0 앱에도 같은
 identifier와 digest를 가진 번들 검토본이 없으므로 설치·실행할 수 없다.
@@ -74,7 +86,7 @@ identifier와 digest를 가진 번들 검토본이 없으므로 설치·실행�
 설치 순서는 다음과 같다.
 
 1. 앱에서 `플러그인 > 플러그인 관리…`를 연다.
-2. `HwattakPDF 기본 플러그인`에서 원하는 항목의 설명과 권한을 읽는다.
+2. `EmberPDF 기본 플러그인`에서 원하는 항목의 설명과 권한을 읽는다.
 3. `검토 및 설치`를 누르고 identifier, 버전, 권한, 파일 정보와 SHA-256을 다시 확인한다.
 4. 설치 후 PDF 툴바의 `플러그인`에서 이름을 선택한다. 단일 action 기본 플러그인은
    별도 하위 메뉴 없이 바로 오른쪽 패널을 연다. 모든 v2 패널은 열린 PDF가 있어야 하며,
@@ -171,7 +183,7 @@ QuickCitation.hwattakplugin/
 확장자 검사는 대소문자를 구분하지 않지만 배포 패키지는 정규 표기인
 `.hwattakplugin`을 사용한다.
 
-선택 가능한 루트 파일은 아래 다섯 개뿐이다. 대소문자를 구분하고, 하위 디렉터리·숨김
+schema 1~4에서 선택 가능한 루트 파일은 아래 다섯 개뿐이다. 대소문자를 구분하고, 하위 디렉터리·숨김
 파일·심볼릭 링크·추가 실행 파일은 거부한다.
 
 ```text
@@ -181,6 +193,8 @@ LICENSE         선택, 현재 런타임 동작에 사용하지 않음
 LICENSE.md      선택, 현재 런타임 동작에 사용하지 않음
 icon.png        선택, PNG signature만 검사하며 현재 UI에는 표시하지 않음
 ```
+
+schema 5 `scriptPanel` 또는 schema 6 `runtime` 패키지는 여기에 `main.js` 하나를 추가할 수 있다. 총 파일 수는 최대 6개이며, 소스/타입 선언/빌드 도구/테스트를 위한 하위 디렉터리는 설치 패키지 밖에 둔다.
 
 파일명은 Unicode NFC(precomposed) 형식이어야 한다. 설치할 때 앱이
 `installation.json`을 추가하고 패키지 디렉터리를
@@ -252,7 +266,7 @@ token으로 해석하거나 거부하지 않고 그대로 보존한다. 최종 �
 | `copyText` | 제한된 일반 텍스트를 macOS 일반 클립보드에 기록 | `clipboardWrite` |
 | `openURL` | 공개적으로 보이는 HTTPS URL인지 다시 검사하고, 매 실행마다 대상 host와 포함되는 문서 정보의 종류를 보여 준 뒤 기본 브라우저로 열기 | `externalURL` |
 
-지원하는 capability 문자열은 다음 네 개뿐이다.
+schema 1이 지원하는 capability 문자열은 다음 네 개뿐이다.
 
 - `documentMetadata`: 문서 표시 이름·현재 페이지 번호·페이지 수 읽기
 - `selectedText`: 사용자가 현재 선택한 제한된 텍스트 읽기
@@ -285,7 +299,7 @@ Schema 2는 schema 1을 대체하지 않는다. v1 패키지와 action은 계속
 | `youtubePanel` | PDF token이 전혀 없는 허용된 YouTube 공개 HTTPS URL | `youtubeContent` | 초기 URL에 PDF 이름·텍스트·페이지 정보 없음 |
 | `browserPanel` | PDF token이 전혀 없는 공개 HTTPS URL | `embeddedWebBrowser` | 초기 URL에 PDF 이름·텍스트·페이지 정보가 없고 PDF bridge도 없음 |
 
-`{{page.text}}`와 `currentPageText`는 v2 `translatePanel` 전용이다. 텍스트 층이 없는
+schema 2에서 `{{page.text}}`와 `currentPageText`는 `translatePanel` 전용이다. schema 4 관련 문서와 schema 5의 명시적 API는 별도 계약으로 현재 페이지 읽기를 제공한다. 텍스트 층이 없는
 스캔 페이지는 먼저 로컬 OCR로 검색 가능한 사본을 만들어야 한다. 선택문과 현재 페이지
 텍스트는 실행 시 불변 값으로 snapshot하고, 렌더 결과의 16,000자·64 KiB UTF-8 상한을
 넘으면 일부만 보내지 않고 action 전체를 거부한다.
@@ -375,20 +389,24 @@ action ID와 제한된 입력 snapshot을 넣고 live `PDFDocument`나 `PDFSelec
 
 ## 강제 상한
 
-| 항목 | schema 1·2 상한 |
+| 항목 | 공통 상한 |
 | --- | ---: |
 | 플러그인 폴더의 visible `.hwattakplugin` entry | 32개 slot. 검증 실패·격리 항목도 포함 |
 | 플러그인당 action | 24개 |
-| 원본 패키지 루트 파일 | 5개 |
+| 원본 패키지 루트 파일 | 최대 6개. `main.js`는 schema 5·6에서만 허용 |
 | source package payload 전체 | 2 MiB |
 | `manifest.json` | 128 KiB |
 | 각 보조 파일 | 1 MiB |
 | 앱이 생성하는 `installation.json` | source payload와 별도로 32 KiB |
 | action template | 16 KiB UTF-8 |
+| schema 5·6 `main.js` | 128 KiB UTF-8 |
+| script dispatch 기한 | 3초. 타임아웃 시 helper 종료 |
+| script IPC / UI / 전용 JSON 설정 | 256 KiB / 64 KiB / 64 KiB |
+| 동시 host RPC / 요청률 | 16개 / 분당 240회 |
 | 렌더된 결과 | 16,000자, 64 KiB UTF-8, 128,000 UTF-16 code units를 모두 만족 |
 | 최종 외부 URL | 4 KiB UTF-8 |
 
-렌더 결과가 상한을 넘으면 일부를 조용히 잘라 실행하지 않고 action 전체를 실패시킨다.
+schema 1·2 템플릿 렌더 결과가 상한을 넘으면 일부를 조용히 잘라 실행하지 않고 action 전체를 실패시킨다. schema 5 읽기 API는 명시적인 `truncated`/`partial` 결과를 제공하는 메서드도 있으므로 해당 표시를 확인한다.
 설치 검토 때 source package의 허용 파일을 실제로 읽은 `Data.count` 합계가 2 MiB인지
 확인하고, 사전 file metadata와 실제 byte 수가 다르면 동시 변경으로 거부한다. 앱이
 생성하는 `installation.json`은 source payload가 아니므로 2 MiB 합계에서 제외하고
@@ -415,8 +433,7 @@ action ID와 제한된 입력 snapshot을 넣고 live `PDFDocument`나 `PDFSelec
 
 이 SHA-256은 비밀키가 없는 일반 해시다. 실수로 바뀐 manifest나 기록과 manifest의
 불일치를 찾지만, 공격자가 현재 사용자 권한으로 `manifest.json`과
-`installation.json`을 함께 바꾸는 상황을 막지 못한다. 해시는 manifest에만 적용되며
-README·LICENSE·icon의 게시자나 무결성을 인증하지 않는다.
+`installation.json`을 함께 바꾸는 상황을 막지 못한다. 설치 기록 해시는 manifest를 가리키고, schema 5 action의 `scriptSHA256` 또는 schema 6 runtime의 `sha256`이 `main.js` bytes를 추가로 묶는다. README·LICENSE·icon의 게시자나 무결성을 인증하지 않는다.
 
 ## 위협 모델
 
@@ -500,22 +517,18 @@ CPU·메모리·네트워크를 v1 템플릿 action처럼 고정된 비용으로
 OCR, 검색과 렌더링을 포함한 호스트 앱의 메모리·CPU 정책과 남은 실물 측정은
 [대용량·다중 PDF 성능 설계](LARGE-PDF-PERFORMANCE.md)를 따른다.
 
-## 향후 실행형 플러그인의 XPC 경계
+## schema 4·5 확장과 남은 범위
 
-schema 1·2에는 XPC 실행형 플러그인이 **구현되어 있지 않다**. 나중에 현재 host-owned
-panel로 표현할 수 없는 기능이 꼭 필요해도 다운로드한 코드를 HwattakPDF 프로세스에
-`dlopen`하거나 임의
-스크립트 엔진에 바로 넣지 않는다. 별도 설계·위협 모델·배포 서명 정책을 통과한 다음과
-같은 프로세스 경계를 선행 조건으로 삼는다.
+schema 4는 안전한 호스트 패널을 요청하는 선언이다. schema 5·6은 사용자 로직을 별도 `EmberPluginWorker` 프로세스에서 실행한다. 이 worker는 앱 프로세스에 `dlopen`한 라이브러리나 WebView가 아니며, JSON pipe와 `ember.call/on/ui.render/commands.register`만 제공한다. 전용 XPC 서비스·플러그인별 독립 OS 계정·게시자 서명 시스템까지 구현했다는 뜻은 아니다. 상세 방어와 남는 위험은 [보안 문서](PLUGIN-SECURITY.md)를 참고한다.
 
-- 플러그인별 또는 신뢰 영역별 sandboxed XPC service와 최소 entitlement
-- 버전형 Codable IPC, 메시지·파일·문자열 크기 상한과 capability broker
-- 네트워크·파일·Keychain·클립보드·GPU 기본 거부, 사용자 동의가 있는 좁은 host API만
-  중개
-- 요청 timeout·취소, 동시성 제한, 메모리/CPU 예산 감시, 반복 crash 시 자동 비활성화
-- 게시자 코드 서명·notarization·업데이트 서명과 rollback/폐기 정책
-- PDF 원본 대신 최소화한 immutable snapshot 또는 host-owned file descriptor 전달,
-  응답 검증과 감사 가능한 동의 기록
+schema 6 runtime은 각 창에서 별도 실행기로 동작하며 패널이 닫혀 있어도 명령·이벤트를 처리한다. 앱 전체 worker 상한은 8개다. `app.ready`, `workspace.changed`, `document.changed`, `documents.changed`, `page.changed`, `selection.changed`와 UI 이벤트가 공개 계약이다. 명령은 확장·창별로 구분한다. `ui.render`와 `ui.open/close`로 내용과 표시를 분리한다. 비활성화·필수 권한 철회·안전 모드·업데이트·제거·창 종료에서 실행기와 기여를 회수한다. schema 5는 기존 열린 PDF의 패널 수명과 `load` 이벤트를 유지한다. `dispose`는 최선 노력이며 강제 종료에 필수 저장을 맡기지 않는다.
 
-이 경계가 구현되고 공격·고장·성능 테스트를 통과하기 전까지 “임의 코드를 실행하는
-플러그인”은 제품 범위로 표시하지 않는다.
+script는 `documentMetadata`, `selectedText`, `currentPageText`, `openDocumentsRead`, `workspaceNavigation`, `notesWrite`, `appearanceWrite`, `pluginStorage` 중 사용하는 권한을 action의 `scriptCapabilities`에 명시한다. 현재 파일/네트워크 권한을 여기에 선언해 직접 접근을 얻을 수 없다. 문서 복사 권한과 선택 객체 소유권도 호스트가 매번 검사한다. 데이터는 bounded JSON 값이며 파일 경로·bookmark·PDFKit 객체를 넘기지 않는다. 문서 수정 API·Undo transaction·네트워크 서비스·더 다양한 view/control은 후속 API 계약과 보안 검토가 필요한 확장 영역이다.
+
+설정의 **모든 플러그인 일시 중지**는 설치와 설정을 보존하면서 실행을 차단한다. 노트의 미저장 글은 호스트 세션이 보존하며 창/앱 종료에서 저장 여부를 묻는다. 플러그인 제거 시 전용 JSON 설정은 지워진다. 사용자가 저장한 Markdown 파일과 PDF 주석은 제거하지 않는다.
+
+## 페이지 번역 (build 22)
+
+`페이지 번역` 기본 플러그인을 설치하고 `현재 페이지를 번역해서 보기`를 실행한다. 번역 엔진과 언어를 고른 뒤 번역하면 원래 페이지의 그림과 배치 위에 번역문을 표시한다. 원본/번역 전환, 큰 미리보기, 별도 PDF 저장을 제공한다. 번역문이 영역에 들어가지 않으면 번호를 표시하고 이어지는 페이지에 전체 내용을 담는다. 스캔은 OCR 후 사용하며, 복잡한 표·수식과 색상 배경은 원본과 비교해야 한다.
+
+페이지 번호·그림·텍스트 위치는 호스트의 현재 페이지 스냅샷으로만 유지된다. 번역 엔진에는 확인한 원문 텍스트만 전달하며 페이지 이미지나 문서 경로를 보내지 않는다. 기존 번역 도우미 manifest는 변경하지 않아 설치 호환성을 유지한다.

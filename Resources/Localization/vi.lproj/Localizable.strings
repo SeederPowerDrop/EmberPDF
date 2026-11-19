@@ -12,6 +12,8 @@
 "settings.language.description" = "Chọn ngôn ngữ dùng cho menu và tính năng.";
 "settings.icon.title" = "Biểu tượng ứng dụng";
 "settings.icon.description" = "Chọn biểu tượng hiển thị trên Dock và trong ứng dụng.";
+"settings.icon.ember.title" = "Than hồng";
+"settings.icon.ember.subtitle" = "Ánh sáng ấm áp cho tài liệu";
 "settings.icon.stack.title" = "Chồng trang";
 "settings.icon.stack.subtitle" = "Nhiều trang PDF và công cụ chọn";
 "settings.icon.markup.title" = "Đánh dấu";
@@ -29,13 +31,13 @@
 "mode.viewer.summary" = "Tập trung vào đọc, chọn, chú thích, chữ ký, dịch, AI và chia sẻ ghi chú.";
 "mode.editing.title" = "Chế độ chỉnh sửa";
 "mode.editing.short" = "Sửa";
-"mode.editing.summary" = "Thêm lớp văn bản hoặc thay thế trực quan ký tự, rồi chỉnh sửa chữ ký, hình ảnh, chữ viết tay và trang.";
+"mode.editing.summary" = "Sửa, xóa và thêm văn bản trong PDF, rồi chỉnh sửa chữ ký, hình ảnh, chữ viết tay và trang.";
 "mode.study.title" = "Chế độ học";
 "mode.study.short" = "Học";
 "mode.study.summary" = "Dùng AI, dịch, trợ giúp thuật ngữ và tính toán, ghi chú, viết tay, gạch chân và tô sáng.";
 "status.mode_changed" = "Đã chuyển sang %@.";
 "tool.comment_note" = "Ghi chú bình luận";
-"tool.pdf_text" = "Văn bản PDF";
+"tool.pdf_text" = "Sửa văn bản";
 "tool.study_note" = "Ghi chú học tập";
 "toolbar.share_note" = "Chia sẻ ghi chú";
 "share_note.title" = "Ghi chú và chia sẻ";
@@ -68,7 +70,7 @@
 "help.item.mode_viewer.title" = "Chế độ xem";
 "help.item.mode_viewer.detail" = "Đọc và chọn văn bản, thêm bình luận hoặc chữ ký, dịch hay tóm tắt bằng AI rồi chia sẻ ghi chú. Tính năng chỉnh sửa trực tiếp nội dung bị tắt.";
 "help.item.mode_editing.title" = "Chế độ chỉnh sửa";
-"help.item.mode_editing.detail" = "Nhập văn bản trực tiếp trên PDF hoặc che ký tự hiện có bằng lớp phủ để thay thế trực quan; sau đó đặt chữ ký và hình ảnh, viết tay và sắp xếp trang. Văn bản trong luồng nội dung gốc vẫn còn; thay đổi lớp phủ có thể hoàn tác và được lưu cùng PDF.";
+"help.item.mode_editing.detail" = "Dùng Chọn kéo qua nội dung, rồi bấm Sửa văn bản (가T) để sửa trực tiếp. Với Sửa văn bản, bấm vào vùng trống để chèn chữ mới. Thêm chữ ký, hình ảnh, chữ viết tay hoặc sắp xếp trang. Các thay đổi có thể hoàn tác và được ghi lại khi lưu.";
 "help.item.mode_study.title" = "Chế độ học";
 "help.item.mode_study.detail" = "Kết hợp giải thích AI, dịch, trợ giúp thuật ngữ và tính toán với ghi chú gõ phím, viết tay, gạch chân và tô sáng có thể điều chỉnh.";
 "help.shortcut.mode_viewer" = "Chuyển sang chế độ xem";
@@ -151,10 +153,10 @@
 "PDF 또는 이미지 파일을 드롭해 주세요." = "Thả tệp PDF hoặc tệp ảnh.";
 "PDF를 새 탭으로 열거나 이미지 추가" = "Mở PDF trong tab mới hoặc thêm ảnh";
 "PDF 병합…" = "Gộp PDF…";
-"PDF 비교 닫기" = "Đóng so sánh PDF";
-"PDF 비교 배치" = "Bố cục so sánh PDF";
-"PDF 비교 설정" = "Thiết lập so sánh PDF";
-"PDF 비교" = "So sánh PDF";
+"PDF 비교 닫기" = "Kết thúc xem cùng nhau";
+"PDF 비교 배치" = "Bố cục xem cùng nhau";
+"PDF 비교 설정" = "Cài đặt xem cùng nhau";
+"PDF 비교" = "Xem cùng nhau";
 "PDF 양식 값을 변경했습니다." = "Đã thay đổi giá trị biểu mẫu PDF.";
 "PDF 없음" = "Không có PDF";
 "PDF 여러 개를 놓으면 각 파일을 별도의 탭으로 엽니다." = "Khi thả nhiều tệp PDF, mỗi tệp sẽ mở trong một tab riêng.";
@@ -164,7 +166,7 @@
 "PDF 추가…" = "Thêm PDF…";
 "PDF 탭별 부담" = "Tải theo từng tab PDF";
 "PDF 탭을 주제별로 묶어 접거나 펼칠 수 있습니다." = "Bạn có thể nhóm các tab PDF theo chủ đề rồi thu gọn hoặc mở rộng chúng.";
-"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "Nội dung được lưu dưới dạng chú thích văn bản tự do chuẩn PDF. Việc sắp xếp lại các đối tượng nội dung hiện có sẽ được hỗ trợ trong công cụ chỉnh sửa nâng cao sau này.";
+"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "Lưu dưới dạng chú thích văn bản tự do chuẩn PDF. Để đổi nội dung hiện có, dùng Chọn kéo qua chữ trong chế độ Chỉnh sửa rồi bấm Sửa văn bản (가T).";
 "PDF는 각각 새 탭에서 열고 이미지는 현재 페이지 중앙에 놓습니다." = "Mỗi tệp PDF được mở trong một tab riêng, còn ảnh được đặt ở giữa trang hiện tại.";
 "PDF는 각각 새 탭에서 열고, 이미지는 현재 페이지 중앙에 놓습니다." = "Mỗi tệp PDF được mở trong một tab riêng, còn ảnh được đặt ở giữa trang hiện tại.";
 "PDF를 새 탭으로 열기" = "Mở PDF trong tab mới";
@@ -272,14 +274,14 @@
 "보기" = "Xem";
 "분할선 방향까지 함께 표시합니다." = "Hiển thị cả hướng của đường phân chia.";
 "불투명도" = "Độ mờ";
-"비교 배치" = "Bố cục so sánh";
-"비교 시작" = "Bắt đầu so sánh";
-"비교 종료" = "Kết thúc so sánh";
-"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "Tài liệu bị khóa trong màn hình so sánh sẽ không di chuyển tài liệu khác và cũng không di chuyển theo chúng.";
-"비교하려면 PDF 탭을 하나 더 열어 주세요." = "Mở thêm một tab PDF để so sánh.";
-"비교할 PDF" = "PDF cần so sánh";
-"비교할 PDF가 부족합니다" = "Không đủ PDF để so sánh";
-"비교할 PDF가 없습니다" = "Không có PDF để so sánh";
+"비교 배치" = "Bố cục xem cùng nhau";
+"비교 시작" = "Bắt đầu xem cùng nhau";
+"비교 종료" = "Kết thúc xem cùng nhau";
+"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "Trong chế độ xem cùng nhau, PDF đã ghim không di chuyển tài liệu khác và cũng không di chuyển theo chúng.";
+"비교하려면 PDF 탭을 하나 더 열어 주세요." = "Mở thêm một thẻ PDF để xem cùng nhau.";
+"비교할 PDF" = "PDF để xem cùng nhau";
+"비교할 PDF가 부족합니다" = "Chưa đủ PDF để xem cùng nhau";
+"비교할 PDF가 없습니다" = "Không có PDF để xem cùng nhau";
 "빈 탭 추가" = "Thêm tab trống";
 "빠르게 그은 획을 더 가늘게 표현하는 정도입니다." = "Mức độ làm mảnh các nét được vẽ nhanh.";
 "빠르게" = "Nhanh";
@@ -339,7 +341,7 @@
 "열 PDF를 선택하세요. iCloud Drive와 Finder의 파일 제공자 위치도 사용할 수 있습니다." = "Chọn các PDF cần mở. Bạn cũng có thể dùng iCloud Drive và các vị trí của nhà cung cấp tệp trong Finder.";
 "열 PDF를 선택하세요. 각 파일을 별도의 탭으로 엽니다." = "Chọn các PDF cần mở. Mỗi tệp sẽ mở trong một tab riêng.";
 "열려 있는 PDF 중 2~4개를 다시 선택해 주세요." = "Chọn lại từ hai đến bốn PDF đang mở.";
-"열린 PDF 비교" = "So sánh các PDF đang mở";
+"열린 PDF 비교" = "Xem cùng nhau";
 "열린 탭 관리" = "Quản lý tab đang mở";
 "열린 탭" = "Tab đang mở";
 "예: 연구 자료" = "Ví dụ: Tài liệu nghiên cứu";
@@ -351,8 +353,8 @@
 "왼쪽" = "Trái";
 "왼쪽으로 회전" = "Xoay trái";
 "운영 체제가 잘못된 리소스 카운터를 반환했습니다." = "Hệ điều hành trả về bộ đếm tài nguyên không hợp lệ.";
-"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "Các giá trị trên là mức sử dụng RSS và CPU thực tế của toàn bộ tiến trình HwattakPDF. CPU 100% tương ứng với một lõi logic.";
-"위아래 비교" = "So sánh trên dưới";
+"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "Các giá trị trên là mức sử dụng RSS và CPU thực tế của toàn bộ tiến trình EmberPDF. CPU 100% tương ứng với một lõi logic.";
+"위아래 비교" = "Xếp theo chiều dọc";
 "이 탭으로 전환합니다." = "Chuyển sang tab này.";
 "이동 감도" = "Độ nhạy di chuyển";
 "이동할 그룹 없음" = "Không có nhóm để di chuyển";
@@ -404,7 +406,7 @@
 "접습니다" = "Sẽ thu gọn";
 "접힘" = "Đã thu gọn";
 "정밀하게" = "Chính xác";
-"좌우 비교" = "So sánh cạnh nhau";
+"좌우 비교" = "Đặt cạnh nhau";
 "주석 내용" = "Nội dung chú thích";
 "주석 선 색상" = "Màu đường chú thích";
 "주석을 변경했습니다." = "Đã thay đổi chú thích.";
@@ -533,7 +535,7 @@
 "comparison.lock_help.disabled" = "Loại PDF này khỏi nhóm cuộn khi bật lại đồng bộ.";
 
 /* Semantic keys used throughout the workspace */
-"app.version" = "HwattakPDF phiên bản %@";
+"app.version" = "EmberPDF phiên bản %@";
 "comparison.horizontal_split" = "Chia ngang";
 "comparison.side_by_side" = "So sánh cạnh nhau";
 "comparison.stacked" = "So sánh trên dưới";
@@ -544,8 +546,8 @@
 "document.untitled" = "PDF mới";
 "error.cannot_open_file" = "Không thể mở tệp: %@";
 "error.cannot_save_file" = "Không thể lưu tệp: %@";
-"error.external_file_modified" = "“%@” đã bị thay đổi bên ngoài HwattakPDF sau khi mở. Tệp mới hơn không bị ghi đè. Hãy lưu một bản sao.";
-"새 HwattakPDF 창으로 분리" = "Tách sang cửa sổ HwattakPDF mới";
+"error.external_file_modified" = "“%@” đã bị thay đổi bên ngoài EmberPDF sau khi mở. Tệp mới hơn không bị ghi đè. Hãy lưu một bản sao.";
+"새 HwattakPDF 창으로 분리" = "Tách sang cửa sổ EmberPDF mới";
 "error.choose_save_location" = "Dùng “Lưu thành” để chọn vị trí lưu.";
 "error.copy_merged_page" = "Không thể sao chép trang %d của tệp đã gộp.";
 "error.copy_page" = "Không thể sao chép trang %d.";
@@ -813,7 +815,15 @@
 "ai.api_key_required" = "Hãy lưu khóa API cho nhà cung cấp này trong Cài đặt.";
 "ai.empty.title" = "Hỏi về tệp PDF của bạn";
 "ai.empty.message" = "Nội dung chỉ được gửi đến AI bên ngoài sau khi bạn chọn phạm vi và xem lại bản xem trước. Việc tìm PDF liên quan chỉ diễn ra trên máy Mac này.";
+"ai.empty.message.direct" = "Chọn phạm vi gửi kèm câu hỏi để gửi trực tiếp đến nhà cung cấp AI đã chọn. Việc tìm PDF liên quan chỉ diễn ra trên máy Mac này.";
 "ai.external_notice.short" = "Bạn sẽ xem lại nội dung và nhà cung cấp một lần nữa trước khi gửi.";
+"ai.display_options" = "Tùy chọn AI";
+"ai.external_notice.show" = "Hiện thông báo gửi";
+"ai.external_notice.hide" = "Ẩn thông báo";
+"ai.confirmation.show" = "Xác nhận trước khi gửi";
+"ai.confirmation.setting_help" = "Khi tắt, yêu cầu được gửi trực tiếp đến nhà cung cấp đã chọn với phạm vi đã chọn.";
+"ai.send.direct" = "Gửi đến AI";
+"ai.external_notice.direct" = "Yêu cầu được gửi trực tiếp đến nhà cung cấp đã chọn với phạm vi đã chọn.";
 "ai.send" = "Xem lại và gửi đến AI";
 "ai.cancel_request" = "Dừng yêu cầu AI";
 "ai.clear" = "Xóa cuộc trò chuyện";
@@ -832,7 +842,7 @@
 "ai.draft.apply_confirmation.message" = "Bạn có thể xem lại văn bản trong trình chỉnh sửa trước khi thêm. Tệp gốc chỉ được ghi khi bạn chọn Lưu.";
 "ai.draft.review_and_apply" = "Xem lại và thêm dưới dạng văn bản";
 "ai.consent.title" = "Xem lại trước khi gửi đến AI bên ngoài";
-"ai.consent.message" = "Nội dung PDF bên dưới sẽ được gửi đến máy chủ của nhà cung cấp AI đã chọn. HwattakPDF tuyệt đối không đưa khóa API của bạn vào nội dung yêu cầu.";
+"ai.consent.message" = "Nội dung PDF bên dưới sẽ được gửi đến máy chủ của nhà cung cấp AI đã chọn. EmberPDF tuyệt đối không đưa khóa API của bạn vào nội dung yêu cầu.";
 "ai.consent.preview" = "Xem trước nội dung";
 "ai.consent.acknowledge" = "Tôi đồng ý gửi nội dung PDF và câu hỏi đang hiển thị đến nhà cung cấp nêu trên.";
 "ai.consent.send" = "Đồng ý và gửi";
@@ -876,9 +886,10 @@
 "ai.settings.api_key_placeholder" = "Nhập khóa API mới";
 "ai.settings.key_saved" = "Được lưu an toàn trong Keychain";
 "ai.settings.key_missing" = "Nhà cung cấp này yêu cầu khóa API.";
+"ai.settings.key_access_requires_reentry" = "Không thể truy cập khóa API đã lưu. Hãy lưu lại khóa API của nhà cung cấp này trong Cài đặt > AI. Nếu chuỗi khóa đăng nhập bị khóa, hãy mở khóa trước.";
 "ai.settings.key_deleted" = "Đã xóa khóa API đã lưu.";
 "ai.settings.web_search" = "Cho phép nhà cung cấp tìm kiếm trên web";
-"ai.settings.billing_note" = "Gói đăng ký ChatGPT, Claude hoặc Gemini có thể tách biệt với việc sử dụng và thanh toán API dành cho nhà phát triển. Việc truyền tài liệu được xác nhận cho từng yêu cầu trong bảng AI.";
+"ai.settings.billing_note" = "Gói đăng ký ChatGPT, Claude hoặc Gemini có thể tách biệt với việc sử dụng và thanh toán API dành cho nhà phát triển.";
 "ai.settings.mcp_title" = "Máy chủ MCP từ xa";
 "ai.settings.mcp_label" = "Nhãn máy chủ";
 "ai.settings.mcp_approval_note" = "Chỉ kết nối đến máy chủ HTTPS công khai, và mỗi lần gọi công cụ MCP đều phải được xem lại và phê duyệt trước khi thực thi.";
@@ -889,21 +900,35 @@
 "ai.error.duplicate_mcp" = "Máy chủ MCP này đã được đăng ký.";
 
 /* About */
-"about.menu" = "Giới thiệu HwattakPDF";
-"about.title" = "Giới thiệu HwattakPDF";
+"about.menu" = "Giới thiệu EmberPDF";
+"about.title" = "Giới thiệu EmberPDF";
 "about.close" = "Đóng";
 "about.confirm" = "Đóng";
-"about.github" = "GitHub · github.com/SeederPowerDrop/HwattakPDF";
-"about.support" = "Ủng hộ HwattakPDF";
-"about.introduction.1" = "Tôi đã mua và sử dụng một phần mềm PDF trả phí, nhưng giờ đây ngay cả những tính năng cơ bản cũng bị chuyển sang hình thức đăng ký. Vì quá bực mình với điều đó, tôi đã tạo ra HwattakPDF bằng Vibe Coding.";
-"about.introduction.2" = "Tôi hiểu công ty đó cũng cần duy trì hoạt động và có những quyết định khó tránh khỏi. Tuy vậy, tôi cảm thấy cách làm này quá bất công với những người đã trả tiền mua phần mềm, nên tôi quyết định tự mình tạo ra một ứng dụng khác.";
-"about.introduction.3" = "Tôi mong HwattakPDF sẽ giúp nhiều người sử dụng PDF một cách thuận tiện hơn.";
-"about.introduction.4" = "Tôi sẽ cố gắng hết sức để HwattakPDF luôn được cung cấp và hỗ trợ miễn phí trọn đời, và chỉ nhận những khoản tip nhỏ hoàn toàn tự nguyện.";
-"about.introduction.5" = "Và ERW FWS WRG";
-"about.support.title" = "Nguồn động lực giúp HwattakPDF luôn miễn phí";
-"about.support.detail" = "HwattakPDF không có phí đăng ký và cũng không có quảng cáo. Những khoản ủng hộ tự nguyện là nguồn hỗ trợ duy nhất giúp việc phát triển và bảo trì miễn phí có thể tiếp tục.";
+"about.github" = "GitHub · SeederPowerDrop";
+"about.support" = "Ủng hộ EmberPDF";
+"about.introduction.1" = "Một ứng dụng xem và chỉnh sửa PDF mà tôi đã bỏ ra nhiều tiền để mua chuyển sang mô hình thuê bao, khiến tôi không còn sử dụng được những tính năng vốn vẫn dùng. Tôi tức giận, nên đã tạo EmberPDF bằng vibe coding.";
+"about.introduction.2" = "Tôi bắt đầu làm ứng dụng vì tức giận như vậy, nhưng rồi lúc nào không hay, cảm xúc ấy đã lắng xuống như ngọn lửa còn lại than hồng. Tôi nghĩ có lẽ nhiều người cũng đã gặp chuyện giống mình. Tôi làm ứng dụng với mong muốn nó sẽ được duy trì lâu dài cho những người ấy.";
+"about.introduction.3" = "Với mong muốn tạo một ứng dụng giống Obsidian dành cho PDF, tôi cũng thêm tính năng plugin. Hy vọng mỗi người có thể bổ sung những tính năng mình cần, để cùng nhau mở rộng khả năng của ứng dụng.";
+"about.introduction.4" = "Tôi mong EmberPDF sẽ hữu ích với mọi người trong thời gian dài, như than hồng bền bỉ giữ ấm. Tôi sẽ tiếp tục chia sẻ miễn phí và chăm chút cho ứng dụng lâu nhất có thể.";
+"about.introduction.5" = "Xin cảm ơn.\nVà ERW FWS WRG";
+"about.support.title" = "Ủng hộ dự án";
+"about.support.detail" = "Tôi tạo những công cụ ai cũng có thể dùng miễn phí, với mong muốn trao lại sự giúp đỡ mà mình đã nhận được. Nếu EmberPDF hữu ích với bạn, một khoản đóng góp nhỏ sẽ giúp duy trì việc phát triển và bảo trì.";
 "about.image_accessibility" = "Tranh nhân vật đen trắng do nhà phát triển cung cấp";
 "about.image_unavailable" = "Không thể tải hình giới thiệu";
+"about.tagline" = "Công cụ PDF cho macOS mà mọi người có thể tự do sử dụng.";
+"about.guide" = "Hướng dẫn sử dụng";
+"about.rights.title" = "Quyền cơ bản về phần mềm";
+"about.rights.detail" = "Tôi tin rằng mọi người đều nên được tự do sử dụng miễn phí những công cụ máy tính thiết yếu. Mong rằng kiến thức chúng ta chia sẻ sẽ là khởi đầu cho ai đó, và con người cùng AI có thể học hỏi, sáng tạo, mở ra những khả năng mới bên nhau.";
+"about.licenses" = "Giấy phép nguồn mở";
+"about.licenses.detail" = "EmberPDF được phân phối theo Mozilla Public License 2.0. Bạn cũng có thể xem giấy phép và thông báo bản quyền của các thành phần nguồn mở được sử dụng.";
+"about.licenses.project" = "Giấy phép EmberPDF";
+"about.licenses.components" = "Thành phần và thông báo bản quyền";
+"about.bitcoin" = "Bitcoin (BTC)";
+"about.bitcoin.detail" = "Bạn có thể ủng hộ Bitcoin (BTC) đến địa chỉ dưới đây.";
+"about.bitcoin.copy" = "Sao chép địa chỉ";
+"about.bitcoin.copied" = "Đã sao chép địa chỉ";
+"about.bitcoin.qr" = "Mã QR địa chỉ ủng hộ Bitcoin";
+"about.support.optional" = "Việc ủng hộ là tự nguyện và không ảnh hưởng đến các tính năng bạn có thể sử dụng trong ứng dụng.";
 "page.sidebar.layout" = "Nhóm trang";
 "page.sidebar.layout.single" = "Một trang";
 "page.sidebar.layout.facing" = "2 trang cạnh nhau";
@@ -920,11 +945,12 @@
 "settings.pdf_input.keyboard_speed.slow" = "Chậm";
 "settings.pdf_input.keyboard_speed.normal" = "Bình thường";
 "settings.pdf_input.keyboard_speed.fast" = "Nhanh";
-"settings.pdf_input.keyboard_speed.help" = "Điều chỉnh tốc độ di chuyển khi giữ phím mũi tên. Giữ thêm Shift (⇧) để tăng tốc độ lên khoảng 2,2 lần. Option (⌥)+Mũi tên vẫn giữ cách chuyển trang thông thường.";
+"settings.pdf_input.keyboard_speed.help" = "Điều chỉnh tốc độ di chuyển khi giữ phím mũi tên. Giữ thêm Shift (⇧) để tăng tốc độ lên khoảng 2,2 lần. Ở chế độ cả bốn phím, Option (⌥)+Mũi tên cũng lật trang. Các chế độ khác, nhập và chọn văn bản vẫn giữ phím tắt Option thông thường.";
 "pdf.navigation.label" = "Điều hướng trang chính";
 "pdf.navigation.vertical" = "Cuộn dọc";
 "pdf.navigation.horizontal" = "Lật trang ngang";
-"pdf.navigation.help" = "Chọn cuộn dọc hoặc lật trang ngang. Ở chế độ ngang, dùng ←/→ hoặc vuốt trái/phải; chế độ xem hai và bốn trang sẽ lật cả nhóm trang đang hiển thị.";
+"pdf.navigation.all_directions" = "Dùng cả bốn phím mũi tên";
+"pdf.navigation.help" = "Chọn cuộn dọc, lật trang ngang (←/→ hoặc vuốt trái/phải), hoặc cả bốn phím mũi tên. Ở chế độ cả bốn phím trên PDF, ↑/← lùi lại và ↓/→ tiến tới một trang hoặc nhóm trang, kể cả khi giữ Option (⌥). Chuột và bàn di chuột vẫn cuộn như bình thường.";
 "settings.pdf_input.zoom_modifier.label" = "Phím cuộn để thu phóng";
 "settings.pdf_input.zoom_modifier.option" = "Option (⌥)";
 "settings.pdf_input.zoom_modifier.command" = "Command (⌘)";
@@ -937,8 +963,8 @@
 "page.jump.help" = "Nhập số trang rồi nhấn Return.";
 
 /* Help tutorial */
-"help.title" = "Hướng dẫn sử dụng HwattakPDF";
-"help.menu" = "Hướng dẫn sử dụng HwattakPDF";
+"help.title" = "Hướng dẫn sử dụng EmberPDF";
+"help.menu" = "Hướng dẫn sử dụng EmberPDF";
 "help.subtitle" = "Tìm hiểu biểu tượng, cử chỉ, phím tắt và quy trình xử lý tài liệu an toàn.";
 "help.search" = "Tìm tính năng hoặc phím tắt";
 "help.no_results.title" = "Không có kết quả";
@@ -954,16 +980,16 @@
 "help.item.open.title" = "Mở PDF";
 "help.item.open.detail" = "Dùng biểu tượng thư mục hoặc ⌘O. Khi chọn nhiều PDF, mỗi tệp sẽ mở trong một tab riêng.";
 "help.item.layout.title" = "Làm quen với màn hình";
-"help.item.layout.detail" = "Thanh trên cùng quản lý không gian làm việc, tab, chế độ so sánh và tài nguyên. Thanh công cụ bên dưới điều khiển trang, chế độ xem, chỉnh sửa, OCR, AI và tìm kiếm.";
+"help.item.layout.detail" = "Thanh trên cùng quản lý thẻ và không gian làm việc. Thanh công cụ Xem có điều hướng trang, bố cục và Xem cùng nhau.";
 "help.item.resume.title" = "Tiếp tục công việc";
-"help.item.resume.detail" = "Sau khi thoát ứng dụng theo cách thông thường, các tệp, không gian làm việc, thứ tự và ngăn xếp tab, trang đang mở, trạng thái xem và bố cục so sánh sẽ được khôi phục. Các chỉnh sửa PDF vẫn cần được lưu riêng.";
+"help.item.resume.detail" = "Sau khi thoát ứng dụng bình thường, tài liệu, thẻ, vị trí đọc và bố cục Xem cùng nhau được khôi phục. Hãy lưu riêng các chỉnh sửa PDF.";
 
 "help.topic.tabs.title" = "Tab, ngăn xếp và không gian làm việc";
 "help.topic.tabs.summary" = "Sắp xếp nhiều tài liệu mà vẫn giữ nguyên trạng thái riêng của từng tài liệu.";
 "help.item.tab_stack.title" = "Tạo và sắp xếp lại ngăn xếp tab";
 "help.item.tab_stack.detail" = "Thả một tab vào giữa tab khác để xếp chúng thành nhóm. Thả gần mép để đổi thứ tự thay vì tạo nhóm.";
 "help.item.unstack.title" = "Đưa tab ra khỏi ngăn xếp";
-"help.item.unstack.detail" = "Kéo tab trong ngăn xếp đến cuối hàng tab chính để tách riêng, hoặc thả tab vào vùng tài liệu để chuyển nguyên phiên làm việc đó sang cửa sổ HwattakPDF mới.";
+"help.item.unstack.detail" = "Kéo tab trong ngăn xếp đến cuối hàng tab chính để tách riêng, hoặc thả tab vào vùng tài liệu để chuyển nguyên phiên làm việc đó sang cửa sổ EmberPDF mới.";
 "help.item.workspace.title" = "Tách riêng các không gian làm việc";
 "help.item.workspace.detail" = "Dùng menu có biểu tượng các ô vuông xếp chồng để tạo, đổi tên, chuyển đổi hoặc xóa không gian làm việc và di chuyển các tab liên quan cùng nhau.";
 "help.item.resources.title" = "Theo dõi mức sử dụng tài nguyên";
@@ -980,14 +1006,14 @@
 "help.item.thumbnails.title" = "Điều chỉnh nhóm hình thu nhỏ";
 "help.item.thumbnails.detail" = "Bảng trang có thể hiển thị từng trang, cặp trang trái-phải cố định hoặc nhóm bốn trang. Dùng thanh trượt, nút cộng/trừ hoặc cử chỉ phóng đại trên bàn di chuột, và kéo hình thu nhỏ của trang thật để đổi thứ tự.";
 
-"help.topic.compare.title" = "So sánh PDF";
+"help.topic.compare.title" = "Xem cùng nhau";
 "help.topic.compare.summary" = "Đọc hai đến bốn tài liệu đang mở theo chiều ngang hoặc chiều dọc.";
-"help.item.compare_start.title" = "Bắt đầu so sánh";
-"help.item.compare_start.detail" = "Mở ít nhất hai PDF, sau đó chọn biểu tượng các hình chữ nhật chồng nhau và chọn tài liệu.";
+"help.item.compare_start.title" = "Bắt đầu xem cùng nhau";
+"help.item.compare_start.detail" = "Mở ít nhất hai PDF, chọn Xem cùng nhau trên thanh công cụ Xem rồi chọn từ hai đến bốn tài liệu.";
 "help.item.compare_layout.title" = "Sắp xếp lại và đổi kích thước các bảng";
-"help.item.compare_layout.detail" = "Chọn bố cục cạnh nhau hoặc xếp chồng. Kéo tiêu đề bảng để đổi thứ tự và kéo đường phân cách để điều chỉnh chiều rộng hoặc chiều cao của các bảng liền kề.";
-"help.item.compare_sync.title" = "Đồng bộ hoặc khóa thao tác cuộn";
-"help.item.compare_sync.detail" = "Bật đồng bộ cuộn để theo dõi tiến độ tương đối giữa các tài liệu. Khóa bảng nào cần giữ nguyên vị trí.";
+"help.item.compare_layout.detail" = "Chọn bố cục ngang, dọc hoặc lưới, hoặc bật Sửa bố cục rồi kéo PDF. Thả ở mép để chia khung hoặc ở giữa để đổi chỗ. Kéo đường phân cách để đổi kích thước.";
+"help.item.compare_sync.title" = "Di chuyển cùng nhau và ghim";
+"help.item.compare_sync.detail" = "Bật Di chuyển cùng nhau để cuộn và chuyển trang mà vẫn giữ vị trí tương đối của từng PDF. Ghim PDF cần giữ nguyên vị trí.";
 
 "help.topic.edit.title" = "Chỉnh sửa và chú thích";
 "help.topic.edit.summary" = "Thêm chú thích PDF tiêu chuẩn và quản lý trang an toàn.";
@@ -1018,7 +1044,7 @@
 "help.item.ai_actions.title" = "Chọn thao tác và phạm vi";
 "help.item.ai_actions.detail" = "Nút lấp lánh mở các thao tác tóm tắt, phân tích, giải bài, soạn bản nháp điền biểu mẫu, tìm PDF liên quan và nghiên cứu trên web cho văn bản đã chọn, các trang hoặc ngữ cảnh đại diện của tài liệu.";
 "help.item.ai_privacy.title" = "Kiểm tra trước khi gửi";
-"help.item.ai_privacy.detail" = "Trước mỗi yêu cầu, HwattakPDF hiển thị văn bản và cuộc trò chuyện sắp rời khỏi máy Mac. PDF gốc không tự động được tải lên; công cụ web và MCP phải được chủ động bật, còn lệnh gọi MCP cần được phê duyệt.";
+"help.item.ai_privacy.detail" = "Trước mỗi yêu cầu, EmberPDF hiển thị văn bản và cuộc trò chuyện sắp rời khỏi máy Mac. PDF gốc không tự động được tải lên; công cụ web và MCP phải được chủ động bật, còn lệnh gọi MCP cần được phê duyệt.";
 
 "help.topic.save.title" = "Lưu an toàn";
 "help.topic.save.summary" = "Phân biệt khi nào tệp PDF thay đổi và khi nào chỉ trạng thái không gian làm việc được ghi nhớ.";
@@ -1029,10 +1055,10 @@
 "help.item.save_close.title" = "Đóng mà không mất công việc";
 "help.item.save_close.detail" = "Khi đóng tab hoặc cửa sổ có thay đổi chưa lưu, hay thoát ứng dụng, bạn sẽ được hỏi ghi đè, lưu bản sao, bỏ thay đổi hay hủy. Chọn hủy sẽ giữ tài liệu mở.";
 "help.item.session_vs_pdf.title" = "Khôi phục phiên không phải là lưu PDF";
-"help.item.session_vs_pdf.detail" = "Ngăn xếp tab, không gian làm việc, cửa sổ, bố cục so sánh, trang và vị trí xem được tự động ghi nhớ. Chú thích và chỉnh sửa trang chỉ được ghi vào tệp PDF sau khi bạn lưu.";
+"help.item.session_vs_pdf.detail" = "Thẻ, không gian làm việc, vị trí đọc và bố cục Xem cùng nhau được ghi nhớ tự động. Hãy lưu ghi chú và chỉnh sửa trang vào tệp PDF.";
 
 "help.topic.shortcuts.title" = "Phím tắt";
-"help.topic.shortcuts.summary" = "Các lệnh thông dụng hiện đã được triển khai trong HwattakPDF.";
+"help.topic.shortcuts.summary" = "Các lệnh thông dụng hiện đã được triển khai trong EmberPDF.";
 "help.shortcut.new_tab" = "Tab mới";
 "help.shortcut.open" = "Mở PDF";
 "help.shortcut.close" = "Đóng tab đang hoạt động";
@@ -1043,7 +1069,7 @@
 "help.shortcut.previous_tab" = "Tab trước";
 "help.shortcut.settings" = "Mở Cài đặt";
 "help.shortcut.signature_undo" = "Hoàn tác nét ký gần nhất";
-"help.shortcut.compare_exit" = "Thoát so sánh hoặc hủy";
+"help.shortcut.compare_exit" = "Hủy sắp xếp hoặc kết thúc Xem cùng nhau";
 "help.shortcut.help" = "Mở hướng dẫn sử dụng này";
 
 "help.topic.accessibility.title" = "Trợ năng và sự thoải mái";
@@ -1065,7 +1091,7 @@
 "status.undo_completed" = "Đã hoàn tác %@";
 "status.redo_completed" = "Đã làm lại %@";
 "help.item.undo_redo.title" = "Hoàn tác và làm lại chỉnh sửa PDF";
-"help.item.undo_redo.detail" = "Dùng ⌘Z để hoàn tác và ⇧⌘Z để làm lại. HwattakPDF lưu tối đa 22 thao tác chỉnh sửa có thể đảo ngược cho mỗi PDF, gồm thao tác bút, đánh dấu, đối tượng đã thêm và trang, mà không cần giữ 22 bản sao PDF đầy đủ.";
+"help.item.undo_redo.detail" = "Dùng ⌘Z để hoàn tác và ⇧⌘Z để làm lại. EmberPDF lưu tối đa 22 thao tác chỉnh sửa có thể đảo ngược cho mỗi PDF, gồm thao tác bút, đánh dấu, đối tượng đã thêm và trang, mà không cần giữ 22 bản sao PDF đầy đủ.";
 "help.shortcut.undo" = "Hoàn tác chỉnh sửa PDF gần nhất";
 "help.shortcut.redo" = "Làm lại chỉnh sửa PDF vừa hoàn tác";
 
@@ -1078,16 +1104,18 @@
 "search.navigator.clear" = "Xóa tìm kiếm";
 "search.navigator.compact_position" = "%d/%d";
 "search.navigator.show_results" = "Hiện bộ điều hướng kết quả";
+"search.navigator.hide_results" = "Ẩn bộ điều hướng kết quả";
 "search.navigator.results_count" = "%d kết quả";
 "search.navigator.query" = "“%@”";
 "search.navigator.query_accessibility" = "Từ khóa: %@";
 "search.navigator.cancel" = "Hủy";
 "search.navigator.progress_label" = "Tiến trình tìm kiếm";
 "search.navigator.current_position" = "Kết quả %d/%d";
-"search.navigator.enter_query_message" = "Nhấn ⌘F, nhập từ khóa rồi nhấn Return.";
+"search.navigator.enter_query_message" = "Nhấn ⌘F và nhập từ khóa tìm kiếm.";
 "search.navigator.no_position" = "Không có kết quả để chọn.";
 "search.navigator.progress" = "Đã tìm %d/%d trang";
 "search.navigator.page_heading" = "Trang %@ · %d kết quả";
+"search.navigator.file_page_detail" = "Trang %d/%d trong tệp";
 "search.navigator.result_accessibility" = "Trang %@, kết quả %d/%d: %@";
 "search.navigator.result_hint" = "Kích hoạt kết quả này và đi đến vị trí chính xác trên trang.";
 "search.navigator.current_result" = "Kết quả hiện tại";
@@ -1128,7 +1156,9 @@
 "study.ai.prompt.study_points" = "Hãy sắp xếp các khái niệm, mối quan hệ cần nhớ và điểm dễ nhầm quan trọng cho việc ôn tập hoặc kiểm tra.";
 "study.ai.prompt.quiz" = "Hãy tạo một bài kiểm tra ngắn về nội dung này và đặt đáp án riêng ở cuối để không nhìn thấy ngay.";
 "study.ai.current_page_help" = "Chuẩn bị bản xem trước của trang hiện tại. Không gửi gì đến AI bên ngoài trước khi bạn xác nhận.";
+"study.ai.current_page_help.direct" = "Gửi trang hiện tại trực tiếp đến nhà cung cấp AI đã chọn.";
 "study.ai.selection_help" = "Chuẩn bị bản xem trước của văn bản đã chọn. Không gửi gì đến AI bên ngoài trước khi bạn xác nhận.";
+"study.ai.selection_help.direct" = "Gửi văn bản đã chọn trực tiếp đến nhà cung cấp AI.";
 "study.note.typed" = "Ghi chú bằng phím";
 "study.note.typed_help" = "Bấm vào PDF để thêm chú thích ghi chú học tập bằng bàn phím.";
 "study.note.handwriting" = "Viết tay";
@@ -1148,7 +1178,7 @@
 "study.status.underline_added" = "Đã thêm gạch chân.";
 
 /* Trình sửa văn bản trực tiếp của chế độ Chỉnh sửa */
-"inline_text.editor" = "Trình sửa văn bản trực tiếp trên PDF";
+"inline_text.editor" = "Trình chỉnh sửa văn bản PDF";
 "inline_text.font" = "Phông chữ";
 "inline_text.font_size" = "Cỡ chữ";
 "inline_text.text_color" = "Màu chữ";
@@ -1168,10 +1198,10 @@
 "inline_text.visual_replacement_warning" = "Chỉ thay thế trực quan. Văn bản PDF gốc vẫn có thể tìm kiếm và sao chép; đây không phải che nội dung an toàn.";
 "status.inline_text_updated" = "Đã cập nhật văn bản và giao diện.";
 "status.visual_text_replacement_added" = "Đã thêm lớp thay thế trực quan; văn bản gốc vẫn còn bên dưới.";
-"help.item.inline_text.title" = "Nhập trực tiếp trên PDF";
-"help.item.inline_text.detail" = "Trong chế độ Chỉnh sửa, bấm trang bằng công cụ Văn bản để nhập tại chỗ. Bấm đúp văn bản do ứng dụng tạo để sửa. Chọn phông, cỡ, màu chữ, nền và căn chỉnh; Return hoặc ⌘Return áp dụng, Shift-Return xuống dòng, Esc hủy.";
-"help.item.visual_text_replacement.title" = "Thay thế trực quan văn bản hiện có";
-"help.item.visual_text_replacement.detail" = "Chọn văn bản rồi bấm vùng chọn bằng công cụ Văn bản để đặt lớp FreeText. Văn bản gốc vẫn có thể tìm kiếm, sao chép và trích xuất trợ năng. Không dùng như biện pháp che dữ liệu an toàn.";
+"help.item.inline_text.title" = "Sửa nội dung và thêm văn bản";
+"help.item.inline_text.detail" = "Trong chế độ Chỉnh sửa, dùng Chọn kéo qua nội dung rồi bấm Sửa văn bản (가T) để sửa trực tiếp chữ đã chọn. Nhập để thay thế phần đã chọn, hoặc bấm và dùng phím mũi tên để di chuyển con trỏ khi sửa. Return xuống dòng, ⌘Return áp dụng và Esc hủy. Để chèn chữ mới, chọn Sửa văn bản rồi bấm vào vùng trống. Chú thích văn bản tự do hiện có vẫn được sửa dưới dạng chú thích.";
+"help.item.visual_text_replacement.title" = "Phạm vi chỉnh sửa và xóa nội dung";
+"help.item.visual_text_replacement.detail" = "Trình sửa hiển thị toàn bộ đối tượng văn bản được lưu trong PDF, có thể rộng hơn từ đã chọn. Xóa hết rồi áp dụng để xóa đối tượng đó. Thay đổi đã lưu được phản ánh khi tìm kiếm và sao chép. Chưa hỗ trợ dàn lại cả đoạn, chữ nghiêng hoặc biến đổi phức tạp, hay chữ trong ảnh quét. Văn bản gốc bên dưới chú thích thay thế trực quan cũ vẫn còn.";
 "help.item.study_palette.title" = "Công cụ học nhanh và kiểm tra quyền riêng tư";
 "help.item.study_palette.detail" = "Chọn văn bản để chuẩn bị bản dịch, giải thích, tóm tắt, lời giải từng bước, điểm cần học hoặc câu hỏi ôn tập; nếu không chọn thì chỉ dùng trang hiện tại. Chỉ gửi đến AI bên ngoài sau khi bạn xác nhận bản xem trước. Nhập phím tạo chú thích ghi chú học tập; viết tay dùng chuột, bàn di chuột hoặc đầu vào con trỏ Apple Pencil qua Sidecar. Có thể chỉnh màu, độ dày, độ mờ và hoàn tác bằng Command-Z.";
 "help.item.study_markup_interop.title" = "Khả năng tương thích của dấu có thể điều chỉnh";
@@ -1187,7 +1217,7 @@
 "error.image_unsafe_file" = "Chỉ có thể thêm tệp hình ảnh thông thường.";
 
 "menu.plugins" = "Tiện ích bổ sung";
-"plugins.manager.title" = "Tiện ích bổ sung HwattakPDF";
+"plugins.manager.title" = "Tiện ích bổ sung EmberPDF";
 "plugins.manager.summary" = "%d tiện ích · %d tác vụ đã bật";
 "plugins.install" = "Cài đặt tiện ích…";
 "plugins.install.confirm" = "Cài đặt";
@@ -1212,17 +1242,17 @@
 "plugins.permissions.none" = "Không có quyền đối với tài liệu";
 "plugins.permission.document_metadata" = "Đọc tên tài liệu và thông tin trang";
 "plugins.permission.selected_text" = "Đọc văn bản do người dùng chọn";
-"plugins.permission.clipboard" = "Ghi văn bản vào bảng nhớ tạm";
+"plugins.permission.clipboard" = "Ghi văn bản và ảnh vào bảng nhớ tạm";
 "plugins.permission.external_url" = "Mở liên kết HTTPS bên ngoài sau khi xác nhận";
 
-"plugins.safety.title" = "Tiện ích khai báo an toàn";
-"plugins.safety.detail" = "Tác vụ mẫu v1 không truy cập trực tiếp mã tùy ý, shell, Chuỗi khóa, byte PDF thô, mạng hoặc GPU. Bảng web v2 hiển thị trang đã được xem xét trong phiên tạm thời, nhưng tập lệnh từ xa, cookie và theo dõi vẫn có thể chạy. Giới hạn điều hướng không phải trình chặn theo dõi hay tường lửa.";
+"plugins.safety.title" = "Nền tảng tiện ích có kiểm tra quyền";
+"plugins.safety.detail" = "Quyền theo từng tính năng và mã băm của gói, mã nguồn được kiểm tra. Mã tiện ích thực thi chạy trong tiến trình riêng. Chữ ký và danh tính nhà phát hành không được xác minh. Ngay cả bảng web đã được xem xét cũng có thể chạy tập lệnh từ xa, cookie và theo dõi của trang bên ngoài trong phiên.";
 "plugins.resources.title" = "Chính sách tài nguyên và độ ổn định";
-"plugins.resources.detail" = "Giới hạn là %d tiện ích đã cài, %d tác vụ cho mỗi tiện ích và %d MB cho mỗi gói. Tác vụ chỉ chạy khi được yêu cầu và không tạo tải CPU hoặc GPU thường trú.";
+"plugins.resources.detail" = "Giới hạn là %d plugin đã cài, %d tác vụ cho mỗi plugin và %d MB cho mỗi gói. Tiện ích cửa sổ được cấp quyền có thể chạy nền khi cửa sổ còn mở, với tối đa 8 tiến trình riêng biệt trong toàn ứng dụng.";
 
 "plugins.review.install_title" = "Xem xét việc cài đặt tiện ích";
 "plugins.review.update_title" = "Xem xét bản cập nhật tiện ích";
-"plugins.review.unsigned_notice" = "Chữ ký nhà phát hành không được xác minh. Gói v1 không chứa mã thực thi và chỉ dùng tác vụ máy chủ có giới hạn nêu trên. Bảng web v2 chỉ được cài khi khớp với bản đã xem xét của ứng dụng, nhưng tập lệnh từ xa, cookie và theo dõi có thể chạy trong phiên.";
+"plugins.review.unsigned_notice" = "Xem xét quyền theo từng tính năng trước khi cài đặt. Mã băm của gói và mã nguồn được kiểm tra, nhưng chữ ký và danh tính nhà phát hành không được xác minh. Mã tiện ích thực thi chạy trong tiến trình riêng. Bảng web phải khớp hoàn toàn với bản đã được xem xét đi kèm ứng dụng để cài đặt, nhưng tập lệnh từ xa, cookie và theo dõi của trang bên ngoài có thể hoạt động trong phiên.";
 "plugins.review.package_info" = "%d tệp · %d KB · SHA-256 %@";
 
 "plugins.external_url.title" = "Mở liên kết bên ngoài?";
@@ -1235,7 +1265,7 @@
 "plugins.error.title" = "Lỗi tiện ích";
 "plugins.error.invalid_package" = "Gói tiện ích không hợp lệ: %@";
 "plugins.error.invalid_manifest" = "Tệp kê khai tiện ích không hợp lệ: %@";
-"plugins.error.incompatible" = "Tiện ích này yêu cầu HwattakPDF %@ trở lên. Phiên bản hiện tại: %@";
+"plugins.error.incompatible" = "Tiện ích này yêu cầu EmberPDF %@ trở lên. Phiên bản hiện tại: %@";
 "plugins.error.already_installed" = "Tiện ích “%@” đã được cài đặt.";
 "plugins.error.package_changed" = "Gói tiện ích đã thay đổi sau khi xem xét. Hãy chọn lại gói.";
 "plugins.error.limit" = "Bạn có thể cài đặt tối đa %d tiện ích.";
@@ -1258,7 +1288,7 @@
 "action.stop" = "Dừng tải";
 "plugins.browser.address_placeholder" = "Tìm kiếm hoặc nhập địa chỉ HTTPS";
 "plugins.browser.privacy" = "Thanh địa chỉ và điều hướng trang cấp cao nhất chỉ giới hạn ở HTTPS công khai. Đây không phải trình chặn theo dõi hay tường lửa cho tài nguyên phụ, fetch, WebSocket hoặc DNS.";
-"plugins.bundled.title" = "Tiện ích tích hợp của HwattakPDF";
+"plugins.bundled.title" = "Tiện ích tích hợp của EmberPDF";
 "plugins.bundled.detail" = "Đi kèm ứng dụng · Xem xét quyền trước khi cài đặt";
 "plugins.bundled.review_install" = "Xem xét và cài đặt";
 "plugins.bundled.translation.name" = "Trợ lý dịch thuật";
@@ -1334,7 +1364,7 @@
 "settings.plugins.title" = "Tiện ích bổ sung";
 "settings.plugins.description" = "Cài đặt các gói .hwattakplugin đã được xác thực và quản lý quyền cũng như trạng thái bật của chúng.";
 "settings.plugins.installed_count" = "%d tiện ích đã cài · %d tác vụ đã bật";
-"settings.plugins.safety_note" = "Chỉ các tác vụ mẫu có giới hạn do bạn khởi chạy mới có thể chạy; không có mã thực thi hay tác vụ thường trú.";
+"settings.plugins.safety_note" = "Mã tiện ích được cấp quyền chạy trong tiến trình riêng, có kiểm tra quyền và giới hạn thực thi, kích thước. Ngay cả bảng web đã được xem xét cũng có thể chạy tập lệnh, cookie và theo dõi của trang bên ngoài trong phiên.";
 "settings.plugins.resource_note" = "Tác vụ mẫu v1 có giới hạn về số lượng và kích thước, đồng thời không truy cập trực tiếp mạng hoặc GPU. Bảng web v2 kết nối đến trang đã được xem xét; giới hạn điều hướng không phải trình chặn theo dõi hay tường lửa.";
 
 "help.topic.plugins.title" = "Tiện ích bổ sung";
@@ -1521,7 +1551,7 @@
 
 "pen.pressure.enabled" = "Dùng lực nhấn của bút";
 
-"pen.pressure.help" = "Dùng lực nhấn qua Sidecar hoặc bảng vẽ. Nét có lực nhấn được lưu dưới dạng dấu PDF; nét chuột có độ rộng cố định.";
+"pen.pressure.help" = "Nét vẽ bằng chuột có độ dày cố định. Apple Pencil qua Sidecar và bảng vẽ hỗ trợ lực nhấn thay đổi độ dày theo lực nhấn.";
 
 "recovery.title" = "Khôi phục công việc…";
 
@@ -1550,19 +1580,19 @@
 
 // Default PDF app association
 "settings.default_pdf.title" = "Ứng dụng PDF mặc định";
-"settings.default_pdf.description" = "Mở PDF bằng HwattakPDF khi bạn bấm hai lần vào tệp trong Finder.";
+"settings.default_pdf.description" = "Mở PDF bằng EmberPDF khi bạn bấm hai lần vào tệp trong Finder.";
 "settings.default_pdf.current" = "Ứng dụng mặc định hiện tại: %@";
 "settings.default_pdf.unknown" = "Không thể xác định";
-"settings.default_pdf.active" = "Bản HwattakPDF này là ứng dụng PDF mặc định của bạn.";
+"settings.default_pdf.active" = "Bản EmberPDF này là ứng dụng PDF mặc định của bạn.";
 "settings.default_pdf.set" = "Thiết lập trong Finder…";
 "settings.default_pdf.refresh" = "Làm mới trạng thái liên kết";
 "settings.default_pdf.failed" = "Không thể chuẩn bị thiết lập liên kết: %@";
-"settings.default_pdf.requires_app" = "Có sẵn trong HwattakPDF.app đã cài đặt. Hãy đặt ứng dụng trong thư mục Ứng dụng rồi mở ứng dụng.";
+"settings.default_pdf.requires_app" = "Có sẵn trong EmberPDF.app đã cài đặt. Hãy đặt ứng dụng trong thư mục Ứng dụng rồi mở ứng dụng.";
 "settings.default_pdf.location_hint" = "Bạn nên đặt ứng dụng trong thư mục Ứng dụng trước khi đặt làm mặc định. Nếu di chuyển hoặc xóa ứng dụng sau đó, bạn có thể cần thiết lập lại liên kết.";
 "settings.default_pdf.manual_title" = "Cách đặt ứng dụng PDF mặc định";
-"settings.default_pdf.manual_help" = "Nút bên dưới chọn một PDF dùng để thiết lập trong Finder. Chọn Lấy thông tin (⌘I) → chọn HwattakPDF trong Mở bằng → bấm Thay đổi tất cả. Liên kết được kiểm tra lại khi bạn quay về ứng dụng.";
+"settings.default_pdf.manual_help" = "Nút bên dưới chọn một PDF dùng để thiết lập trong Finder. Chọn Lấy thông tin (⌘I) → chọn EmberPDF trong Mở bằng → bấm Thay đổi tất cả. Liên kết được kiểm tra lại khi bạn quay về ứng dụng.";
 "settings.default_pdf.manual_note" = "Liên kết tệp của macOS được xác nhận trong Finder. Nếu một tệp có liên kết riêng, hãy kiểm tra cả cửa sổ Lấy thông tin của tệp đó.";
-"settings.default_pdf.revealed" = "Mở Lấy thông tin (⌘I) cho PDF được chọn trong Finder, chọn HwattakPDF trong Mở bằng, rồi bấm Thay đổi tất cả.";
+"settings.default_pdf.revealed" = "Mở Lấy thông tin (⌘I) cho PDF được chọn trong Finder, chọn EmberPDF trong Mở bằng, rồi bấm Thay đổi tất cả.";
 
 /* Local region text selection */
 "selection.region_drag" = "Chế độ chọn vùng. Kéo một hình chữ nhật quanh phần chữ cần dịch.";
@@ -1679,3 +1709,701 @@
 "translation.local.error.runtimeMissing" = "Môi trường Python của trợ lý thiếu Argos Translate. Cài vào môi trường đó rồi khởi động lại trợ lý.";
 "translation.local.error.timedOut" = "Tác vụ dịch cục bộ hết thời gian chờ. Hãy thử lại với ít văn bản hơn.";
 "translation.local.reveal_setup" = "Hiển thị trợ lý cài đặt và khởi chạy trong Finder";
+
+/* EmberPDF identity and hidden origin story */
+"brand.tagline" = "Công cụ PDF bền bỉ như than hồng.";
+"brand.detail" = "Trình đọc và chỉnh sửa PDF dễ dùng cho mọi người.";
+"brand.origin.title" = "Khởi đầu từ một tia lửa nhỏ";
+"brand.origin.message" = "Tôi tạo ra ứng dụng này vì quá bực mình.\nSau khi bình tâm lại, tôi đã biến cảm xúc đó thành động lực để xây dựng một công cụ giúp mọi người làm việc với PDF dễ dàng hơn.";
+"brand.origin.close" = "Quay lại tài liệu";
+"brand.origin.accessibility" = "Câu chuyện về tên EmberPDF";
+"brand.origin.hint" = "Nhấn vào tên năm lần để khám phá một câu chuyện nhỏ.";
+
+/* Current-page translation preview */
+"plugins.bundled.page_translation.name" = "Dịch trang";
+"plugins.bundled.page_translation.description" = "Đọc trang hiện tại với bản dịch được đặt trên bố cục gốc.";
+"plugins.bundled.page_translation.page.title" = "Hiển thị trang đã dịch";
+"plugins.bundled.page_translation.page.description" = "Dịch trang hiện tại và xem trước cùng hình ảnh và bố cục của trang.";
+"translation.page.preview" = "Xem trước trang";
+"translation.page.original" = "Bản gốc";
+"translation.page.translated" = "Bản dịch";
+"translation.page.expand" = "Phóng to trang";
+"translation.page.save_pdf" = "Lưu trang đã dịch dưới dạng PDF";
+"translation.page.number" = "Trang %d";
+"translation.page.note" = "Bản dịch dùng để đọc. Vùng văn bản có thể che nền; bảng và công thức phức tạp có thể cần kiểm tra lại.";
+"translation.page.source_note" = "Văn bản gốc được giữ cố định tại vị trí trên trang. Với trang được quét, hãy chạy OCR trước.";
+"translation.page.continued" = "Văn bản không vừa sẽ được tiếp tục ở các trang sau.";
+"translation.page.preparing" = "Đang chuẩn bị trang…";
+"translation.page.preview_error" = "Không thể chuẩn bị trang đã dịch.";
+"translation.page.close" = "Đóng bản xem trước trang";
+
+/* Translated-page layout and continuation */
+"translation.layout.error.geometry" = "Không thể đọc chính xác vị trí văn bản trên trang này. Hãy thử chế độ xem bản dịch văn bản.";
+"translation.layout.error.render" = "Không thể hiển thị toàn bộ trang đã dịch. Không sử dụng trang chưa hoàn chỉnh.";
+"translation.layout.error.mapping" = "Bản dịch không khớp với tất cả các vùng văn bản trên trang này. Hãy dịch lại trang.";
+"translation.layout.continuation" = "Bản dịch đầy đủ tiếp nối từ các vùng được đánh số";
+"translation.layout.region" = "Vùng %@";
+"translation.layout.continuation_note" = "Bản dịch đầy đủ của từng vùng được đánh số được trình bày bên dưới.";
+"translation.page.html_source" = "Bao gồm văn bản gốc trong HTML";
+
+/* Open-document current-page gallery */
+"gallery.title" = "Thư viện PDF đang mở";
+"gallery.subtitle" = "Duyệt các không gian làm việc và tìm nhanh tài liệu cùng nội dung.";
+"gallery.open" = "Thư viện PDF đang mở";
+"gallery.close" = "Đóng thư viện";
+"gallery.search" = "Tìm theo tên hoặc nội dung tài liệu";
+"gallery.count" = "%d tài liệu PDF";
+"gallery.current_page" = "Trang %d trên %d";
+"gallery.current_document" = "Tài liệu hiện tại";
+"gallery.empty" = "Không có PDF nào đang mở trong không gian làm việc này.";
+"gallery.no_results" = "Không có tài liệu phù hợp với tìm kiếm.";
+"gallery.preview_loading" = "Đang chuẩn bị bản xem trước…";
+"gallery.preview_unavailable" = "Không thể hiển thị bản xem trước.";
+"gallery.preview_locked" = "Mở tài liệu để mở khóa.";
+"gallery.open_document" = "Tiếp tục đọc tài liệu này";
+"gallery.shortcut_hint" = "Chọn thẻ để đọc tiếp · Nhấn Esc để đóng";
+"gallery.modified" = "Thay đổi chưa lưu";
+
+/* Reading colors */
+"reading.title" = "Màu đọc";
+"reading.original" = "Màu gốc";
+"reading.soft" = "Giấy dịu";
+"reading.sepia" = "Giấy ấm";
+"reading.night" = "Đọc ban đêm";
+"reading.description" = "Điều chỉnh màu ứng dụng và giấy PDF để chọn giao diện thoải mái khi đọc lâu.";
+"reading.original.detail" = "Giữ nguyên giao diện hiện tại và màu gốc của PDF.";
+"reading.soft.detail" = "Làm dịu giấy trắng thành màu ngà nhẹ.";
+"reading.sepia.detail" = "Thêm sắc ấm cho ứng dụng và giấy.";
+"reading.night.detail" = "Giảm độ sáng bằng giao diện tối và giấy xám dịu.";
+"reading.display_only" = "Hình ảnh và chú thích cũng trông khác trên màn hình. Tệp gốc, tệp đã lưu và bản xuất không thay đổi.";
+"reading.preview" = "Xem trước khi đọc";
+"reading.preview.text" = "Đọc một ý nghĩ nhỏ và để nó đồng hành thật lâu.";
+"reading.preview.caption" = "Đọc thư thái cùng EmberPDF";
+
+/* Gallery workspace navigation and local content search */
+"gallery.all_workspaces" = "Tất cả không gian làm việc";
+"gallery.workspace_scope" = "Chọn không gian làm việc";
+"gallery.all_tabs" = "Tất cả thẻ";
+"gallery.tab_scope" = "Chọn thẻ";
+"gallery.all_groups" = "Tất cả tài liệu";
+"gallery.ungrouped" = "Thẻ chưa nhóm";
+"gallery.group_scope" = "Nhóm thẻ";
+"gallery.search.progress" = "Đang tìm trong %d/%d tài liệu · Đã kiểm tra %d trang";
+"gallery.search.results" = "%d tài liệu · %d kết quả trong nội dung";
+"gallery.search.stop" = "Dừng tìm kiếm";
+"gallery.search.retry" = "Tìm lại";
+"gallery.search.cancelled" = "Đã dừng tìm kiếm. Bạn vẫn có thể xem các kết quả đã tìm thấy.";
+"gallery.search.local" = "Tìm văn bản trong các PDF đang mở ngay trên thiết bị này.";
+"gallery.search.limited" = "Chỉ hiển thị một số kết quả. Hãy thu hẹp từ khóa hoặc tiếp tục tìm trong tài liệu.";
+"gallery.search.unreadable" = "Không thể tìm trong nội dung của %d tài liệu.";
+"gallery.search.unreadable_detail" = "PDF bị khóa bằng mật khẩu, PDF hạn chế trích xuất văn bản và bản quét không có văn bản sẽ không được tìm kiếm nội dung.";
+"gallery.search.filename_only" = "Tên trùng khớp";
+"gallery.search.content_count" = "%d kết quả trong nội dung";
+"gallery.search.page" = "Trang %d";
+"gallery.search.more" = "Xem thêm %d kết quả";
+"gallery.search.less" = "Thu gọn";
+"gallery.search.open_result" = "Đến đoạn này";
+"gallery.search.no_results" = "Không tìm thấy tài liệu hoặc nội dung phù hợp.";
+"gallery.search.no_results_help" = "Hãy thử từ khóa khác hoặc mở rộng phạm vi không gian làm việc hay thẻ.";
+"gallery.search.waiting" = "Đang tìm trong nội dung tài liệu…";
+"gallery.search.clear" = "Xóa tìm kiếm";
+"gallery.search.changed" = "Tài liệu đã thay đổi. Vui lòng tìm lại.";
+"gallery.search.unavailable" = "Không thể tìm nội dung";
+"gallery.search.opened_result" = "Đã chuyển đến đoạn phù hợp.";
+"gallery.search.stale_result" = "Tài liệu đã thay đổi nên không thể xác nhận vị trí kết quả. Vui lòng tìm lại trong thư viện.";
+
+/* Host-owned plugin companion panels, schema 4 */
+"plugins.appearance.detail" = "Điều chỉnh màu ứng dụng và trang giấy cho dễ đọc. PDF gốc không thay đổi.";
+"plugins.clip.adjust" = "Tinh chỉnh vùng";
+"plugins.clip.copied" = "Đã sao chép ảnh. Hãy dán vào ứng dụng khác.";
+"plugins.clip.copy" = "Sao chép ảnh";
+"plugins.clip.drag" = "Kéo ảnh này sang ứng dụng khác";
+"plugins.clip.error.authorization" = "Quyền đã thay đổi. Kiểm tra rồi mở lại bảng này.";
+"plugins.clip.error.clipboard" = "Không thể sao chép ảnh vào bảng nhớ tạm.";
+"plugins.clip.error.copy_restricted" = "PDF này không cho phép sao chép ảnh.";
+"plugins.clip.error.destination" = "Chọn tệp PNG không ghi đè PDF gốc.";
+"plugins.clip.error.geometry" = "Chọn một vùng trong trang.";
+"plugins.clip.error.render" = "Không thể tạo ảnh trang.";
+"plugins.clip.error.size" = "Ảnh quá lớn. Hãy chọn vùng nhỏ hơn.";
+"plugins.clip.error.stale" = "Tài liệu đã thay đổi. Hãy mở lại công cụ cắt trang.";
+"plugins.clip.error.unavailable" = "Hãy mở một trang PDF trước.";
+"plugins.clip.export_note" = "Dán PNG đã sao chép hoặc lưu vào PDF, ghi chú, Word hay ứng dụng khác. Ảnh giữ màu gốc.";
+"plugins.clip.full_page" = "Toàn bộ trang";
+"plugins.clip.height" = "Chiều cao";
+"plugins.clip.instructions" = "Kéo trên trang để cắt một vùng. PDF gốc không thay đổi.";
+"plugins.clip.left" = "Trái";
+"plugins.clip.page" = "Trang %d";
+"plugins.clip.save" = "Lưu PNG";
+"plugins.clip.saved" = "Đã lưu ảnh PNG.";
+"plugins.clip.selection" = "Vùng cắt trang. Dùng Tinh chỉnh vùng để điều chỉnh bằng bàn phím.";
+"plugins.clip.top" = "Trên";
+"plugins.clip.width" = "Chiều rộng";
+"plugins.hover.detail" = "Bật rồi dừng con trỏ trên một từ trong PDF. Dịch trên thiết bị của macOS chỉ chạy khi bảng này mở.";
+"plugins.hover.download" = "Lần đầu dùng một ngôn ngữ, macOS có thể yêu cầu tải gói ngôn ngữ.";
+"plugins.hover.enable" = "Bật dịch khi di chuột";
+"plugins.hover.language" = "Ngôn ngữ đích";
+"plugins.hover.requires_system" = "Dịch tự động khi di chuột cần macOS 15 trở lên.";
+"plugins.hover.title" = "Dịch khi di chuột";
+"plugins.notes.edit" = "Viết";
+"plugins.notes.editor" = "Trình sửa ghi chú Markdown";
+"plugins.notes.empty" = "Ghi lại ý tưởng và thu thập các đoạn từ PDF.";
+"plugins.notes.error.changed" = "Ứng dụng khác đã sửa tệp. Hãy lưu bằng tên khác để giữ cả hai phiên bản.";
+"plugins.notes.error.encoding" = "Chọn tệp văn bản UTF-8.";
+"plugins.notes.error.file" = "Chọn tệp .md hoặc .markdown thông thường. Không mở bí danh hay liên kết tượng trưng.";
+"plugins.notes.error.linked" = "Không ghi đè tệp có liên kết cứng. Hãy lưu bằng tên khác.";
+"plugins.notes.error.path" = "Chỉ mở các tệp Markdown cục bộ do bạn chọn.";
+"plugins.notes.error.size" = "Ghi chú không được quá 1 MB ở dạng UTF-8.";
+"plugins.notes.insert_selection" = "Văn bản đã chọn";
+"plugins.notes.insert_source" = "Nguồn trang";
+"plugins.notes.local_only" = "Viết trên thiết bị này. Liên kết, ảnh và HTML không tự động mở.";
+"plugins.notes.mode" = "Chế độ ghi chú";
+"plugins.notes.new" = "Ghi chú mới";
+"plugins.notes.open" = "Mở Markdown";
+"plugins.notes.page" = "Trang %d";
+"plugins.notes.preview" = "Xem trước";
+"plugins.notes.preview_limit" = "Hiển thị phần đầu ghi chú dài. Khi sửa và lưu, toàn bộ nội dung được giữ lại.";
+"plugins.notes.save" = "Lưu Markdown";
+"plugins.notes.save_as" = "Lưu thành";
+"plugins.notes.unsaved.title" = "Lưu thay đổi của ghi chú?";
+"plugins.notes.untitled" = "Chưa đặt tên.md";
+"plugins.permission.appearance" = "Đổi màu đọc";
+"plugins.permission.export" = "Lưu hoặc kéo ảnh đến vị trí bạn chọn";
+"plugins.permission.files" = "Mở và lưu tệp Markdown bạn chọn";
+"plugins.permission.hover" = "Đọc từ PDF dưới con trỏ";
+"plugins.permission.local_translation" = "Dùng tính năng dịch trên thiết bị của macOS";
+"plugins.permission.notes" = "Đọc và viết ghi chú cục bộ";
+"plugins.permission.open_documents" = "Tìm trong nội dung PDF đang mở";
+"plugins.permission.page_image" = "Đọc trang PDF hiện tại dưới dạng ảnh";
+"plugins.related.detail" = "Tìm từ chung trong các PDF đang mở. Chỉ khảo sát một số trang mỗi tài liệu và không gửi dữ liệu ra ngoài.";
+"plugins.related.empty" = "Không thấy đoạn liên quan trong các trang đã khảo sát. Hãy thử từ khóa khác.";
+"plugins.related.page" = "Lấy chủ đề từ trang hiện tại";
+"plugins.related.query" = "Chủ đề hoặc từ khóa";
+"plugins.safe_mode.detail" = "Tạm dừng mọi plugin và giữ nguyên cài đặt cùng cấu hình.";
+"plugins.safe_mode.title" = "Tạm dừng mọi plugin";
+
+"plugins.review.action.appearance" = "Mở cài đặt màu đọc của ứng dụng, không thay đổi PDF gốc.";
+"plugins.review.action.notes" = "Viết ghi chú Markdown bên cạnh PDF. Chỉ mở và lưu tệp do bạn chọn.";
+"plugins.review.action.clip" = "Sao chép, lưu hoặc kéo vùng trang dưới dạng PNG, tuân thủ quyền sao chép PDF.";
+"plugins.review.action.related" = "Tìm từ chung trong một số trang PDF đang mở. Không gửi ra ngoài hay truy cập cả thư mục.";
+"plugins.review.action.hover" = "Khi bật, dịch từ PDF dưới con trỏ bằng dịch trên thiết bị của macOS. Có thể cần tải gói ngôn ngữ.";
+
+/* Isolated script SDK */
+"plugins.permission.storage" = "Lưu cài đặt cục bộ riêng cho plugin";
+"plugins.review.action.script" = "Chạy mã trong tiến trình riêng, chỉ dùng API đã cấp quyền. Không truy cập trực tiếp tệp, mạng hay shell.";
+"plugins.script.invalid" = "Định dạng yêu cầu của plugin không hợp lệ.";
+"plugins.script.limit" = "Plugin đã vượt giới hạn kích thước hoặc số yêu cầu.";
+"plugins.script.unavailable" = "Không tìm thấy trình trợ giúp chạy plugin.";
+"plugins.script.revoked" = "Plugin đã dừng vì quyền hoặc tài liệu thay đổi.";
+"plugins.script.timeout" = "Plugin không phản hồi nên đã bị dừng. Bạn vẫn có thể tiếp tục làm việc với PDF.";
+"plugins.script.running" = "Plugin đang chạy";
+"plugins.script.stopped" = "Plugin đã dừng";
+"plugins.script.stop" = "Dừng";
+"plugins.script.restart" = "Chạy lại";
+"plugins.permission.background_execution" = "Chạy trong khi sử dụng ứng dụng";
+"plugins.permission.document_text" = "Đọc văn bản trong toàn bộ tài liệu";
+"plugins.runtime.title" = "Tiện ích hoạt động cùng ứng dụng";
+"plugins.runtime.disclosure" = "Sau khi được cài đặt và bật, tiện ích tự khởi động khi cửa sổ ứng dụng đang mở. Các lệnh và sự kiện được cấp quyền vẫn hoạt động khi đóng bảng. Tắt plugin hoặc thu hồi quyền chạy trong khi sử dụng ứng dụng để dừng tiện ích.";
+"plugins.extensions.title" = "Tiện ích";
+"plugins.script.contextChanged" = "Tài liệu đã thay đổi nên yêu cầu trước đó đã bị hủy.";
+
+/* Native PDF body text editing */
+"body_text.edit_hint" = "Sửa nội dung trực tiếp. Bấm vào chỗ khác trên trang hoặc nhấn ⌘Return để áp dụng.";
+"status.body_text_updated" = "Đã sửa văn bản trong PDF.";
+"status.body_text_deleted" = "Đã xóa văn bản trong PDF.";
+"status.body_text_added" = "Đã thêm văn bản vào PDF.";
+"error.body_text_stale" = "Trang đang chỉnh sửa đã thay đổi. Hãy hủy chỉnh sửa rồi chọn lại văn bản.";
+"body_text.error.restricted" = "Hãy mở PDF này bằng quyền chủ sở hữu để chỉnh sửa nội dung.";
+"body_text.error.unreadable" = "Không thể đọc nội dung PDF ở dạng có thể chỉnh sửa.";
+"body_text.error.too_complex" = "Trang hoặc văn bản này vượt quá kích thước chỉnh sửa được hỗ trợ.";
+"body_text.error.unsupported" = "Chưa hỗ trợ chỉnh sửa nội dung với cấu trúc, phép biến đổi hoặc cách hiển thị của văn bản hay trang này.";
+"body_text.error.reading_order" = "Áp dụng thay đổi này có thể làm đổi thứ tự đọc văn bản trên trang. PDF vẫn nguyên vẹn và bản nháp vẫn còn trong trình chỉnh sửa.";
+"body_text.error.reopen_for_edit" = "Để giữ thẻ trợ năng của trang, hãy hủy bản nháp hiện tại, lưu rồi mở lại PDF trước khi chỉnh sửa tiếp.";
+"body_text.error.save_accessibility_tags" = "Đã dừng lưu vì không thể giữ các thẻ trợ năng trên trang %d. Các chỉnh sửa vẫn còn trong tài liệu đang mở. Hãy hoàn tác chỉnh sửa văn bản chính trên trang đó rồi lưu lại.";
+"body_text.error.scan_background" = "Không thể chỉnh sửa phần văn bản quét đã chọn mà vẫn đảm bảo giữ nguyên bố cục và nền. Hãy chọn các dòng trong cùng một đoạn hoặc chỉnh sửa từng dòng.";
+"body_text.error.scan_selection_fit" = "Văn bản đã nhập vượt ra ngoài vùng quét đã chọn. Hãy chọn câu hoặc đoạn văn rộng hơn, hoặc giảm cỡ chữ.";
+"body_text.error.changed" = "Văn bản gốc đã thay đổi trong lúc chỉnh sửa. Hãy chọn lại.";
+"body_text.error.failed" = "Không thể thay đổi nội dung PDF. Bản gốc vẫn nguyên vẹn.";
+"body_text.error.does_not_fit" = "Không thể đặt nội dung trong vùng chỉnh sửa hiện tại. Hãy điều chỉnh phông chữ hoặc cỡ chữ, hoặc rút ngắn nội dung.";
+
+/* Recent PDF access recovery */
+"recent.reconnect.title" = "Kết nối lại PDF gần đây";
+"recent.reconnect.choose" = "Chọn lại tệp…";
+"recent.reconnect.message" = "Không thể dùng thông tin truy cập đã lưu cho “%@”. Điều này có thể xảy ra sau khi cập nhật ứng dụng hoặc di chuyển tệp. Hãy chọn lại tệp để kết nối lại.";
+"recent.reconnect.panel" = "Hãy chọn lại “%@”. Nếu tệp đã được di chuyển, hãy chọn PDF ở vị trí hiện tại.";
+
+/* Study notes, pen and eraser controls, and thumbnail zoom */
+"page.sidebar.settings" = "Cài đặt xem trước trang";
+"page.sidebar.thumbnail_reset" = "Đặt lại hình xem trước về 100%";
+"pen.opacity" = "Độ đục";
+"study.pen.style" = "Độ dày và độ đục của bút";
+"study.eraser.settings" = "Cài đặt tẩy";
+"study.eraser.mode" = "Cách tẩy";
+"study.eraser.stroke" = "Xóa cả nét";
+"study.eraser.partial" = "Xóa một phần";
+"study.eraser.option_help" = "Giữ phím Option để tạm dùng cách tẩy còn lại.";
+"study.eraser.size" = "Kích thước tẩy";
+"study.notes.open" = "Ghi chú học tập";
+"eraser.changed" = "Đã xóa nét viết tay.";
+"study.notes.title" = "Ghi chú";
+"study.notes.add" = "Ghi chú mới";
+"study.notes.quote" = "Tạo ghi chú từ văn bản đã chọn";
+"study.notes.empty.title" = "Chưa có ghi chú";
+"study.notes.empty.detail" = "Thêm ghi chú khi đọc PDF để xem tất cả tại đây.";
+"study.notes.scanning" = "Đang tìm ghi chú…";
+"study.notes.saved_in_pdf" = "Ghi chú được lưu dưới dạng chú thích trong PDF này. Hãy lưu tệp để giữ lại ghi chú.";
+"study.notes.edit" = "Sửa ghi chú";
+"study.notes.reveal" = "Đến vị trí ghi chú";
+"study.notes.delete" = "Xóa ghi chú";
+"study.notes.delete_unavailable" = "Bạn có thể xóa ghi chú đã lưu trong chế độ Chỉnh sửa, hoặc sau khi sửa nội dung ghi chú.";
+"study.notes.untitled" = "Ghi chú trống";
+"study.notes.editor_hint" = "Khi áp dụng, ghi chú sẽ được thêm vào trang và danh sách ghi chú. Bạn có thể mở lại ghi chú dài từ danh sách để đọc.";
+"study.notes.deleted" = "Đã xóa ghi chú.";
+"study.notes.count" = "%d ghi chú";
+"tool.select.help" = "Kéo để chọn văn bản PDF. Trên trang dạng ảnh, chữ trong vùng được kéo chọn sẽ được nhận dạng.";
+"tool.select.edit_help" = "Kéo chọn nội dung rồi bấm Sửa văn bản (가T) để sửa trực tiếp chữ đã chọn.";
+
+// Study note editor, appearance, links and pen styles
+"study.notes.editor.float" = "Mở cửa sổ soạn thảo";
+"study.notes.editor.dock" = "Gắn vào thanh bên";
+"pen.style" = "Loại bút";
+"pen.style.ink" = "Bút mực";
+"pen.style.pencil" = "Bút chì";
+"pen.style.fountain" = "Bút máy";
+"pen.style.highlighter" = "Bút đánh dấu";
+"pen.style.ink.help" = "Viết nét mực mượt mà, thay đổi theo lực nhấn.";
+"pen.style.pencil.help" = "Vẽ với hạt mịn như bút chì trên giấy.";
+"pen.style.fountain.help" = "Hướng nét và lực nhấn làm thay đổi độ dày nét bút.";
+"pen.style.highlighter.help" = "Đánh dấu văn bản bằng nét rộng, bán trong suốt. Có thể chỉnh độ dày và độ mờ sau khi chọn.";
+"study.note.style.title" = "Giao diện ghi chú";
+"study.note.style.background" = "Màu nền";
+"study.note.style.foreground" = "Màu chữ";
+"study.note.style.opacity" = "Độ đục của nền";
+"study.note.style.width" = "Chiều rộng";
+"study.note.style.height" = "Chiều cao";
+"study.note.style.x" = "Vị trí ngang";
+"study.note.style.y" = "Vị trí dọc";
+"study.note.style.font_size" = "Cỡ chữ";
+"study.note.style.units" = "Kích thước và vị trí dùng đơn vị pt. Vị trí dọc được tính từ cuối trang.";
+"study.note.style.move_resize" = "Di chuyển và đổi kích thước trên trang";
+"study.note.style.updated" = "Đã cập nhật giao diện ghi chú.";
+"study.links.title" = "Liên kết";
+"study.links.add" = "Thêm liên kết";
+"study.links.empty" = "Liên kết đến trang PDF, ghi chú hoặc dấu trang khác.";
+"study.links.local_hint" = "Danh sách liên kết được lưu trong EmberPDF trên máy Mac này và không được gửi sang ứng dụng khác. Để giữ liên kết ghi chú, hãy lưu cả những PDF đã được thêm mã định danh ghi chú.";
+"study.links.open" = "Mở vị trí được liên kết";
+"study.links.reconnect" = "Kết nối lại tệp…";
+"study.links.remove" = "Xóa liên kết";
+"study.links.target" = "Liên kết đến";
+"study.links.pdf" = "PDF đang mở";
+"study.links.page" = "Trang";
+"study.links.page_only" = "Trang này";
+"study.links.open_target" = "Trước tiên, hãy mở PDF muốn liên kết trong ứng dụng.";
+"study.links.save_first" = "Hãy lưu các PDF thành tệp trước khi liên kết.";
+"study.links.invalid_target" = "Hãy chọn lại trang hoặc ghi chú đích.";
+"study.links.duplicate" = "Các vị trí này đã được liên kết.";
+"study.links.limit" = "Bộ nhớ liên kết đã đầy. Hãy xóa các liên kết không còn cần thiết.";
+"study.links.unavailable" = "Không thể mở PDF được liên kết. Hãy chọn tệp bằng “Kết nối lại tệp”.";
+"study.links.storage_error" = "Không thể đọc danh sách liên kết đã lưu. Dữ liệu gốc vẫn được giữ lại.";
+"study.links.note_missing" = "Không tìm thấy ghi chú được liên kết nên đã mở trang chứa ghi chú đó.";
+"study.links.note_permission" = "Liên kết ghi chú này cần quyền chỉnh sửa để lưu mã định danh. Hãy liên kết trong chế độ Học hoặc liên kết đến trang.";
+
+"study.notes.insert.selection" = "Chèn văn bản PDF đã chọn tại con trỏ";
+
+"study.notes.insert.time" = "Chèn ngày giờ hiện tại tại con trỏ";
+
+"study.notes.insert.location" = "Chèn tên và trang PDF hiện tại tại con trỏ";
+
+"study.notes.insert.location_format" = "%@ · trang %d/%d";
+
+"study.links.target_load_failed" = "Không thể tải PDF này. Hãy kiểm tra quyền truy cập tệp rồi thử lại.";
+
+"study.links.all_notes" = "Mọi ghi chú";
+
+"study.links.bookmarks" = "Dấu trang";
+
+"study.links.target_loading" = "Đang tải PDF…";
+
+"study.links.retry" = "Tải lại";
+
+"study.links.targets_scanning" = "Đang tìm tất cả ghi chú và dấu trang…";
+
+"study.links.targets_limited" = "Có quá nhiều mục nên chỉ hiển thị một phần. Bạn cũng có thể liên kết bằng số trang.";
+
+"study.links.filter_targets" = "Tìm ghi chú và dấu trang";
+
+"study.links.bookmark_hint" = "Liên kết đến trang được mục lục hoặc dấu trang PDF trỏ tới.";
+
+"study.links.targets_empty" = "Không có mục để chọn.";
+
+"study.links.total_pages" = "trong %d trang";
+
+"study.links.current_page" = "Vị trí đang đọc: trang %d";
+
+"study.links.page_range" = "Nhập số trang từ 1 đến %d.";
+
+"study.links.search_text" = "Tìm nội dung";
+
+"study.links.search_placeholder" = "Tìm trong nội dung PDF đã chọn";
+
+"study.links.search_hint" = "Chọn trang trong kết quả để liên kết. Tìm trên các trang có văn bản hoặc lớp chữ OCR.";
+
+"study.links.search_no_text" = "Không có chữ để tìm kiếm. Hãy áp dụng OCR cho PDF chỉ có ảnh trước khi tìm.";
+
+"study.links.search_empty" = "Không tìm thấy nội dung phù hợp.";
+
+"study.links.search_copy_restricted" = "PDF này hạn chế sao chép nên không thể tìm kiếm bản xem trước nội dung.";
+
+"study.links.search_changed" = "PDF đã thay đổi; đang cập nhật tìm kiếm.";
+
+"study.links.search_unavailable" = "Không thể tải PDF để tìm kiếm.";
+
+"study.links.connect_current" = "Liên kết ngay đến trang %d đang đọc";
+
+"study.links.search_pages" = "Tìm thấy trên %d trang";
+
+"study.links.search_progress" = "Đang tìm trang %d/%d";
+
+"study.links.search_limited" = "Chỉ hiển thị %d trang phù hợp đầu tiên. Hãy dùng từ khóa cụ thể hơn.";
+
+"study.links.choose_pdf" = "Chọn PDF để liên kết";
+
+"study.note.style.preview" = "Xem trước màu và độ mờ của ghi chú";
+
+"study.note.style.color_target" = "Chọn phần cần đổi màu";
+
+"study.note.style.apply_failed" = "Không thể thay đổi ghi chú. Hãy mở lại ghi chú và thử lại.";
+
+"study.note.style.apply_hint" = "Kiểm tra bản xem trước rồi nhấn Áp dụng.";
+
+"study.notes.visibility.menu" = "Hiển thị ghi chú";
+
+"study.notes.visibility.hide_all" = "Ẩn tất cả ghi chú";
+
+"study.notes.visibility.show_all" = "Hiện tất cả ghi chú";
+
+"study.notes.visibility.hide" = "Ẩn ghi chú trên PDF";
+
+"study.notes.visibility.show" = "Hiện ghi chú trên PDF";
+
+"study.notes.visibility.hidden" = "Đã ẩn";
+
+"study.notes.visibility.count" = "%d ghi chú · %d đã ẩn";
+
+"study.notes.visibility.hint" = "Ghi chú đã ẩn vẫn nằm trong danh sách để đọc và hiển thị lại. Khi lưu PDF, trạng thái ẩn cũng được lưu.";
+
+"comparison.entry.open" = "Xem cùng nhau";
+
+"comparison.entry.close" = "Kết thúc xem cùng nhau";
+
+"comparison.entry.help" = "Chọn 2–4 PDF đang mở để xem và sắp xếp cùng nhau.";
+
+"comparison.arrange.horizontal" = "Đặt cạnh nhau";
+
+"comparison.arrange.vertical" = "Xếp theo chiều dọc";
+
+"comparison.arrange.grid" = "Xếp dạng lưới";
+
+"comparison.arrange.equal" = "Kích thước bằng nhau";
+
+"comparison.arrange.hint" = "Kéo tiêu đề hoặc bật Sửa bố cục để đổi vị trí PDF. Kéo đường phân cách để đổi kích thước.";
+
+"comparison.arrange.panel" = "Sắp xếp PDF này";
+
+"comparison.arrange.document" = "Sắp xếp %@";
+
+"comparison.arrange.custom" = "Bố cục tùy chỉnh · Đổi hướng và kích thước từng khung trong chế độ xem cùng nhau.";
+
+"comparison.motion_sync" = "Di chuyển cùng nhau";
+
+"comparison.motion_sync.help" = "Giữ vị trí tương đối đã thiết lập cho từng PDF khi cuộn và chuyển trang cùng nhau.";
+
+"comparison.all_previous" = "Trang trước trong mọi PDF chưa ghim";
+
+"comparison.all_next" = "Trang sau trong mọi PDF chưa ghim";
+
+"comparison.place.left" = "Bên trái PDF đã chọn";
+
+"comparison.place.right" = "Bên phải PDF đã chọn";
+
+"comparison.place.above" = "Phía trên PDF đã chọn";
+
+"comparison.place.below" = "Phía dưới PDF đã chọn";
+
+"comparison.place.swap" = "Đổi chỗ";
+
+"comparison.pin" = "Ghim %@";
+
+"comparison.unpin" = "Bỏ ghim %@";
+
+"comparison.pin.help" = "PDF đã ghim giữ nguyên vị trí cuộn, trang và mức thu phóng. Nhấn lại để bỏ ghim.";
+
+"comparison.pinned" = "Đã ghim";
+
+"comparison.page.previous" = "Trang trước trong %@";
+
+"comparison.page.next" = "Trang sau trong %@";
+
+"comparison.resize.width" = "Điều chỉnh chiều rộng khung";
+
+"comparison.resize.height" = "Điều chỉnh chiều cao khung";
+
+"comparison.arrange.edit" = "Sửa bố cục";
+
+"comparison.arrange.done" = "Xong bố cục";
+
+"comparison.arrange.edit_hint" = "Kéo PDF đến mép hoặc giữa một PDF khác. Khi hoàn tất, chọn “Xong bố cục”.";
+
+"comparison.drag.handle" = "Kéo để sắp xếp";
+
+"comparison.drag.document" = "Kéo PDF này để sắp xếp";
+
+"comparison.drag.cancel_hint" = "Nhấn Esc để hủy sắp xếp";
+
+"comparison.drop.left" = "Trái";
+
+"comparison.drop.right" = "Phải";
+
+"comparison.drop.above" = "Trên";
+
+"comparison.drop.below" = "Dưới";
+
+"comparison.drop.swap" = "Đổi chỗ";
+// Together view document chooser
+"comparison.chooser.gallery" = "Thư viện";
+"comparison.chooser.list" = "Danh sách";
+"comparison.chooser.presentation" = "Cách hiển thị tài liệu";
+"comparison.chooser.preview" = "Trang xem trước";
+"comparison.chooser.preview.current" = "Trang hiện tại";
+"comparison.chooser.preview.cover" = "Trang đầu";
+"comparison.chooser.workspace" = "Không gian làm việc";
+"comparison.chooser.search" = "Tìm theo tên PDF, không gian hoặc nhóm";
+"comparison.chooser.selected_order" = "PDF đã chọn · Thứ tự hiển thị";
+"comparison.chooser.select_hint" = "Chọn 2–4 PDF bên dưới để xem cùng nhau.";
+"comparison.chooser.remove" = "Bỏ chọn";
+"comparison.chooser.no_results_help" = "Thử tên khác hoặc mở rộng phạm vi không gian làm việc.";
+"comparison.chooser.tab" = "Thẻ %d";
+"comparison.focus.help" = "Ẩn các thẻ và thanh công cụ để các PDF đang xem cùng nhau lấp đầy cửa sổ.";
+
+/* Recent internal validation, with scope and limitations */
+
+/* Continuous spreads with compact page spacing */
+"view.two_page.compact.title" = "Tự điều chỉnh khoảng cách giữa hai trang";
+"view.two_page.compact.help" = "Giữ các trang gần nhau khi xem liên tục, ngay cả khi chiều rộng khác nhau.";
+
+/* Quick document changes in View Together */
+"comparison.document.add" = "Thêm PDF";
+"comparison.document.replace" = "Thay PDF";
+"comparison.document.close" = "Đóng trong Xem cùng nhau";
+"comparison.document.close.help" = "Chỉ bỏ khỏi Xem cùng nhau. Thẻ PDF ban đầu vẫn mở.";
+"comparison.document.open" = "Mở tệp PDF…";
+"comparison.document.no_candidates" = "Không có PDF nào khác đang mở để thêm";
+"comparison.document.add.help" = "Thêm PDF đang mở hoặc mở một tệp (tối đa 4 PDF).";
+"comparison.document.replace.help" = "Hiển thị PDF khác trong ô này.";
+"comparison.document.limit" = "Có thể xem cùng lúc tối đa 4 PDF.";
+"comparison.document.error" = "Không thể tải PDF. Các tài liệu hiện có không thay đổi.";
+
+/* Current-document page gallery and page organization */
+"page_gallery.title" = "Thư viện trang";
+"page_gallery.open" = "Hiển thị thư viện trang";
+"page_gallery.close" = "Quay lại đọc";
+"page_gallery.subtitle" = "%d trang";
+"page_gallery.selected" = "Đã chọn %d trang";
+"page_gallery.select_all" = "Chọn tất cả";
+"page_gallery.deselect_all" = "Bỏ chọn tất cả";
+"page_gallery.size" = "Kích thước hình thu nhỏ";
+"page_gallery.hint" = "⌘-bấm để chọn nhiều trang · Shift-bấm để chọn một dải trang · Bấm đúp để đọc";
+"page_gallery.edit" = "Chỉnh sửa trang";
+"page_gallery.edit_hint" = "Bắt đầu chỉnh sửa để xoay, di chuyển hoặc xóa trang.";
+"page_gallery.extract" = "Trích xuất";
+"page_gallery.rotate" = "Xoay";
+"page_gallery.move" = "Di chuyển";
+"page_gallery.delete" = "Xóa";
+"page_gallery.move_title" = "Di chuyển các trang đã chọn";
+"page_gallery.move_start" = "Đến đầu tài liệu";
+"page_gallery.move_end" = "Đến cuối tài liệu";
+"page_gallery.move_before" = "Trước";
+"page_gallery.move_after" = "Sau";
+"page_gallery.move_page" = "Trang tham chiếu";
+"page_gallery.move_apply" = "Di chuyển";
+"page_gallery.move_hint" = "Các trang đã chọn giữ nguyên thứ tự.";
+"page_gallery.delete_title" = "Xóa %d trang đã chọn?";
+"page_gallery.delete_message" = "Bạn có thể khôi phục bằng Hoàn tác (⌘Z).";
+"page_gallery.minimum_one" = "Tài liệu phải giữ lại ít nhất một trang.";
+"page_gallery.drop_end" = "Thả vào đây để di chuyển đến cuối tài liệu";
+"page_gallery.drag_hint" = "Kéo các trang đã chọn để sắp xếp lại.";
+"page_gallery.open_page" = "Đọc trang này";
+
+// AI conversation management and rich responses
+"ai.history.open" = "Danh sách cuộc trò chuyện";
+"ai.history.new" = "Cuộc trò chuyện mới";
+"ai.history.rename" = "Đổi tên cuộc trò chuyện";
+"ai.history.title" = "Tên cuộc trò chuyện";
+"ai.history.delete_title" = "Xóa cuộc trò chuyện này?";
+"ai.history.delete_message" = "Lịch sử trò chuyện đã lưu trên máy Mac này cũng sẽ bị xóa.";
+"ai.history.heading" = "Cuộc trò chuyện của PDF này";
+"ai.history.search" = "Tìm theo tên cuộc trò chuyện";
+"ai.history.empty" = "Không có cuộc trò chuyện để hiển thị.";
+"ai.history.saved_locally" = "Lịch sử trò chuyện được lưu trên máy Mac này.";
+"ai.history.memory_only" = "Cuộc trò chuyện của PDF này chỉ được giữ khi ứng dụng đang chạy.";
+"ai.history.message_count" = "%d tin nhắn";
+"ai.history.delete" = "Xóa cuộc trò chuyện";
+"ai.history.options" = "Quản lý cuộc trò chuyện";
+"ai.message.copy" = "Sao chép";
+"ai.message.delete" = "Xóa tin nhắn";
+"ai.message.options" = "Tùy chọn tin nhắn";
+"ai.rich.load_image" = "Tải hình ảnh";
+"ai.rich.loading_image" = "Đang tải…";
+"ai.rich.image_failed" = "Không thể tải hình ảnh.";
+"ai.rich.image_unavailable" = "Hình ảnh này không được hỗ trợ.";
+"ai.history.untitled" = "Cuộc trò chuyện mới";
+"ai.history.error.invalid" = "Không thể đọc lịch sử trò chuyện đã lưu. Các bản ghi hiện có vẫn được giữ lại.";
+"ai.history.error.large" = "Lịch sử trò chuyện đã đạt giới hạn lưu trữ. Hãy xóa các cuộc trò chuyện không còn cần thiết.";
+"ai.history.error.limit" = "Bạn có thể lưu tối đa 100 cuộc trò chuyện cho mỗi PDF. Hãy xóa các cuộc trò chuyện không còn cần thiết trước khi bắt đầu cuộc trò chuyện mới.";
+"ai.history.error.conversation_full" = "Cuộc trò chuyện này đã đạt giới hạn lưu trữ. Nội dung hiện có vẫn được giữ lại. Bắt đầu cuộc trò chuyện mới để tiếp tục đặt câu hỏi.";
+"ai.rich.image_alt" = "Hình ảnh trong câu trả lời của AI";
+
+"body_text.shortcuts" = "Return Xuống dòng · ⌘Return Áp dụng · Esc Hủy";
+
+/* Image insertion choices and PDF size reduction. */
+"image.insert.quality.original" = "Ưu tiên bản gốc";
+"image.insert.quality.balanced" = "Cân bằng";
+"image.insert.quality.small" = "Tệp nhỏ hơn";
+"image.insert.quality.original.detail" = "Giữ JPEG gốc mà không nén lại khi có thể. Ảnh lớn được thu về kích thước an toàn.";
+"image.insert.quality.balanced.detail" = "Thu về tối đa 2.400px và nén lại ảnh. Một số chi tiết nhỏ có thể thay đổi.";
+"image.insert.quality.small.detail" = "Thu về tối đa 1.600px và nén ảnh mạnh hơn. Có thể thấy giảm chất lượng khi phóng to.";
+"image.insert.batch_too_large" = "Các ảnh đã chọn vượt quá giới hạn xử lý. Chọn Tệp nhỏ hơn hoặc thêm ít ảnh hơn mỗi lần.";
+"image.insert.options.title" = "Chất lượng và dung lượng ảnh";
+"image.insert.options.detail" = "Kiểm tra chất lượng và dung lượng ước tính trước khi chèn vào PDF. Lựa chọn này áp dụng cho các ảnh lần này.";
+"image.insert.quality" = "Chất lượng ảnh";
+"image.insert.preparing" = "Đang chuẩn bị bản xem trước và ước tính dung lượng…";
+"image.insert.estimated_size" = "Dung lượng PDF tăng ước tính";
+"image.insert.estimate_note" = "Dung lượng thực tế có thể thay đổi khi lưu. Nền trong suốt được giữ nguyên.";
+"image.insert.confirm" = "Chèn ảnh";
+"image.insert.source_size" = "Tệp gốc";
+"image.insert.resized" = "Đã đổi kích thước";
+"image.insert.transparency" = "Giữ độ trong suốt · nén không mất dữ liệu";
+"compression.title" = "Giảm dung lượng PDF";
+"compression.detail" = "Chọn chất lượng ảnh, kiểm tra dung lượng thực tế rồi lưu một bản sao.";
+"compression.quality" = "Chất lượng ảnh";
+"compression.preservation" = "Văn bản và hình vẽ được giữ nguyên. Ảnh được nén lại nên chất lượng có thể thay đổi tùy theo lựa chọn của bạn.";
+"compression.current_size" = "PDF hiện tại";
+"compression.processing" = "Đang tối ưu ảnh và tính dung lượng thực tế…";
+"compression.result_size" = "Sau khi tối ưu";
+"compression.no_reduction" = "Thiết lập này không thể giảm thêm dung lượng. Hãy thử chất lượng khác. PDF hiện tại chưa bị thay đổi.";
+"compression.preview_help" = "Nhấn Tính dung lượng để kiểm tra dung lượng tệp trước khi lưu.";
+"compression.stop" = "Dừng";
+"compression.preview" = "Tính dung lượng";
+"compression.quality.high" = "Chất lượng cao";
+"compression.quality.balanced" = "Cân bằng";
+"compression.quality.small" = "Dung lượng nhỏ";
+"compression.quality.high_detail" = "Ưu tiên độ rõ nét của ảnh trong khi giảm dung lượng.";
+"compression.quality.balanced_detail" = "Phù hợp để xem trên màn hình và chia sẻ hằng ngày.";
+"compression.quality.small_detail" = "Giảm dung lượng mạnh hơn. Ảnh có thể kém nét khi phóng to hoặc in.";
+"compression.savings" = "Giảm %@";
+"compression.menu" = "Giảm dung lượng PDF…";
+"compression.preparing" = "Đang chuẩn bị PDF…";
+"compression.document_changed" = "Tài liệu đã thay đổi. Vui lòng thử lại.";
+"compression.saved" = "Đã lưu bản sao nhỏ hơn: %@";
+"compression.error.unreadable" = "Không thể đọc PDF để giảm dung lượng.";
+"compression.error.protected" = "Không thể giảm dung lượng PDF được mã hóa hoặc có chữ ký số.";
+"compression.error.unsupported" = "Không giảm dung lượng PDF này vì không thể giữ an toàn các cấu trúc đặc biệt của tệp.";
+"compression.error.too_large" = "PDF này vượt quá giới hạn xử lý hiện tại của tính năng giảm dung lượng.";
+"compression.error.validation_failed" = "Không thể xác minh rằng nội dung và thông tin chỉnh sửa PDF được giữ nguyên. Bản gốc không thay đổi.";
+
+// Quick writing tools and saved pen presets
+"pen.quick.title" = "Công cụ viết";
+"pen.quick.settings" = "Cài đặt bút hiện tại";
+"pen.quick.more" = "Bút đã lưu";
+"pen.preset.save" = "Lưu bút hiện tại";
+"pen.preset.replace" = "Thay bằng cài đặt hiện tại";
+"pen.preset.delete" = "Xóa bút đã lưu";
+"pen.preset.limit" = "Bạn có thể lưu tối đa 8 bút.";
+"pen.preset.help" = "Nhấp một lần để dùng bút. Nhấp lại vào bút đang chọn để mở cài đặt.";
+"pen.shape" = "Vẽ";
+"pen.shape.freehand" = "Vẽ tự do";
+"pen.shape.line" = "Đường thẳng";
+"pen.shape.rectangle" = "Hình chữ nhật";
+"pen.shape.ellipse" = "Hình elip";
+"pen.pattern" = "Kiểu nét";
+"pen.pattern.solid" = "Nét liền";
+"pen.pattern.dashed" = "Nét đứt";
+"pen.tip" = "Đầu bút đánh dấu";
+"pen.tip.square" = "Đầu vuông";
+"pen.tip.round" = "Đầu tròn";
+"pen.quick.width" = "Chọn độ dày";
+"pen.quick.color" = "Chọn màu";
+"pen.quick.draw_help" = "Chọn vẽ tự do hoặc hình dạng, rồi kéo bằng chuột hoặc bút để vẽ.";
+
+/* Text comparison */
+"comparison.difference.title" = "Thay đổi văn bản";
+"comparison.difference.close" = "Đóng danh sách thay đổi";
+"comparison.difference.scope" = "So sánh văn bản có thể trích xuất và các trang được thêm hoặc xóa. Không so sánh hình ảnh, bố cục và chú thích.";
+"comparison.difference.before" = "Tài liệu gốc";
+"comparison.difference.after" = "Tài liệu sửa đổi";
+"comparison.difference.start" = "So sánh văn bản";
+"comparison.difference.restart" = "So sánh lại";
+"comparison.difference.cancel" = "Hủy";
+"comparison.difference.navigation" = "Chọn một thay đổi để đến trang tương ứng trong cả hai tài liệu. PDF đã ghim giữ nguyên vị trí.";
+"comparison.difference.ready" = "Chọn hai PDF để so sánh văn bản.";
+"comparison.difference.reading" = "Đang đọc văn bản: %d / %d trang";
+"comparison.difference.comparing" = "Đang so sánh văn bản…";
+"comparison.difference.cancelled" = "Đã hủy so sánh. So sánh lại để xem kết quả.";
+"comparison.difference.changed" = "Một PDF nguồn đã thay đổi. So sánh lại nội dung mới nhất.";
+"comparison.difference.identical" = "Không tìm thấy thay đổi văn bản.";
+"comparison.difference.count" = "Số thay đổi văn bản: %d";
+"comparison.difference.textless" = "Không thể trích xuất văn bản ở %d trang nên chưa so sánh được các trang này. Hãy áp dụng OCR trước khi so sánh chữ trong bản quét.";
+"comparison.difference.truncated" = "Đã đạt giới hạn số kết quả. Danh sách này chưa đầy đủ.";
+"comparison.difference.whole_page" = "Trang";
+"comparison.difference.page" = "Trang %d";
+"comparison.difference.added" = "Đã thêm";
+"comparison.difference.removed" = "Đã xóa";
+"comparison.difference.modified" = "Đã sửa";
+"comparison.difference.unavailable" = "Không đọc được văn bản từ các PDF này.";
+"comparison.difference.restricted" = "Cả hai PDF phải cho phép sao chép văn bản để so sánh.";
+"comparison.difference.too_large" = "Các PDF này vượt quá giới hạn xử lý so sánh. Hãy chia thành tài liệu nhỏ hơn để so sánh.";
+"comparison.difference.no_text" = "Các PDF này không có văn bản có thể trích xuất. Hãy áp dụng OCR trước khi so sánh chữ trong bản quét.";
+"comparison.difference.timed_out" = "Thời gian so sánh vượt quá giới hạn. Hãy chia thành tài liệu nhỏ hơn để so sánh.";
+
+/* Page structure preservation */
+"page_structure.error.unsupported" = "PDF này có tệp đính kèm, lớp, thẻ trợ năng, chữ ký số hoặc cấu trúc đặc biệt không thể giữ an toàn khi ghép trang. Tệp gốc chưa bị thay đổi.";
+"page_structure.error.page_labels" = "PDF này dùng nhãn trang tùy chỉnh hiện chưa thể giữ lại khi lưu các trang đã ghép. Tệp gốc chưa bị thay đổi.";
+"page_structure.error.destination" = "Không thể xác định an toàn trang đích của liên kết nội bộ PDF nên các trang chưa được ghép.";
+"page_structure.error.form_fields" = "Tên trường biểu mẫu trùng nhau hoặc quan hệ trường phức tạp khiến giá trị không thể được giữ an toàn. Hãy thử lại với bản sao đã điều chỉnh tên trường.";
+"page_structure.error.too_complex" = "Cấu trúc mục lục, liên kết hoặc biểu mẫu PDF vượt quá giới hạn ghép trang an toàn.";
+"page_structure.error.copy" = "Không thể tạo bản sao độc lập của chú thích trang và liên kết nội bộ. Tệp gốc chưa bị thay đổi.";
+"page_structure.imported_document" = "PDF đã nhập";
+
+"pdf.rendering_unavailable" = "Không thể hiển thị PDF trong môi trường này. Hãy mở lại EmberPDF trong phiên làm việc macOS thông thường.";
+
+"page_structure.signed_original_notice" = "Bản gốc có chữ ký được giữ lại dưới dạng tệp đính kèm. Tài liệu mới chưa được ký.";
+
+/* Asynchronous document saving */
+"action.saving" = "Đang lưu";
+"status.saving_file" = "Đang lưu %@…";
+"status.save_cancelled" = "Đã hủy lưu.";
+"status.saved_earlier_edits" = "Các chỉnh sửa trước đó đã được lưu vào %@. Những thay đổi mới hơn vẫn chưa được lưu.";
+"error.save_in_progress" = "Đang lưu. Hãy thử lại sau khi hoàn tất.";
+
+"resource.memory_footprint" = "Bộ nhớ ứng dụng";
+"resource.memory_note" = "Bộ nhớ ứng dụng là mức chiếm dụng của tiến trình này, gồm cả bộ nhớ nén. RSS là bộ nhớ hiện đang thường trú. Không bao gồm các tiến trình hỗ trợ riêng. CPU 100% tương ứng một lõi logic.";
+
+/* Native menu roles refreshed when the app language changes. */
+"native_menu.file" = "Tệp";
+"native_menu.edit" = "Chỉnh sửa";
+"native_menu.view" = "Xem";
+"native_menu.window" = "Cửa sổ";
+"native_menu.help" = "Trợ giúp";
+
+"native_menu.close_all" = "Đóng tất cả";
+"native_menu.cut" = "Cắt";
+"native_menu.copy" = "Sao chép";
+"native_menu.paste" = "Dán";
+"native_menu.select_all" = "Chọn tất cả";
+
+/* AppKit tab commands use the current application language. */
+"native_menu.show_tab_bar" = "Hiện thanh tab";
+"native_menu.hide_tab_bar" = "Ẩn thanh tab";
+"native_menu.show_all_tabs" = "Hiện tất cả tab";
+"native_menu.exit_tab_overview" = "Thoát tổng quan tab";
+"native_menu.enter_full_screen" = "Vào toàn màn hình";
+"native_menu.exit_full_screen" = "Thoát toàn màn hình";

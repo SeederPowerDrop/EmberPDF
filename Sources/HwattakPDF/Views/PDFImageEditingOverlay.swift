@@ -135,6 +135,17 @@ final class PDFAnnotationEditingOverlayView: NSView {
             return
         }
 
+        if event.clickCount >= 2, hit.kind == .freeText,
+           owner.viewportContext == .normal,
+           let workspace = owner.workspaceState, workspace.mode == .study,
+           let document = owner.document,
+           let note = workspace.studyNotes(on: document.index(for: hit.page))
+            .first(where: { $0.annotation === hit.annotation }) {
+            dragOperation = nil
+            workspace.editStudyNote(note)
+            return
+        }
+
         // In Editing mode, a double-click on an app-owned FreeText object
         // enters the exact same inline transaction as the Text tool. Viewer,
         // Study, and comparison canvases never take this branch, preserving
@@ -228,7 +239,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
                 handle: handle,
                 draggedTo: point,
                 within: pageBounds,
-                preservingAspectRatio: !event.modifierFlags.contains(.shift)
+                preservingAspectRatio: snapshot.kind != .freeText && !event.modifierFlags.contains(.shift)
             )
 
         case let .cropping(handle, snapshot):
@@ -284,16 +295,15 @@ final class PDFAnnotationEditingOverlayView: NSView {
         }
 
         let changed: Bool
-        let message: String
+        let actionLocalization: PDFEditActionLocalization
         switch operation {
         case .moving:
             changed = !approximatelyEqual(annotation.bounds, snapshot.bounds)
-            message = movementMessage(for: annotation)
+            actionLocalization = movementLocalization(for: annotation)
         case .resizing:
             changed = !approximatelyEqual(annotation.bounds, snapshot.bounds)
-            message = EditableAnnotationIdentity.kind(of: annotation) == .image
-                ? L10n.string("이미지 크기를 변경했습니다.")
-                : L10n.string("status.annotation_changed")
+            actionLocalization = .init(key: editableKind(of: annotation) == .image
+                ? "이미지 크기를 변경했습니다." : "status.annotation_changed")
         case .cropping:
             let cropChanged = if
                 let image = annotation as? ImageStampAnnotation,
@@ -304,7 +314,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
                 false
             }
             changed = !approximatelyEqual(annotation.bounds, snapshot.bounds) || cropChanged
-            message = L10n.string("이미지를 잘랐습니다.")
+            actionLocalization = .init(key: "이미지를 잘랐습니다.")
         }
 
         // Live dragging already changed the PDFAnnotation. Mouse-up therefore
@@ -319,7 +329,8 @@ final class PDFAnnotationEditingOverlayView: NSView {
                     on: page,
                     from: snapshot.bounds,
                     originalModificationDate: snapshot.modificationDate,
-                    message: message
+                    message: actionLocalization.resolve(),
+                    actionLocalization: actionLocalization
                 )
             case .cropping:
                 // Crop mode is one logical session. It is recorded once by
@@ -384,7 +395,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
         }
 
         if
-            EditableAnnotationIdentity.kind(of: selectedAnnotation) == .image,
+            editableKind(of: selectedAnnotation) == .image,
             event.modifierFlags.contains(.command)
         {
             let characters = event.charactersIgnoringModifiers ?? ""
@@ -425,8 +436,9 @@ final class PDFAnnotationEditingOverlayView: NSView {
         super.draw(dirtyRect)
         guard
             let annotation = selectedAnnotation,
+            annotation.shouldDisplay,
             let page = selectedPage,
-            let kind = EditableAnnotationIdentity.kind(of: annotation)
+            let kind = editableKind(of: annotation)
         else { return }
         let centers = handleCenters(for: annotation, on: page)
         guard centers.count == ImageAnnotationHandle.allCases.count else { return }
@@ -480,6 +492,18 @@ final class PDFAnnotationEditingOverlayView: NSView {
 
     func refreshForConfiguration() {
         refreshScrollObservation()
+        if let owner, owner.viewportContext == .normal, owner.activeTool == .select,
+           let workspace = owner.workspaceState,
+           let requested = workspace.studyNoteLayoutSelection, !requested.isConsumed,
+           let annotation = requested.annotation, workspace.isExplicitlySelectedStudyNote(annotation),
+           let page = annotation.page, owner.compactSpread?.contains(page: page) != false {
+            rollbackActiveDrag()
+            finishCropping()
+            selectedAnnotation = annotation
+            selectedPage = page
+            requested.isConsumed = true
+            needsDisplay = true
+        }
         let hadSelection = selectedAnnotation != nil
         // SwiftUI can update for harmless reasons (search/status text) while
         // AppKit is still delivering a drag. Preserve an authorized preview,
@@ -540,6 +564,11 @@ final class PDFAnnotationEditingOverlayView: NSView {
         owner = nil
     }
 
+    private func editableKind(of annotation: PDFAnnotation) -> EditableAnnotationKind? {
+        EditableAnnotationIdentity.kind(of: annotation)
+            ?? (owner?.workspaceState?.isExplicitlySelectedStudyNote(annotation) == true ? .freeText : nil)
+    }
+
     private func editableAnnotation(
         at overlayPoint: CGPoint
     ) -> (annotation: PDFAnnotation, page: PDFPage, kind: EditableAnnotationKind)? {
@@ -550,7 +579,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
         guard let page = owner.page(for: ownerPoint, nearest: false) else { return nil }
         let point = owner.convert(ownerPoint, to: page)
         guard let annotation = page.annotations.reversed().first(where: { annotation in
-            guard let kind = EditableAnnotationIdentity.kind(of: annotation) else {
+            guard annotation.shouldDisplay, let kind = editableKind(of: annotation) else {
                 return false
             }
             return owner.workspaceState?.allowsAnnotationEditing(
@@ -558,7 +587,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
                 annotation: annotation
             ) == true
                 && annotation.bounds.contains(point)
-        }), let kind = EditableAnnotationIdentity.kind(of: annotation) else { return nil }
+        }), let kind = editableKind(of: annotation) else { return nil }
         return (annotation, page, kind)
     }
 
@@ -572,7 +601,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
         guard
             let annotation = selectedAnnotation,
             let page = selectedPage,
-            EditableAnnotationIdentity.kind(of: annotation)?.canResize == true
+            editableKind(of: annotation)?.canResize == true
         else { return nil }
         let centers = handleCenters(for: annotation, on: page)
         return ImageAnnotationHandle.allCases.first { handle in
@@ -620,7 +649,8 @@ final class PDFAnnotationEditingOverlayView: NSView {
             on: page,
             from: snapshot.bounds,
             originalModificationDate: snapshot.modificationDate,
-            message: movementMessage(for: annotation)
+            message: movementLocalization(for: annotation).resolve(),
+            actionLocalization: movementLocalization(for: annotation)
         )
         owner.needsDisplay = true
         needsDisplay = true
@@ -630,7 +660,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
         guard
             let annotation = selectedAnnotation,
             let page = selectedPage,
-            EditableAnnotationIdentity.kind(of: annotation)?.hasImageEditingMenu == true,
+            editableKind(of: annotation)?.hasImageEditingMenu == true,
             let snapshot = geometrySnapshot(for: annotation, on: page),
             isAuthorizedForCommit(snapshot)
         else { return nil }
@@ -705,7 +735,7 @@ final class PDFAnnotationEditingOverlayView: NSView {
         guard
             let annotation = selectedAnnotation,
             let page = selectedPage,
-            let kind = EditableAnnotationIdentity.kind(of: annotation),
+            let kind = editableKind(of: annotation),
             let snapshot = geometrySnapshot(for: annotation, on: page),
             snapshot.kind == kind,
             isAuthorizedForCommit(snapshot)
@@ -724,7 +754,8 @@ final class PDFAnnotationEditingOverlayView: NSView {
                 annotation,
                 from: page,
                 originalIndex: originalIndex,
-                message: L10n.string("주석을 삭제했습니다.")
+                message: L10n.string("주석을 삭제했습니다."),
+                actionLocalization: .init(key: "주석을 삭제했습니다.")
             )
         }
         discardSelectionState()
@@ -796,7 +827,8 @@ final class PDFAnnotationEditingOverlayView: NSView {
                 from: snapshot.bounds,
                 originalCropRect: originalCrop,
                 originalModificationDate: snapshot.modificationDate,
-                message: L10n.string("이미지를 잘랐습니다.")
+                message: L10n.string("이미지를 잘랐습니다."),
+                actionLocalization: .init(key: "이미지를 잘랐습니다.")
             )
         } else {
             restoreGeometry(from: snapshot)
@@ -822,7 +854,8 @@ final class PDFAnnotationEditingOverlayView: NSView {
             document === workspaceDocument,
             owner.viewportContext == .normal,
             owner.activeTool == .select,
-            let kind = EditableAnnotationIdentity.kind(of: annotation),
+            let kind = editableKind(of: annotation),
+            annotation.shouldDisplay,
             workspace.allowsAnnotationEditing(kind, annotation: annotation),
             page.annotations.contains(where: { $0 === annotation })
         else {
@@ -857,9 +890,10 @@ final class PDFAnnotationEditingOverlayView: NSView {
             owner.viewportContext == .normal,
             owner.activeTool == .select,
             selectedAnnotation === snapshot.annotation,
+            snapshot.annotation.shouldDisplay,
             selectedPage === snapshot.page,
             snapshot.document.page(at: snapshot.pageIndex) === snapshot.page,
-            EditableAnnotationIdentity.kind(of: snapshot.annotation) == snapshot.kind,
+            editableKind(of: snapshot.annotation) == snapshot.kind,
             workspace.allowsAnnotationEditing(
                 snapshot.kind,
                 annotation: snapshot.annotation
@@ -922,9 +956,10 @@ final class PDFAnnotationEditingOverlayView: NSView {
         guard let owner, let annotation = selectedAnnotation, let page = selectedPage else { return }
         let basicSelectionIsValid: Bool
         if let document = owner.document,
-           let kind = EditableAnnotationIdentity.kind(of: annotation)
+           let kind = editableKind(of: annotation)
         {
             basicSelectionIsValid = document.index(for: page) != NSNotFound
+                && annotation.shouldDisplay
                 && page.annotations.contains(where: { $0 === annotation })
                 && owner.viewportContext == .normal
                 && owner.activeTool == .select
@@ -1029,10 +1064,10 @@ final class PDFAnnotationEditingOverlayView: NSView {
         return L10n.string("선택한 개체를 드래그해 이동하고 화살표 키로 미세 조정할 수 있습니다.")
     }
 
-    private func movementMessage(for annotation: PDFAnnotation) -> String {
-        EditableAnnotationIdentity.kind(of: annotation) == .image
-            ? L10n.string("이미지 위치를 변경했습니다.")
-            : L10n.string("status.annotation_changed")
+    private func movementLocalization(for annotation: PDFAnnotation) -> PDFEditActionLocalization {
+        editableKind(of: annotation) == .image
+            ? .init(key: "이미지 위치를 변경했습니다.")
+            : .init(key: "status.annotation_changed")
     }
 
     private func approximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {

@@ -53,8 +53,11 @@ class PDFBoundedPlainTextView: NSTextView {
         // AppKit normally supplies a valid UTF-16 range. Clamp defensively so
         // drag-and-drop, Services, and input methods share the same safe path.
         let current = string as NSString
+        // With NSNotFound, NSTextInputClient replaces the marked composition
+        // before falling back to the selection. Using only the caret would
+        // leave the unfinished Korean/Japanese/Chinese text in the document.
         let requested = replacementRange.location == NSNotFound
-            ? selectedRange()
+            ? (hasMarkedText() ? markedRange() : selectedRange())
             : replacementRange
         let location = min(max(0, requested.location), current.length)
         let length = min(max(0, requested.length), current.length - location)
@@ -130,8 +133,27 @@ class PDFBoundedPlainTextView: NSTextView {
 final class PDFInlineTextView: PDFBoundedPlainTextView {
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
+    var returnInsertsNewline = false
+    // Preserve fractional PDF baselines after native viewport pixel alignment.
+    var bodyTextBaselineOffset: CGFloat = 0 {
+        didSet {
+            guard bodyTextBaselineOffset != oldValue else { return }
+            invalidateTextContainerOrigin()
+            needsDisplay = true
+        }
+    }
+
+    override var textContainerOrigin: NSPoint {
+        let origin = super.textContainerOrigin
+        return NSPoint(x: origin.x, y: origin.y + bodyTextBaselineOffset)
+    }
 
     override func keyDown(with event: NSEvent) {
+        if returnInsertsNewline, !event.modifierFlags.contains(.command),
+           event.keyCode == 36 || event.keyCode == 76 {
+            super.keyDown(with: event)
+            return
+        }
         // During Korean/Japanese/Chinese composition Return confirms a marked
         // syllable. Closing the editor at that moment would truncate input, so
         // AppKit must finish composition before Return becomes our commit key.
@@ -158,7 +180,7 @@ final class PDFInlineTextView: PDFBoundedPlainTextView {
 /// That preserves macOS text services, native copy/paste, VoiceOver, spelling,
 /// input methods, and the responder-chain undo manager inside the draft.
 @MainActor
-final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
+final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate, NSLayoutManagerDelegate {
     var onDraftChanged: ((String, InlineTextStyle) -> Void)?
     var onLengthLimitReached: (() -> Void)?
     var onCommit: (() -> Void)?
@@ -166,7 +188,19 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
 
     private(set) var draftID: UUID?
     private(set) var purpose: InlineTextEditPurpose = .freeText
-    private let textView = PDFInlineTextView(frame: .zero)
+    let textView = PDFInlineTextView(frame: .zero)
+    let textScrollView = NSScrollView(frame: .zero)
+    private let rootStack = NSStackView()
+    private var textScrollConstraints: [NSLayoutConstraint] = []
+    private var usesBodyPresentation = false
+    private var textPresentationScale: CGFloat = 1
+    private var textHorizontalScale: CGFloat = 1
+    private var bodyTextLineHeight: CGFloat?
+    private var bodyTextFirstLineIndent: CGFloat = 0
+    private var bodyTextSourceText: String?
+    private var bodyTextSourceStyle: InlineTextStyle?
+    private var bodyTextSourceRuns: [InlineTextSourceRun] = []
+    private var bodyTextPreviewPaperColor: PDFTextColor?
     private let fontMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let sizeField = NSTextField(frame: .zero)
     private let sizeStepper = NSStepper(frame: .zero)
@@ -216,8 +250,17 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         }
         draftID = draft.id
         purpose = draft.purpose
+        bodyTextLineHeight = draft.bodyTextLineHeight
+        bodyTextFirstLineIndent = draft.bodyTextFirstLineIndent
+        bodyTextSourceText = draft.bodyTextSourceText
+        bodyTextSourceStyle = draft.bodyTextSourceStyle
+        bodyTextSourceRuns = draft.bodyTextSourceRuns
+        bodyTextPreviewPaperColor = draft.bodyTextPreviewPaperColor
+        configureBaselineLayout()
+        textHorizontalScale = draft.style.horizontalScale
+        textView.returnInsertsNewline = draft.purpose == .bodyText
         textView.string = draft.text
-        selectFont(named: draft.style.fontName)
+        selectFont(named: draft.style.fontName, sourceFont: draft.style.sourceFont)
         sizeField.doubleValue = Double(draft.style.fontSize)
         sizeStepper.doubleValue = Double(draft.style.fontSize)
         textColorWell.color = draft.style.textColor.nsColor
@@ -225,14 +268,22 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         transparentBackgroundButton.state = draft.style.backgroundColor.alpha <= 0.001 ? .on : .off
         backgroundColorWell.isEnabled = transparentBackgroundButton.state == .off
         alignmentControl.selectedSegment = segment(for: draft.style.alignment)
-        warningLabel.isHidden = draft.purpose != .visualReplacement
+        warningLabel.isHidden = usesBodyPresentation || draft.purpose == .freeText
+        refreshPurposeHint()
+        refreshShortcuts()
         applyPreview(style: draft.style)
+        let length = textView.string.utf16.count
+        let requested = draft.initialSelectedRange ?? NSRange(location: 0, length: 0)
+        let location = requested.location == NSNotFound ? length : min(max(0, requested.location), length)
+        textView.setSelectedRange(NSRange(location: location,
+                                         length: min(max(0, requested.length), length - location)))
     }
 
     var currentText: String { textView.string }
 
     var currentStyle: InlineTextStyle {
-        let requestedName = fontMenu.selectedItem?.representedObject as? String
+        let requestedSourceFont = fontMenu.selectedItem?.representedObject as? PDFBodyTextDocumentFonts.Lease
+        let requestedName = requestedSourceFont?.postScriptName ?? fontMenu.selectedItem?.representedObject as? String
             ?? NSFont.systemFont(ofSize: 15).fontName
         let background = transparentBackgroundButton.state == .on
             ? PDFTextColor.clear
@@ -242,12 +293,118 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
             fontSize: CGFloat(sizeField.doubleValue),
             textColor: PDFTextColor(textColorWell.color),
             backgroundColor: background,
-            alignment: alignment(for: alignmentControl.selectedSegment)
+            alignment: alignment(for: alignmentControl.selectedSegment),
+            horizontalScale: textHorizontalScale, sourceFont: requestedSourceFont
         )
     }
 
-    func focusText() {
-        window?.makeFirstResponder(textView)
+    func focusText(at point: CGPoint? = nil) {
+        textView.window?.makeFirstResponder(textView)
+        if let point {
+            let location = min(textView.string.utf16.count, textView.characterIndexForInsertion(at: point))
+            textView.setSelectedRange(NSRange(location: location, length: 0))
+        }
+    }
+
+    /// Body text shares the exact native editor and draft transaction, but its
+    /// canvas sits over the PDF text while this panel becomes a small toolbar.
+    func setBodyPresentation(in host: NSView?) {
+        let requested = host != nil
+        guard usesBodyPresentation != requested || (host != nil && textScrollView.superview !== host) else { return }
+        usesBodyPresentation = requested
+        textView.bodyTextBaselineOffset = 0
+        textView.textContainer?.lineFragmentPadding = requested ? 0 : 5
+        textScrollView.borderType = requested ? .noBorder : .bezelBorder
+        NSLayoutConstraint.deactivate(textScrollConstraints)
+        if rootStack.arrangedSubviews.contains(where: { $0 === textScrollView }) {
+            rootStack.removeArrangedSubview(textScrollView)
+        }
+        textScrollView.removeFromSuperview()
+        if let host {
+            textScrollView.translatesAutoresizingMaskIntoConstraints = true
+            host.addSubview(textScrollView)
+        } else {
+            textScrollView.translatesAutoresizingMaskIntoConstraints = false
+            rootStack.insertArrangedSubview(textScrollView, at: 1)
+            NSLayoutConstraint.activate(textScrollConstraints)
+            textView.textContainer?.widthTracksTextView = true
+            setTextPresentationScale(1)
+        }
+        warningLabel.isHidden = requested || purpose == .freeText
+        shortcutHint.isHidden = requested
+        refreshShortcuts()
+    }
+
+    func setTextPresentationScale(_ requested: CGFloat) {
+        let scale = requested.isFinite ? min(64, max(0.05, requested)) : 1
+        guard abs(scale - textPresentationScale) > 0.0001 else { return }
+        textPresentationScale = scale
+        applyPreview(style: currentStyle)
+    }
+
+    /// Measure the actual first TextKit baseline, including its integral line
+    /// height and text-container inset, instead of estimating from font ascent.
+    func firstTextBaseline(in host: NSView) -> CGPoint? {
+        textScrollView.layoutSubtreeIfNeeded()
+        guard let container = textView.textContainer,
+              let manager = textView.layoutManager else { return nil }
+        manager.ensureLayout(for: container)
+        guard manager.numberOfGlyphs > 0 else { return nil }
+        let line = manager.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+        let glyph = manager.location(forGlyphAt: 0)
+        let origin = textView.textContainerOrigin
+        return textView.convert(CGPoint(x: origin.x + line.minX + glyph.x,
+                                        y: origin.y + line.minY + glyph.y), to: host)
+    }
+
+    func alignBodyTextBaseline(to baselineY: CGFloat, in host: NSView) {
+        guard usesBodyPresentation, baselineY.isFinite,
+              let previous = firstTextBaseline(in: host), previous.y.isFinite else { return }
+        let clip = textScrollView.contentView
+        let previousOffset = clip.convert(.zero, to: host).y - clip.convert(clip.bounds.origin, to: host).y
+        guard abs(previous.y - previousOffset - baselineY) > 0.0001 else { return }
+        textView.bodyTextBaselineOffset = 0
+        guard let current = firstTextBaseline(in: host), current.y.isFinite else { return }
+        var frame = textScrollView.frame
+        let scrollOffset = clip.convert(.zero, to: host).y - clip.convert(clip.bounds.origin, to: host).y
+        // A caret may scroll a long draft inside its canvas. Anchor the
+        // unscrolled layout, so that scrolling never moves the canvas itself.
+        frame.origin.y += baselineY - (current.y - scrollOffset)
+        textScrollView.frame = frame
+        // Native clip views can snap the viewport after moving the scroll
+        // view. Preserve the fractional PDF baseline inside TextKit instead.
+        if let settled = firstTextBaseline(in: host) {
+            let settledOffset = clip.convert(.zero, to: host).y
+                - clip.convert(clip.bounds.origin, to: host).y
+            let source = CGPoint(x: settled.x, y: settled.y - settledOffset)
+            let target = CGPoint(x: settled.x, y: baselineY)
+            let originDelta = textView.convert(target, from: host).y
+                - textView.convert(source, from: host).y
+            if originDelta.isFinite {
+                textView.bodyTextBaselineOffset = originDelta
+            }
+        }
+    }
+
+    /// A PDF layout width describes text, excluding editor padding and native
+    /// scroller gutters. Account for the real scroll view rather than guessing
+    /// its platform-dependent gutter width and wrapping a line too early.
+    func setBodyCanvasFrame(_ requested: CGRect, textWidth: CGFloat) {
+        textScrollView.frame = requested
+        textScrollView.layoutSubtreeIfNeeded()
+        guard usesBodyPresentation, textWidth.isFinite, textWidth > 0,
+              let container = textView.textContainer else { return }
+        var frame = textScrollView.frame
+        let chromeWidth = frame.width - textScrollView.contentSize.width
+            + textView.textContainerInset.width * 2
+        frame.size.width = textWidth + chromeWidth
+        textScrollView.frame = frame
+        textScrollView.layoutSubtreeIfNeeded()
+        // NSScrollView rounds its viewport to pixels. Keep the page's exact
+        // fractional text width so a glyph at the right edge does not wrap in
+        // the preview but remain on the previous line after Apply.
+        container.widthTracksTextView = false
+        container.containerSize.width = textWidth
     }
 
     func textDidChange(_ notification: Notification) {
@@ -265,6 +422,7 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
             suppressCallbacks = false
             onLengthLimitReached?()
         }
+        if purpose == .bodyText { applyPreview(style: currentStyle) }
         notifyDraftChanged()
     }
 
@@ -304,7 +462,7 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         shadow?.shadowOffset = CGSize(width: 0, height: -3)
         shadow?.shadowColor = NSColor.black.withAlphaComponent(0.28)
 
-        let scrollView = NSScrollView(frame: .zero)
+        let scrollView = textScrollView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
@@ -312,6 +470,17 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         textView.isRichText = false
         textView.isEditable = true
         textView.isSelectable = true
+        // NSTextView(frame: .zero) otherwise keeps a zero-width document
+        // frame after the scroller receives its Auto Layout width. TextKit
+        // retains all glyphs and can show a caret while painting no letters.
+        textView.autoresizingMask = [.width]
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = .zero
+        textView.maxSize = CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.frame.size.width = scrollView.contentSize.width
         textView.allowsUndo = true
         textView.usesFindPanel = true
         textView.isAutomaticSpellingCorrectionEnabled = true
@@ -403,12 +572,18 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         actionRow.alignment = .centerY
         actionRow.spacing = 8
 
-        let root = NSStackView(views: [toolbarScrollView, scrollView, warningLabel, actionRow])
+        let root = rootStack
+        [toolbarScrollView, scrollView, warningLabel, actionRow].forEach { root.addArrangedSubview($0) }
         root.translatesAutoresizingMaskIntoConstraints = false
         root.orientation = .vertical
         root.alignment = .leading
         root.spacing = 8
         addSubview(root)
+        textScrollConstraints = [
+            scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
+            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 70),
+        ]
+        NSLayoutConstraint.activate(textScrollConstraints)
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
@@ -416,8 +591,6 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
             root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
             toolbarScrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
             toolbarScrollView.heightAnchor.constraint(equalToConstant: 62),
-            scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
-            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 70),
             warningLabel.widthAnchor.constraint(equalTo: root.widthAnchor),
             actionRow.widthAnchor.constraint(equalTo: root.widthAnchor),
         ])
@@ -487,18 +660,29 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
             systemItem.title = L10n.string("inline_text.system_font", defaultValue: "System")
         }
 
-        warningLabel.stringValue = L10n.string(
-            "inline_text.visual_replacement_warning",
-            defaultValue: "Visual replacement only. The original text remains available to search and copy; this is not secure redaction."
-        )
-        warningLabel.setAccessibilityLabel(warningLabel.stringValue)
-        shortcutHint.stringValue = L10n.string(
-            "inline_text.shortcuts",
-            defaultValue: "Return/⌘Return Apply · Shift-Return Line Break · Esc Cancel"
-        )
-        shortcutHint.setAccessibilityLabel(shortcutHint.stringValue)
+        refreshPurposeHint()
+        refreshShortcuts()
         cancelButton.title = L10n.string("action.cancel", defaultValue: "Cancel")
         applyButton.title = L10n.string("action.apply", defaultValue: "Apply")
+    }
+
+    private func refreshShortcuts() {
+        shortcutHint.stringValue = purpose == .bodyText
+            ? L10n.string("body_text.shortcuts", defaultValue: "Return Line Break · ⌘Return Apply · Esc Cancel")
+            : L10n.string("inline_text.shortcuts", defaultValue: "Return/⌘Return Apply · Shift-Return Line Break · Esc Cancel")
+        shortcutHint.setAccessibilityLabel(shortcutHint.stringValue)
+        applyButton.keyEquivalentModifierMask = purpose == .bodyText ? .command : []
+        applyButton.toolTip = shortcutHint.stringValue
+        textView.toolTip = purpose == .bodyText ? shortcutHint.stringValue : nil
+    }
+
+    private func refreshPurposeHint() {
+        warningLabel.stringValue = purpose == .bodyText
+            ? L10n.string("body_text.edit_hint", defaultValue:
+                "본문 텍스트를 수정합니다. 내용을 모두 지우고 적용하면 해당 텍스트가 삭제됩니다.")
+            : L10n.string("inline_text.visual_replacement_warning", defaultValue:
+                "Visual replacement only. The original text remains available to search and copy; this is not secure redaction.")
+        warningLabel.setAccessibilityLabel(warningLabel.stringValue)
     }
 
     private func installLanguageObserver() {
@@ -536,7 +720,23 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         }
     }
 
-    private func selectFont(named name: String) {
+    private func selectFont(named name: String, sourceFont: PDFBodyTextDocumentFonts.Lease? = nil) {
+        // A private program is a distinct menu choice from an installed face
+        // with the same PostScript name. Selecting that installed choice opts
+        // out of source-run preservation through sourceFont identity equality.
+        for item in fontMenu.itemArray {
+            if let lease = item.representedObject as? PDFBodyTextDocumentFonts.Lease,
+               lease != sourceFont { fontMenu.menu?.removeItem(item) }
+        }
+        if let sourceFont {
+            if let item = fontMenu.itemArray.first(where: {
+                ($0.representedObject as? PDFBodyTextDocumentFonts.Lease) == sourceFont
+            }) { fontMenu.select(item); return }
+            fontMenu.addItem(withTitle: sourceFont.font(ofSize: 15)?.displayName ?? name)
+            fontMenu.lastItem?.representedObject = sourceFont
+            fontMenu.select(fontMenu.lastItem)
+            return
+        }
         if let item = fontMenu.itemArray.first(where: { ($0.representedObject as? String) == name }) {
             fontMenu.select(item)
             return
@@ -563,12 +763,90 @@ final class PDFInlineTextEditorPanel: NSVisualEffectView, NSTextViewDelegate {
         label.textColor = .secondaryLabelColor
     }
 
+    private var sourceBaselineAdvance: CGFloat? {
+        guard purpose == .bodyText, let bodyTextLineHeight,
+              bodyTextLineHeight.isFinite, bodyTextLineHeight > 0 else { return nil }
+        let advance = bodyTextLineHeight * textPresentationScale
+        return advance.isFinite && advance > 0 ? advance : nil
+    }
+
+    private func configureBaselineLayout() {
+        guard let manager = textView.layoutManager else { return }
+        manager.delegate = self
+        let usesFontLeading = sourceBaselineAdvance == nil
+        if manager.usesFontLeading != usesFontLeading {
+            manager.usesFontLeading = usesFontLeading
+            manager.invalidateLayout(forCharacterRange: NSRange(location: 0,
+                length: textView.textStorage?.length ?? 0), actualCharacterRange: nil)
+        }
+    }
+
+    nonisolated func layoutManager(_ layoutManager: NSLayoutManager,
+        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+        lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+        baselineOffset: UnsafeMutablePointer<CGFloat>, in textContainer: NSTextContainer,
+        forGlyphRange glyphRange: NSRange) -> Bool {
+        // This panel owns its TextKit objects on the main actor. Fractional
+        // fonts can add leading even with usesFontLeading disabled; control
+        // only the source's baseline advance, preserving native glyph layout,
+        // ink bounds, baseline offsets, selection, and input-method handling.
+        guard Thread.isMainThread else { return false }
+        return MainActor.assumeIsolated {
+            guard let advance = sourceBaselineAdvance else { return false }
+            lineFragmentRect.pointee.size.height = advance
+            return true
+        }
+    }
+
     private func applyPreview(style: InlineTextStyle) {
-        textView.font = style.font
-        textView.textColor = style.textColor.nsColor
-        textView.backgroundColor = style.backgroundColor.nsColor
-        textView.drawsBackground = style.backgroundColor.alpha > 0.001
+        configureBaselineLayout()
+        var previewStyle = style
+        if purpose == .bodyText, style.backgroundColor.alpha <= 0.001,
+           let paper = bodyTextPreviewPaperColor {
+            previewStyle.backgroundColor = paper
+        }
+        let appearance = PDFInlineTextEditorAppearance(style: previewStyle)
+        let resolvedFont = purpose == .bodyText
+            ? PDFBodyTextEditor.replacementFont(for: textView.string, preferred: style.font)
+            : style.font
+        textView.font = style.renderingFont(resolvedFont, size: style.fontSize * textPresentationScale)
+        textView.textColor = appearance.ink
+        textView.backgroundColor = appearance.paper
+        textView.drawsBackground = true
+        textScrollView.backgroundColor = appearance.paper
+        textScrollView.drawsBackground = true
+        textView.insertionPointColor = appearance.ink
+        textView.selectedTextAttributes = [
+            .foregroundColor: NSColor.selectedTextColor,
+            .backgroundColor: NSColor.selectedTextBackgroundColor,
+        ]
         textView.alignment = style.alignment
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = style.alignment
+        if purpose == .bodyText, let bodyTextLineHeight, bodyTextLineHeight.isFinite {
+            let height = (bodyTextLineHeight > 0 ? bodyTextLineHeight : style.fontSize) * textPresentationScale
+            paragraph.minimumLineHeight = height
+            paragraph.maximumLineHeight = height
+        }
+        textView.defaultParagraphStyle = paragraph
+        if purpose == .bodyText {
+            let attributed = PDFBodyTextAttributedLayout.attributedString(text: textView.string, style: style,
+                sourceText: bodyTextSourceText, sourceStyle: bodyTextSourceStyle, sourceRuns: bodyTextSourceRuns,
+                lineHeight: bodyTextLineHeight, firstLineIndent: bodyTextFirstLineIndent,
+                textScale: textPresentationScale)
+            // Apply appearance attributes in place. Replacing the whole
+            // attributed string would discard IME marked text and selection.
+            if let storage = textView.textStorage {
+                storage.beginEditing()
+                attributed.enumerateAttributes(in: NSRange(location: 0, length: attributed.length)) { attributes, range, _ in
+                    storage.addAttributes(attributes, range: range)
+                }
+                storage.endEditing()
+            }
+        } else {
+            textView.textStorage?.addAttribute(.paragraphStyle, value: paragraph,
+                range: NSRange(location: 0, length: textView.string.utf16.count))
+        }
     }
 
     private func notifyDraftChanged(style: InlineTextStyle? = nil) {
@@ -604,13 +882,21 @@ final class PDFInlineTextEditingOverlayView: NSView {
     /// SwiftUI replacement, outgoing and incoming overlays can display the
     /// same draft; only the incoming owner may write it back.
     private let ownershipID = UUID()
-    private let panel = PDFInlineTextEditorPanel(frame: .zero)
+    // A normal reader installs this lightweight overlay to keep PDFKit's
+    // rendering order stable. Building TextKit, formatting controls and their
+    // constraints belongs to the first actual edit, not opening every PDF or
+    // creating every compact-spread row.
+    private lazy var panel = PDFInlineTextEditorPanel(frame: .zero)
+    private var hasPreparedPanel = false
     private var activeDraftID: UUID?
     private var targetRect = CGRect.zero
     private var boundsObserver: NSObjectProtocol?
     private var scaleObserver: NSObjectProtocol?
     private weak var observedClipView: NSClipView?
     private(set) var superviewAttachmentCount = 0
+    private var presentsBodyCanvas: Bool {
+        hasPreparedPanel && panel.textScrollView.superview === self
+    }
 
     /// Narrow test seam for lifecycle verification. Production callers should
     /// use `prepareForRemoval()` rather than manipulating observers directly.
@@ -629,18 +915,21 @@ final class PDFInlineTextEditingOverlayView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setupPanel()
+        isHidden = true
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupPanel()
+        isHidden = true
     }
 
-    /// Only the floating panel owns mouse input. Returning nil elsewhere keeps
+    /// Only the text canvas and formatting controls own mouse input. Returning nil elsewhere keeps
     /// PDFKit form widgets, selection, links, and gestures fully native.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard !panel.isHidden, panel.frame.contains(point) else { return nil }
+        guard hasPreparedPanel, !panel.isHidden,
+              panel.frame.contains(point)
+                || (presentsBodyCanvas && panel.textScrollView.frame.contains(point))
+        else { return nil }
         return super.hitTest(point)
     }
 
@@ -651,7 +940,7 @@ final class PDFInlineTextEditingOverlayView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard !targetRect.isEmpty, !panel.isHidden else { return }
+        guard !targetRect.isEmpty, hasPreparedPanel, !panel.isHidden else { return }
         NSGraphicsContext.saveGraphicsState()
         NSColor.controlAccentColor.withAlphaComponent(0.9).setStroke()
         let path = NSBezierPath(roundedRect: targetRect, xRadius: 3, yRadius: 3)
@@ -662,7 +951,7 @@ final class PDFInlineTextEditingOverlayView: NSView {
     }
 
     func synchronizeWithWorkspace() {
-        let wasPresenting = activeDraftID != nil || !panel.isHidden || !targetRect.isEmpty
+        let wasPresenting = activeDraftID != nil || !targetRect.isEmpty
         guard
             let owner,
             owner.viewportContext == .normal,
@@ -670,10 +959,11 @@ final class PDFInlineTextEditingOverlayView: NSView {
             let draft = owner.workspaceState?.pendingInlineTextEdit,
             let document = owner.document,
             draft.pageIndex >= 0,
-            draft.pageIndex < document.pageCount
+            draft.pageIndex < document.pageCount,
+            owner.compactSpread?.contains(pageIndex: draft.pageIndex) != false
         else {
             removeObservations()
-            panel.isHidden = true
+            if hasPreparedPanel { panel.isHidden = true }
             isHidden = true
             targetRect = .zero
             activeDraftID = nil
@@ -689,16 +979,35 @@ final class PDFInlineTextEditingOverlayView: NSView {
                 draftID: draft.id
             ) == true else {
                 removeObservations()
-                panel.isHidden = true
+                if hasPreparedPanel { panel.isHidden = true }
                 isHidden = true
                 targetRect = .zero
                 activeDraftID = nil
                 return
             }
+            if !hasPreparedPanel { setupPanel() }
             activeDraftID = draft.id
+            if draft.purpose == .bodyText {
+                // The draft already owns the selected UTF-16 range and reveal
+                // geometry. Transfer input from both PDFKit and repaired drag
+                // selection to TextKit only once, when this editor claims it.
+                owner.finishNativeSelectionPreview()
+                owner.clearSelection()
+                owner.workspaceState?.currentSelection = nil
+            }
+            // A rotated page needs the floating text canvas: a horizontal
+            // NSTextView cannot safely imitate a rotated PDF baseline.
+            let usesPageCanvas = draft.purpose == .bodyText
+                && (document.page(at: draft.pageIndex)?.rotation ?? 0) % 360 == 0
+            panel.setBodyPresentation(in: usesPageCanvas ? self : nil)
             panel.configure(with: draft)
             panel.isHidden = false
-            DispatchQueue.main.async { [weak self] in self?.panel.focusText() }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.activeDraftID == draft.id,
+                      self.ownsActiveDraft, !self.isHidden else { return }
+                self.revealPendingBodyTextSelection()
+                self.panel.focusText()
+            }
         }
         isHidden = false
         refreshScrollObservation()
@@ -732,10 +1041,14 @@ final class PDFInlineTextEditingOverlayView: NSView {
     }
 
     private func setupPanel() {
+        hasPreparedPanel = true
         isHidden = true
         panel.isHidden = true
         addSubview(panel)
-        panel.onDraftChanged = { [weak self] _, _ in self?.synchronizeDraft() }
+        panel.onDraftChanged = { [weak self] _, _ in
+            self?.synchronizeDraft()
+            self?.positionPanel()
+        }
         panel.onLengthLimitReached = { [weak self] in
             guard let self else { return }
             guard self.ownsActiveDraft else { return }
@@ -778,6 +1091,10 @@ final class PDFInlineTextEditingOverlayView: NSView {
             style: panel.currentStyle,
             bounds: bounds
         )
+        guard state.pendingInlineTextEdit?.id != id else {
+            synchronizeDraft()
+            return
+        }
         finishPresentation()
     }
 
@@ -799,11 +1116,60 @@ final class PDFInlineTextEditingOverlayView: NSView {
     private func finishPresentation() {
         activeDraftID = nil
         targetRect = .zero
-        panel.isHidden = true
+        if hasPreparedPanel { panel.isHidden = true }
         isHidden = true
         removeObservations()
         owner?.needsDisplay = true
         owner?.window?.makeFirstResponder(owner)
+    }
+
+    func focusText(at ownerPoint: CGPoint) {
+        guard let owner, presentsBodyCanvas, ownsActiveDraft else { return }
+        layoutSubtreeIfNeeded()
+        panel.focusText(at: panel.textView.convert(ownerPoint, from: owner))
+    }
+
+    func focusTextSelection() {
+        guard ownsActiveDraft else { return }
+        revealPendingBodyTextSelection()
+        layoutSubtreeIfNeeded()
+        panel.focusText()
+    }
+
+    /// The workspace consumes the request once, so rebuilding an overlay or
+    /// typing after a manual scroll never re-centers an already open editor.
+    /// The main PDFView update calls this after its page/zoom navigation; the
+    /// initial responder callback also covers direct native view entry points.
+    func revealPendingBodyTextSelection() {
+        guard ownsActiveDraft, let owner, let draftID = activeDraftID,
+              let draft = owner.workspaceState?.pendingInlineTextEdit,
+              draft.id == draftID, draft.purpose == .bodyText,
+              let page = owner.document?.page(at: draft.pageIndex),
+              let documentView = owner.documentView,
+              documentView.bounds.width > 0, documentView.bounds.height > 0,
+              let scroll = owner.compactSpread?.host?.scrollView
+                ?? documentView.enclosingScrollView ?? firstScrollView(in: owner)
+        else { return }
+        let clip = scroll.contentView
+        guard clip.bounds.width > 0, clip.bounds.height > 0,
+              let lineRects = owner.workspaceState?.consumePendingBodyTextFocus(draftID: draftID)
+        else { return }
+        let converted = lineRects.map { rect in
+            clip.convert(convertedRect(rect, from: page, owner: owner), from: self)
+        }
+        guard let proposed = PDFBodyTextFocusScrollPolicy.proposedBounds(
+            focusing: converted, viewport: clip.bounds, isFlipped: clip.isFlipped)
+        else { return }
+        // PDFKit's clip view knows its document margins and centered short
+        // pages. Use its native clamping rather than assuming a zero origin.
+        let constrained = clip.constrainBoundsRect(proposed)
+        clip.scroll(to: constrained.origin)
+        scroll.reflectScrolledClipView(clip)
+        positionPanel()
+        // The toolbar click can take focus from TextKit. An explicit edit
+        // request must leave typing directed at the selected body text.
+        panel.focusText()
+        needsDisplay = true
     }
 
     private func positionPanel() {
@@ -815,11 +1181,74 @@ final class PDFInlineTextEditingOverlayView: NSView {
         else { return }
 
         targetRect = convertedRect(draft.bounds, from: page, owner: owner)
+        if presentsBodyCanvas {
+            let baseline = draft.bodyTextBaseline.map {
+                convert(owner.convert($0, from: page), from: owner)
+            }
+            positionBodyEditor(targetRect: targetRect, baseline: baseline, draft: draft, page: page, owner: owner)
+            return
+        }
         panel.frame = InlineTextGeometry.editorPanelFrame(
             targetRect: targetRect,
             viewportBounds: bounds,
             purpose: draft.purpose
         )
+    }
+
+    private func positionBodyEditor(targetRect: CGRect, baseline: CGPoint?, draft: PendingInlineTextEdit,
+                                    page: PDFPage, owner: InteractivePDFView) {
+        let viewport = bounds.insetBy(dx: 8, dy: 8)
+        guard viewport.width > 0, viewport.height > 0 else { return }
+        let scale = max(0.05, owner.scaleFactor)
+        panel.setTextPresentationScale(scale)
+        let scroll = panel.textScrollView
+        scroll.wantsLayer = true
+        let editor = panel.textView
+        let padding: CGFloat = 7
+        // The editing canvas covers the original run only while its draft is
+        // open. It is an ordinary text view, never a PDF annotation.
+        let font = editor.font ?? .systemFont(ofSize: 15)
+        let nativeWidth = PDFBodyTextEditor.layoutWidth(text: panel.currentText, style: panel.currentStyle,
+            bounds: draft.bounds, visibleBox: page.bounds(for: .mediaBox).intersection(page.bounds(for: .cropBox)),
+            baseline: draft.bodyTextBaseline, lineHeight: draft.bodyTextLineHeight,
+            firstLineIndent: draft.bodyTextFirstLineIndent, sourceText: draft.bodyTextSourceText,
+            sourceStyle: draft.bodyTextSourceStyle, sourceRuns: draft.bodyTextSourceRuns)
+        let textWidth = max(1, nativeWidth * scale)
+        let lineHeight = max(20, ceil(font.ascender - font.descender + font.leading))
+        // Text layout is defined in page coordinates. A narrow viewport clips
+        // that canvas with the PDF instead of introducing different wrapping
+        // from the content that Apply will save.
+        let textOriginX = baseline.map { $0.x - draft.bodyTextFirstLineIndent * scale } ?? targetRect.minX
+        var frame = CGRect(x: textOriginX - padding, y: targetRect.minY - padding,
+                           width: textWidth + padding * 2,
+                           height: max(targetRect.height, lineHeight) + padding * 2)
+        panel.setBodyCanvasFrame(frame, textWidth: textWidth)
+        frame = scroll.frame
+        if let container = editor.textContainer, let manager = editor.layoutManager {
+            manager.ensureLayout(for: container)
+            frame.size.height = min(viewport.height * 0.55,
+                max(frame.height, ceil(manager.usedRect(for: container).height) + padding * 2))
+        }
+        // NSView's coordinate system grows upward; pin the top of the text to
+        // the PDF run while additional typed lines expand downward.
+        frame.origin.y = targetRect.maxY + padding - frame.height
+        frame.origin.y = min(max(viewport.minY, frame.minY), viewport.maxY - frame.height)
+        scroll.frame = frame
+        if let baseline, baseline.y >= viewport.minY, baseline.y <= viewport.maxY {
+            panel.alignBodyTextBaseline(to: baseline.y, in: self)
+            frame = scroll.frame
+        }
+        scroll.layer?.borderWidth = 1
+        scroll.layer?.borderColor = NSColor.controlAccentColor.cgColor
+        scroll.layer?.cornerRadius = 3
+
+        let toolbarWidth = min(460, viewport.width)
+        let toolbarHeight: CGFloat = 114
+        let above = frame.maxY + 6
+        let toolbarY = above + toolbarHeight <= viewport.maxY
+            ? above : max(viewport.minY, frame.minY - toolbarHeight - 6)
+        panel.frame = CGRect(x: min(max(viewport.minX, frame.minX), viewport.maxX - toolbarWidth),
+                             y: toolbarY, width: toolbarWidth, height: toolbarHeight)
     }
 
     private func convertedRect(
@@ -899,6 +1328,21 @@ final class PDFInlineTextEditingOverlayView: NSView {
 
 @MainActor
 extension InteractivePDFView {
+    func revealPendingBodyTextSelection() {
+        subviews.compactMap { $0 as? PDFInlineTextEditingOverlayView }
+            .forEach { $0.revealPendingBodyTextSelection() }
+    }
+
+    func focusInlineTextEditorSelection() {
+        subviews.compactMap { $0 as? PDFInlineTextEditingOverlayView }
+            .forEach { $0.focusTextSelection() }
+    }
+
+    func focusInlineTextEditor(at point: CGPoint) {
+        subviews.compactMap { $0 as? PDFInlineTextEditingOverlayView }
+            .forEach { $0.focusText(at: point) }
+    }
+
     func configureInlineTextEditingOverlay() {
         let overlay: PDFInlineTextEditingOverlayView
         if let installed = subviews.compactMap({ $0 as? PDFInlineTextEditingOverlayView }).last {

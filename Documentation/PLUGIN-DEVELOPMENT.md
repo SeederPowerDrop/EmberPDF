@@ -1,229 +1,263 @@
-# HwattakPDF 플러그인 만들기
+# EmberPDF 플러그인 개발 시작하기
 
-**문서를 읽고 공부하는 나만의 방법을, 다른 사람도 설치할 수 있는 작은 도구로 만들어 보세요.**
+EmberPDF 플러그인은 앱 안에서 동작하는 작은 프로그램입니다. 개발자는 JavaScript로 자신만의 기능을 만들고, 명령과 화면을 추가하며, PDF 정보와 문서 변경 이벤트를 사용할 수 있습니다. 제공된 API로 만든 기능은 EmberPDF를 다시 빌드하지 않고 설치할 수 있습니다.
 
-이 가이드는 2026-09-05 안정화 소스의 실제 구현을 기준으로 한다. 코드 편집기와 HwattakPDF만 있으면 첫 플러그인을 만들 수 있다. Swift나 JavaScript 빌드는 필요하지 않다. 터미널 검증을 선택할 때만 저장소와 Mac용 Swift 개발 환경이 필요하다.
+이 가이드에서는 **버튼을 누를 때마다 숫자가 늘어나는 플러그인**을 실행한 뒤, 코드를 바꾸고 PDF 정보를 읽는 기능까지 붙여 봅니다. 완성 코드를 먼저 실행하고, 필요한 부분을 하나씩 이해하는 순서입니다.
 
-[English quick start](PLUGIN-DEVELOPMENT.en.md) · [문서 명령 API](PLUGIN-HOST-API.md) · [호환성·확장 설계](PLUGIN-COMPATIBILITY.md) · [보안 가이드](PLUGIN-SECURITY.md) · [전체 예제](../Examples/Plugins/README.md)
+기준: **EmberPDF 0.9.0 build 27 · macOS 14 이상**. 앱 정보에서 빌드 번호를 확인하세요. 이 실습에는 PDF, Xcode, 별도의 JavaScript 빌드 도구가 필요하지 않습니다.
 
-## 1. 무엇을 만들 수 있나요?
+[English](PLUGIN-DEVELOPMENT.en.md) · [API 참조](PLUGIN-HOST-API.md) · [TypeScript 타입](PluginSDK/emberpdf.d.ts) · [예제 목록](../Examples/Plugins/README.md)
 
-| 하고 싶은 일 | 지금 사용하는 방식 | 출발점 |
-| --- | --- | --- |
-| 분야별 색상 체계, 논문 읽기용 강조·밑줄 | `documentCommand`의 주석 명령 | CommunityStarter |
-| 세밀한 필기용 펜, 발표 중 페이지 이동 | 펜 설정·모드 전환·탐색 명령 | CommunityStarter |
-| 학습 체크리스트, 작업 순서 안내 | 권한 없는 `showText` | OfflineChecklist |
-| 선택 문장과 출처를 Markdown으로 옮기기 | 텍스트 토큰 + `copyText` | MarkdownQuote |
-| 선택한 용어를 공개 웹사이트에서 검색 | URL 인코딩 + 호출마다 확인하는 `openURL` | ReferenceSearch |
-| 새 OCR 엔진, 자동 플래시카드 생성, 사용자 정의 렌더러 | 새 호스트 API 또는 격리된 실행 환경이 필요 | [확장 제안 절차](PLUGIN-COMPATIBILITY.md#5-아직-없는-기능을-추가하는-방법) |
+## 1. 먼저 완성된 예제를 실행하세요
 
-현재 패키지는 **앱이 구현한 명령과 텍스트 템플릿을 선언**한다. 임의 코드, 타이머, 이벤트 구독, 명령 여러 개의 자동 연쇄 실행은 지원하지 않는다. 설치된 플러그인은 메뉴·툴바·명령 팔레트에서 사용자가 실행한다. 스캔 문서에 텍스트 선택을 요구하는 기능은 먼저 텍스트 레이어/OCR이 필요하다.
+### 예제 폴더 준비
 
-## 2. 첫 플러그인: 복사 → 수정 → 설치 → 실행
-
-### 준비
-
-- macOS 14 이상과 HwattakPDF 앱. 문서 명령 예제에는 **schema 3을 지원하는 앱**이 필요하다.
-- 개인 자료가 없는 시험용 PDF 한 개. 문서 편집 실험은 복사본에서 한다.
-- JSON을 UTF-8 일반 텍스트로 저장할 수 있는 편집기.
-
-현재 소스는 0.9.0/build 19이며 schema 1·2·3을 지원한다. 과거에는 0.8.0/build 18 표기가 같은 공개 앱과 안정화 후보가 존재했다. 예제의 최소 버전 숫자만 보지 말고 [정확한 호환성 기준](PLUGIN-COMPATIBILITY.md#1-현재-지원-범위)을 확인한다.
-
-### 패키지 복사
-
-저장소의 [CommunityStarter.hwattakplugin](../Examples/Plugins/CommunityStarter.hwattakplugin)을 복사해 `MyStudy.hwattakplugin`으로 이름을 바꾼다. 저장소를 받은 개발자라면 루트에서 다음을 실행할 수 있다.
+[HelloEmber.hwattakplugin](../Examples/Plugins/HelloEmber.hwattakplugin)을 통째로 복사하고 폴더 이름을 `MyExtension.hwattakplugin`으로 바꿉니다. 저장소를 내려받았다면 저장소 루트에서 다음 명령을 실행해도 됩니다. 처음 복사할 때 쓰는 명령이므로 `work/MyExtension.hwattakplugin` 폴더가 이미 있다면 다른 폴더 이름을 사용하세요.
 
 ```sh
 mkdir -p work
-cp -R Examples/Plugins/CommunityStarter.hwattakplugin work/MyStudy.hwattakplugin
+cp -R Examples/Plugins/HelloEmber.hwattakplugin work/MyExtension.hwattakplugin
 ```
 
-패키지는 **폴더**다. `manifest.json`이 그 폴더 바로 안에 있어야 한다. Git 저장소, 스크린샷, 빌드 도구, 테스트 PDF는 패키지 밖에 둔다.
+`.hwattakplugin`은 파일 하나가 아니라 **다음 파일이 들어 있는 폴더**입니다. 예제는 앱의 기본 설치 목록에 포함되지 않으므로 이 폴더를 직접 선택해 설치합니다.
 
 ```text
-my-study-project/
-├── MyStudy.hwattakplugin/
-│   ├── manifest.json
-│   ├── README.md
-│   └── LICENSE
-├── screenshots/          ← 개발 저장소에만 포함
-└── test-results.md       ← 개발 저장소에만 포함
+MyExtension.hwattakplugin/
+├── manifest.json   ← 이름, 버전, 필요한 권한
+├── main.js         ← 실제 기능
+├── README.md       ← 사용 설명
+└── LICENSE         ← 예제 코드의 이용 조건
 ```
 
-### 나의 정보로 수정
+### 설치하고 버튼 눌러 보기
 
-`manifest.json`에서 다음 값을 바꾼다.
+1. EmberPDF에서 **플러그인 → 플러그인 관리… → 플러그인 설치…**를 엽니다.
+2. 복사한 `MyExtension.hwattakplugin` 폴더를 선택합니다. ZIP으로 받았다면 먼저 압축을 풉니다.
+3. 이름이 **Hello Ember**, 요청 권한이 **앱을 사용하는 동안 동작** 하나인지 확인하고 설치합니다.
+4. 관리 창을 닫고 EmberPDF의 문서 창으로 돌아갑니다. PDF가 없는 빈 문서 창이어도 됩니다.
+5. **⇧⌘P**를 누르고 `Hello Ember`를 검색한 뒤 Enter를 누릅니다. **플러그인** 메뉴에서도 같은 명령을 실행할 수 있습니다.
+6. 열린 패널에서 **Record an idea**를 누릅니다. 숫자가 `0`에서 `1`로 바뀌면 성공입니다.
 
-| 필드 | 작성할 내용 |
-| --- | --- |
-| `identifier` | 배포자가 정하는 고유한 소문자 식별자. 예: `dev.yourname.my-study`. 업데이트 때 유지한다. 예제의 `org.example.*`는 배포 전에 바꾼다. |
-| `displayName` / `author` | 사용자에게 표시할 이름과 실제 제작자 |
-| `description` | 무엇을 하는지, 어떤 문서·모드에서 쓰는지 |
-| `version` | 첫 배포는 `1.0.0`, 변경 후에는 올린다. `1.0.0-beta` 형식은 현재 불가 |
-| `minimumHostVersion` | 실제 시험한 최소 앱 버전. 개발자의 플러그인 버전과는 다른 값 |
-| `actions` / `capabilities` | 제공할 명령과 그 명령들이 사용하는 권한의 정확한 합집합 |
+**Close panel**로 패널을 닫고 같은 명령을 다시 실행해 보세요. 숫자는 그대로 `1`입니다. 화면을 숨겨도 플러그인은 계속 동작하기 때문입니다. 이 예제의 숫자는 창 안의 메모리에만 있으므로 창을 닫거나 플러그인을 중지하면 초기화됩니다.
 
-아래는 하이라이트 하나만 제공하는 **그대로 저장할 수 있는 전체 manifest**다. 시작 예제 대신 이것으로 첫 실험을 해도 된다.
+## 2. 두 파일이 하는 일을 살펴보세요
+
+### main.js: 무엇을 할지 작성하는 코드
+
+아래는 예제의 전체 코드입니다. EmberPDF가 제공하는 `ember` 객체로 명령을 등록하고 화면을 표시합니다.
+
+```javascript
+// SPDX-License-Identifier: MIT
+let count = 0;
+
+async function renderPanel() {
+  await ember.ui.render({
+    title: 'Hello Ember',
+    text: `Ideas recorded in this window: ${count}`,
+    actions: [
+      { id: 'add-idea', label: 'Record an idea' },
+      { id: 'close', label: 'Close panel' }
+    ]
+  });
+}
+
+ember.commands.register({
+  id: 'open-hello',
+  title: 'Hello Ember',
+  run: async () => {
+    await renderPanel();
+    await ember.ui.open();
+  }
+});
+
+ember.on('view.action', async ({ id }) => {
+  if (id === 'add-idea') {
+    count += 1;
+    await renderPanel();
+  } else if (id === 'close') {
+    await ember.ui.close();
+  }
+});
+```
+
+실행 순서는 다음과 같습니다.
+
+1. EmberPDF가 플러그인을 시작하면 `Hello Ember` 명령과 버튼 이벤트 처리가 등록됩니다.
+2. 사용자가 명령을 실행하면 `renderPanel()`이 화면 내용을 만들고 `ui.open()`이 패널을 엽니다.
+3. 버튼을 누르면 `view.action` 이벤트에 버튼의 `id`가 전달됩니다. 코드는 그 값에 따라 숫자를 늘리거나 패널을 닫습니다.
+
+`ui.render()`는 제목·본문·버튼 등 화면의 **내용**을 정합니다. `ui.open()`과 `ui.close()`는 그 화면을 **보이거나 숨깁니다**. 숫자를 세는 기능은 전부 이 파일에 있고, EmberPDF 본체에는 카운터를 위한 코드를 추가하지 않았습니다.
+
+### manifest.json: 앱에 플러그인을 소개하는 파일
+
+아래는 위 코드와 함께 설치할 수 있는 전체 설정입니다. `runtime`은 실행할 코드와 실행 조건을 지정하는 부분입니다.
 
 ```json
 {
-  "schemaVersion": 3,
-  "identifier": "org.example.my-highlighter",
-  "displayName": "My Highlighter",
+  "schemaVersion": 6,
+  "identifier": "org.emberpdf.examples.hello-ember",
+  "displayName": "Hello Ember",
   "version": "1.0.0",
-  "author": "Your name",
-  "description": "선택한 문장을 노란색으로 강조합니다. 텍스트를 외부로 보내지 않습니다.",
-  "minimumHostVersion": "0.8.0",
-  "capabilities": ["annotationWrite"],
-  "actions": [
-    {
-      "id": "highlight-yellow",
-      "title": "노란색으로 강조",
-      "output": "documentCommand",
-      "template": "",
-      "command": {"kind": "highlight", "color": "#FFD60A"}
-    }
-  ]
+  "author": "EmberPDF SDK Examples",
+  "description": "A first independent extension with its own command, panel and per-window counter. Works without an open PDF.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": ["backgroundExecution"],
+  "actions": [],
+  "runtime": {
+    "apiVersion": 1,
+    "entry": "main.js",
+    "sha256": "4c2e55462065cbd4d5a71c1e869bd9ab5fbdfe51b1cd5361381dec50b386afc3",
+    "activation": "window",
+    "capabilities": ["backgroundExecution"]
+  }
 }
 ```
 
-하이라이트는 호스트가 현재 선택에 주석을 붙이는 기능이다. 텍스트를 추출하는 `selectedText` 권한은 필요하지 않다. 불필요한 권한까지 넣으면 설치 검증이 실패한다.
+처음에는 다음 항목만 이해하면 됩니다.
 
-### 설치와 첫 실행
-
-1. **플러그인 → 플러그인 관리… → 플러그인 설치…**에서 `MyStudy.hwattakplugin` 폴더를 선택한다. ZIP 자체를 선택하지 않는다.
-2. 표시되는 이름·제작자·버전·권한을 확인한다. 하이라이트 하나의 예제라면 `annotationWrite`만 있어야 한다.
-3. 설치하고 활성 상태인지 확인한다. 시험용 PDF에서 문장을 선택한다.
-4. **⇧⌘P**를 눌러 플러그인/명령 이름을 검색한다. Enter는 첫 번째 실행 가능한 결과를 실행하고 Esc는 닫는다. 메뉴·툴바에서도 선택할 수 있다.
-5. 하이라이트가 생기는지 확인하고 **⌘Z → ⇧⌘Z**로 취소·재실행한다. 별도 PDF로 저장한 뒤 다시 열어 확인한다.
-
-권한 없는 체크리스트는 PDF가 없는 창에서도 **플러그인 메뉴**로 실행할 수 있다. 현재 명령 팔레트는 열린 PDF가 있어야 열린다. 관리 창 검색은 설치 목록 검색이고, 명령 팔레트 검색은 실행할 action 검색이다.
-
-### 수정 후 다시 실행
-
-개발 중인 **원본 패키지**를 수정하고 관리 창에서 다시 선택한다. 같은 `identifier`면 업데이트 검토가 열린다. 설치된 플러그인 폴더를 직접 편집하는 hot reload는 지원하지 않는다. 직접 수정한 설치본은 무결성 검사에서 격리될 수 있다.
-
-같은 식별자의 비활성 상태와 호스트 제공 옵션은 업데이트 후에도 유지된다. 문서에 이미 만든 하이라이트는 플러그인을 끄거나 제거해도 남는다. 실행 취소나 PDF 편집으로 지운다.
-
-## 3. 두 번째 기능부터: 권한과 데이터 흐름
-
-| 넣은 기능 | 필요한 권한 | 사용자에게 설명할 내용 |
-| --- | --- | --- |
-| 정적 `showText` | 없음 | 로컬 안내 표시 |
-| `{{selection}}` / `{{selection.urlEncoded}}` | `selectedText` | 선택 문장을 템플릿에 사용 |
-| `{{document.name}}`, `.urlEncoded`, `{{page.number}}`, `{{document.pageCount}}` | `documentMetadata` | 문서 이름·현재 페이지·총 페이지 수 사용 |
-| `copyText` | `clipboardWrite` + 사용한 토큰 권한 | 시스템 클립보드 내용을 바꿈 |
-| `openURL` | `externalURL` + 사용한 토큰 권한 | 공개 HTTPS 링크를 확인 후 외부 브라우저로 엶 |
-| 하이라이트·밑줄 | `annotationWrite` | PDF 주석을 추가하고 Undo 가능 |
-| 펜·지우개·선택 | `toolControl` | 현재 도구나 펜 설정 변경 |
-| 모드·페이지 이동 | `workspaceNavigation` | 열린 문서의 화면 상태 변경 |
-
-여러 action의 권한을 합쳐 루트 `capabilities`에 중복 없이 넣는다. 각 권한을 켜고 끄는 개별 토글은 없고, 현재 동의/비활성화 단위는 플러그인이다. 읽기 기능과 외부 전송 기능을 별도 패키지로 나누면 사용자가 필요한 것만 선택할 수 있다.
-
-`{{page.text}}`와 `currentPageText`는 현재 **공식 번역 패널 전용**이다. 전체 페이지 읽기나 OCR API로 사용할 수 없다. 커뮤니티 웹 패널도 아직 허용되지 않는다.
-
-### 레시피 A — 의미가 있는 색상 규칙
-
-CommunityStarter를 바탕으로 `color`와 `title`을 바꿔 주장·근거·질문을 구별한다. 색만 보지 않아도 뜻을 알 수 있도록 제목을 쓴다. 예: “근거 표시 — 파란 밑줄”. 굵기·투명도·기본값은 [명령 API 표](PLUGIN-HOST-API.md#명령과-스타일-참조)를 따른다.
-
-### 레시피 B — Obsidian에 인용 옮기기
-
-[MarkdownQuote](../Examples/Plugins/MarkdownQuote.hwattakplugin/manifest.json)를 설치한다. PDF의 문장을 선택해 미리보기/복사를 실행하고, Obsidian 노트에 직접 붙여 넣는다. Markdown 문자열을 교환하는 방법이며 vault 파일 접근이나 자동 동기화는 아니다. 여러 줄 선택의 모든 줄에 `>`를 붙이는 반복/필터 언어는 없으므로 붙여 넣은 서식을 확인한다. 페이지 번호는 현재 페이지의 1-based 위치이며 로마 숫자 같은 인쇄 페이지 라벨과 다를 수 있다.
-
-`obsidian://` 링크는 현재 `openURL`의 공개 HTTPS 정책에서 허용되지 않는다. Obsidian의 `main.js`를 복사하거나 manifest 필드 이름만 바꿔도 실행되지 않는다. [기존 Obsidian 기능 옮기기](PLUGIN-COMPATIBILITY.md#3-obsidian에서-가져올-수-있는-것).
-
-### 레시피 C — 논문·용어 검색
-
-[ReferenceSearch](../Examples/Plugins/ReferenceSearch.hwattakplugin/manifest.json)의 공개 HTTPS 주소를 자신의 검색 서비스에 맞게 바꾼다. 검색어는 `{{selection.urlEncoded}}`를 사용한다. URL 인코딩은 문법을 보호하며 **개인정보 익명화나 암호화가 아니다**. 대상 사이트, 전송되는 문장/파일명, 사용자의 확인과 취소 흐름을 README에 설명한다. `fetch`, API 키, POST 요청이나 응답 파싱은 이 API에 없다.
-
-### 레시피 D — 태블릿 필기 프리셋
-
-CommunityStarter의 학습 모드 명령을 먼저 실행하고 펜 명령을 실행한다. 한 action에서 두 명령을 자동 연결할 수 없다. 펜 설정은 macOS가 전달한 입력을 처리하는 호스트 도구에 적용된다. Sidecar/기기 지원 범위와 Stamp 저장 형식은 [태블릿 가이드](PLUGIN-HOST-API.md#ipad태블릿-필기)를 참고한다. 펜 프리셋 제작과 iPad 드라이버 제작은 서로 다른 개발 범위다.
-
-## 4. 검증: 앱에서 확인하고, 필요하면 명령으로 반복하기
-
-터미널 검증은 **macOS용 HwattakPDF 소스 checkout + 저장소가 사용하는 Swift/Xcode 환경**이 필요하다. 첫 실행은 앱과 테스트 모듈을 빌드하므로 오래 걸릴 수 있다. 개발 환경은 [기여 가이드](../CONTRIBUTING.md#2-개발-환경)를 따른다. 일반 플러그인 제작자는 앱의 설치 검토만으로 시작할 수 있다.
-
-저장소 루트에서:
-
-```sh
-zsh scripts/validate_plugin.sh work/MyStudy.hwattakplugin
-zsh scripts/validate_plugin.sh --examples
-```
-
-`PLUGIN VALID: ... schema=3; host=0.9.0; sha256=...`와 실패 없는 테스트 종료를 확인한다. 실패하면 종료 코드는 0이 아니다. 이 명령은 별도 Python 모방 검사기가 아니라 앱의 `PluginPackageValidator`와 `PluginManager` 신뢰 규칙을 호출한다. 사용자 플러그인 폴더에 설치하지 않으며 패키지 코드를 실행하지 않는다. 읽은 파일·검토 bytes·manifest digest만 검사한다.
-
-최소 호스트 버전 선언의 거부 동작도 검사할 수 있다.
-
-```sh
-zsh scripts/validate_plugin.sh work/MyStudy.hwattakplugin 0.7.0
-```
-
-`minimumHostVersion: 0.8.0`이면 위 명령은 실패해야 한다. 다만 이 인수는 **현재 소스 검사기에 버전 숫자를 주입**하는 기능이다. 0.7.0의 과거 parser·UI·PDFKit을 실행하는 호환성 에뮬레이터는 아니다. 지원을 주장할 실제 구형 앱에서도 설치·실행한다.
-
-공식 예약 식별자나 웹 패널을 검사하면 커뮤니티 검사기는 거부한다. 공식 번들 신뢰 경계를 해제하는 개발 옵션은 제공하지 않는다. JSON 문법 검사만 통과해도 권한·호환성·패키지 검사가 실패할 수 있다.
-
-### 배포 전 시험표
-
-| 시험 | 기대 결과 |
+| 항목 | 의미 |
 | --- | --- |
-| 정상 문서·선택·지원 모드 | 설명한 결과가 한 번 발생 |
-| 선택 없음 / 이미지뿐인 페이지 | 해당 명령 사용 불가 또는 안내, 다른 곳에 주석을 붙이지 않음 |
-| 문서 변경·탭 전환 후 재실행 | 현재 문서의 조건을 다시 확인 |
-| 펜을 보기 모드에서 실행 / 첫·마지막 페이지 탐색 | 실행 불가, 범위 밖으로 이동하지 않음 |
-| 주석 추가 → Undo → Redo → 저장 → 재개방 | 주석과 저장 결과 확인 |
-| 비활성화·업데이트·제거 | 오래된 메뉴/팔레트 결과로 실행되지 않음 |
-| 외부 링크 확인 취소 | 브라우저가 열리지 않음 |
-| 다른 앱에서 PDF를 변경한 뒤 저장 | 호스트의 저장 충돌 처리를 따름 |
-| 지원할 최소 앱·macOS와 대표 대용량 PDF | 실제 시험한 조합과 한계를 README에 기록 |
+| `identifier` | 플러그인을 구별하는 고유 이름입니다. 같은 이름으로 다시 설치하면 업데이트 대상으로 인식합니다. |
+| `displayName`, `author`, `version` | 사용자에게 표시할 이름, 제작자, 플러그인 버전입니다. |
+| `schemaVersion: 6` | 이 가이드에서 사용하는 플러그인 설정 형식입니다. |
+| `runtime.apiVersion: 1` | 코드에서 사용하는 EmberPDF API의 버전입니다. |
+| `runtime.entry: "main.js"` | EmberPDF가 실행할 파일입니다. 현재 파일명은 `main.js`로 고정입니다. |
+| `runtime.activation: "window"` | 활성화한 플러그인을 각 앱 창에서 시작합니다. |
+| `capabilities` | 필요한 권한입니다. 이 예제는 창이 열려 있는 동안 동작하는 권한 하나만 요청합니다. |
+| `runtime.sha256` | 설치 검토를 받은 코드와 실제 실행할 코드가 같은지 확인하는 값입니다. 코드를 고치면 함께 갱신합니다. |
 
-숫자로 된 성능 보장은 측정 자료가 있을 때만 쓴다. 패키지 정적 검증은 PDF 결과나 실제 태블릿 지연 검증을 대신하지 않는다.
+`actions`가 비어 있는 것은 명령을 `main.js`에서 등록하기 때문입니다. 이 예제처럼 실행 코드만 있는 패키지는 바깥쪽 `capabilities`와 `runtime.capabilities`에 **같은 권한 목록**을 씁니다. 선언형 액션까지 함께 쓰는 경우의 규칙은 [형식 참조](PLUGINS.md)에 있습니다.
 
-## 5. 공유·업데이트·유지보수
+## 3. 코드를 고치고 다시 설치하세요
 
-소스와 배포 폴더를 분리한 공개 저장소로 시작할 수 있다. 현재 앱에는 온라인 카탈로그·자동 업데이트·게시자 서명 검증이 없다. 개발자가 버전별 소스를 공개하고 사용자가 내려받은 패키지를 검토해 설치한다.
+먼저 작은 변경부터 해보겠습니다. `main.js`의 `Record an idea`를 `아이디어 하나 기록`으로 바꾸세요. 수정 대상은 **복사해 둔 원본 폴더**입니다. 앱 내부에 설치된 사본은 직접 편집하지 않습니다.
 
-README에는 다음을 적는다. [시작 예제 README](../Examples/Plugins/CommunityStarter.hwattakplugin/README.md)를 복사해도 된다.
+코드가 바뀌면 다음 순서로 적용합니다.
 
-- 해결하는 문제와 한 번의 사용 예시, 필요 모드/선택/OCR 조건
-- 지원하는 schema, 최소 호스트 버전, 실제 시험한 앱 빌드·macOS·기기
-- 권한마다 필요한 이유, 클립보드 변경, 외부 대상과 전달되는 데이터
-- 설치·명령 실행·업데이트·제거 방법, 알려진 한계
-- 작성자, 소스 저장소, 라이선스, 공개 버그와 비공개 보안 제보 경로
+1. `main.js`를 저장합니다.
+2. 저장소 루트에서 아래 명령으로 새 해시를 구합니다.
+3. 출력에서 파일명 앞의 64자리 값을 복사해 `manifest.json`의 `runtime.sha256`에 넣습니다.
+4. 플러그인 `version`을 `1.0.1`로 올리고, 관리 창의 **플러그인 설치…**에서 같은 원본 폴더를 다시 선택합니다. `identifier`는 유지합니다.
+5. 업데이트 검토를 마치고 `Hello Ember`를 다시 실행합니다. 버튼 이름이 바뀌었는지 확인합니다.
 
-`homepage`, `repository`, `supportURL`, `license`, `fundingUrl`, `settings`, `hotkeys`, `minimumHostBuild` 같은 **새 manifest 키를 임의로 추가하지 않는다**. 현재 허용하지 않는 정보는 README에 쓴다. 문서 이미지도 패키지 밖의 저장소에 둔다. 런타임은 README를 실행하거나 플러그인 전용 화면으로 렌더링하지 않는다.
+```sh
+shasum -a 256 work/MyExtension.hwattakplugin/main.js
+```
 
-배포 ZIP에는 폴더와 허용한 파일만 넣는다. macOS 숨김 파일이 들어가지 않도록 파일 목록을 명시하는 예:
+코드뿐 아니라 주석·공백·줄바꿈을 바꿔도 해시는 달라집니다. 위 manifest의 해시는 예제 원본 파일용입니다. 코드를 직접 붙여 넣어 만든 경우에도 저장한 파일의 해시를 다시 구하세요. 업데이트하면 실행기가 다시 시작하므로 저장하지 않은 카운터 값은 초기화됩니다.
+
+## 4. 현재 PDF의 정보를 읽어 보세요
+
+이제 패널에 PDF 이름과 페이지 번호를 표시해 보겠습니다. 앱이 가진 정보를 읽으려면 해당 권한을 먼저 선언합니다.
+
+`manifest.json`의 두 `capabilities` 목록을 모두 `["backgroundExecution", "documentMetadata"]`로 바꿉니다. 그런 다음 `main.js`의 **renderPanel 함수만** 아래 코드로 교체합니다. 나머지 명령과 버튼 코드는 그대로 둡니다.
+
+```javascript
+async function renderPanel() {
+  const context = await ember.call('app.getContext');
+  let info = null;
+  if (context.hasDocument) {
+    try {
+      info = await ember.call('document.getInfo');
+    } catch (error) {
+      // 조회하는 사이 PDF가 닫혔다면 빈 문서 안내를 표시합니다.
+      if ((await ember.call('app.getContext')).hasDocument) throw error;
+    }
+  }
+
+  await ember.ui.render({
+    title: 'Hello Ember',
+    text: info
+      ? `${info.name} · ${info.pageNumber}/${info.pageCount}페이지 · 아이디어 ${count}개`
+      : `PDF를 열어 보세요. 아이디어 ${count}개`,
+    actions: [
+      { id: 'add-idea', label: '아이디어 하나 기록' },
+      { id: 'close', label: '패널 닫기' }
+    ]
+  });
+}
+```
+
+앞 절처럼 해시와 버전을 갱신해 다시 설치합니다. 이번 검토에는 **문서 이름·페이지 정보 읽기**가 추가로 표시됩니다. PDF를 연 뒤 명령을 실행하면 이름과 페이지 번호가 나오고, PDF가 없어도 안내 문구를 표시합니다.
+
+이 코드는 명령이나 버튼을 실행할 때 화면을 갱신합니다. 페이지나 문서를 바꿀 때도 자동으로 갱신하려면 파일 끝에 다음 코드를 추가하고 다시 설치하세요.
+
+```javascript
+ember.on('page.changed', renderPanel);
+ember.on('document.changed', renderPanel);
+```
+
+이벤트는 파일이 실행될 때 바로 등록하세요. `app.ready` 같은 초기 이벤트를 사용한다면 다른 API 응답을 기다린 뒤에 등록할 경우 첫 알림을 놓칠 수 있습니다. 문서 전환 중 완료되지 않은 문서 요청은 `CONTEXT_CHANGED`로 취소될 수 있습니다. 이 예제의 이벤트 처리는 다음 문서 이벤트에서 새 정보를 읽습니다. 여러 단계의 작업을 만들 때는 [이벤트와 취소 규칙](PLUGIN-HOST-API.md#ui명령이벤트수명)을 확인하세요.
+
+## 5. 기능을 늘릴 때 찾아볼 것
+
+아래는 출발점입니다. 플러그인의 기능은 개발자가 작성하는 코드와 API 조합으로 결정됩니다.
+
+| 만들고 싶은 기능 | 사용할 API·문서 |
+| --- | --- |
+| 선택한 글이나 페이지 내용을 분석 | `document.getSelection`, `document.getPageText` — [메서드·권한 표](PLUGIN-HOST-API.md#api-경계) |
+| 문서·페이지 이동에 반응 | `ember.on` — [이벤트와 실행 수명](PLUGIN-HOST-API.md#ui명령이벤트수명) |
+| 입력란·목록·버튼으로 자체 화면 구성 | `ember.ui.render` — [PanelDescription 타입](PluginSDK/emberpdf.d.ts) |
+| 여러 PDF를 검색하고 결과로 이동 | `workspace.search`, `workspace.navigate` — [API 참조](PLUGIN-HOST-API.md#api-경계) |
+| 설정이나 기록을 앱 재시작 후에도 유지 | `storage.get/set`; 여러 창에서 함께 수정하면 `storage.compareAndSet` — [Research Trail 예제](../Examples/Plugins/ResearchTrail.hwattakplugin/README.md) |
+| 주석·도구·읽기 색상·노트와 연결 | `commands.execute`, `appearance.get/set`, `notes.get/append` — [API 참조](PLUGIN-HOST-API.md#api-경계) |
+
+TypeScript를 쓴다면 [emberpdf.d.ts](PluginSDK/emberpdf.d.ts)를 **개발 프로젝트 쪽**에 두고, 결과를 `main.js` 하나로 묶어 패키지에 넣습니다. 앱이 제공하는 `ember` 객체를 사용하므로 별도의 SDK 실행 파일은 넣지 않습니다.
+
+사용자는 플러그인 설정에서 **권한을 각각 켜고 끌 수 있습니다**. 실행에 필요한 권한이 철회되면 해당 확장은 멈춥니다. 처음부터 실제 사용하는 권한만 요청하고, 각 권한의 이유를 README에 설명하세요.
+
+실행 환경은 별도 JavaScript 실행기입니다. 화면은 앱이 제공하는 UI 요소로 구성하며, Node.js·브라우저 DOM·직접 파일/네트워크 접근은 제공하지 않습니다. API 호출, 화면 크기, 실행 시간에도 한도가 있으므로 긴 작업은 [API 참조](PLUGIN-HOST-API.md#실행형-sdk--schema-56)와 [보안·자원 제한](PLUGIN-SECURITY.md)을 확인해 설계하세요. 필요한 기능이 API에 없다면 [API 확장 제안](PLUGIN-COMPATIBILITY.md#5-아직-없는-기능을-추가하는-방법)을 남길 수 있습니다.
+
+### 코드가 필요 없는 플러그인과 기존 형식
+
+이 가이드의 기본 선택은 **schema 6**입니다. 이미 앱에 있는 명령이나 패널을 묶는 것만 필요할 때는 아래 형식도 사용할 수 있습니다. 구체적인 기능과 권한은 각 예제를 참고하세요.
+
+| 용도 | 형식 | 예제 |
+| --- | --- | --- |
+| 안내문·인용 복사·링크 열기 | schema 1 | [OfflineChecklist](../Examples/Plugins/OfflineChecklist.hwattakplugin/manifest.json), [MarkdownQuote](../Examples/Plugins/MarkdownQuote.hwattakplugin/manifest.json) |
+| 하이라이트·펜 등 앱 명령의 프리셋 | schema 3 | [CommunityStarter](../Examples/Plugins/CommunityStarter.hwattakplugin/manifest.json) |
+| 앱이 제공하는 노트·색상·클립 패널 열기 | schema 4 | [호스트 패널 참조](PLUGIN-HOST-API.md#호스트-패널--schema-4) |
+| 패널을 연 동안만 실행하는 기존 코드 | schema 5 | [Reading Lab](../Examples/Plugins/ReadingLab.hwattakplugin/README.md) |
+
+버전별 지원 여부와 과거 빌드의 차이는 [호환성 표](PLUGIN-COMPATIBILITY.md#1-현재-지원-범위)에 모았습니다.
+
+## 6. 오류를 해결하고 다른 사람에게 공유하세요
+
+### 막혔을 때
+
+| 증상 | 먼저 확인할 것 |
+| --- | --- |
+| 설치가 거부됨 | build 27인지, 폴더를 선택했는지, `main.js` 해시가 실제 파일과 같은지 확인합니다. |
+| 불필요한 파일 오류 | `.DS_Store`, `package.json`, `node_modules`와 개발용 파일은 패키지 밖에 둡니다. |
+| 설치했는데 명령이 안 보임 | 활성화 상태·필수 권한·전체 일시 중지 상태를 확인하고 문서 창으로 돌아갑니다. 실행 중인 확장의 오류 메시지도 확인합니다. |
+| 코드 변경이 반영되지 않음 | 원본을 저장하고 해시를 갱신한 뒤, 관리 창에서 같은 식별자로 다시 설치합니다. |
+| PDF 정보를 읽지 못함 | 두 권한 목록, 현재 PDF 유무를 확인합니다. 원문 읽기에는 PDF 복사 권한도 필요합니다. |
+| 실행 중 멈춤 | 패널의 오류를 확인합니다. 종료되지 않는 반복문이나 과도한 API 호출은 실행 제한에 걸릴 수 있습니다. |
+
+### 명령으로 패키지 검증하기 — 선택 사항
+
+앱의 설치 검토만으로 시작할 수 있습니다. EmberPDF 소스와 [Swift/Xcode 개발 환경](../CONTRIBUTING.md#2-개발-환경)이 있다면 저장소 루트에서 아래 명령도 사용할 수 있습니다.
+
+```sh
+zsh scripts/validate_plugin.sh work/MyExtension.hwattakplugin
+```
+
+이 검사는 앱과 같은 패키지 검증 규칙을 사용합니다. 성공하면 `PLUGIN VALID`가 나오며 종료 코드가 0입니다. 처음에는 Swift 빌드가 필요합니다. **패키지 구조와 권한을 검사할 뿐 코드를 실행하지는 않으므로**, 앱에서 명령 실행·패널 닫기·문서 전환·권한 해제도 확인하세요.
+
+### 배포 폴더 묶기
+
+배포 전에는 예제의 `identifier`, 이름과 제작자를 자신의 값으로 바꿉니다. 식별자는 `dev.yourname.my-extension`처럼 정합니다. 소문자 영문·숫자를 기본으로 점과 하이픈을 사용하세요. 식별자를 바꾸면 앱에서는 별도 플러그인이 됩니다. 첫 배포 이후에는 그 식별자를 유지하세요. README에는 사용법, 권한을 요청하는 이유, 실제 시험한 앱 빌드와 알려진 한계를 적습니다. 예제의 MIT 라이선스 고지도 함께 보존합니다.
+
+JavaScript 파일을 빠뜨리지 않도록 네 파일을 명시해서 압축합니다. 저장소 루트에서 실행하세요.
 
 ```sh
 cd work
-zip -X -r MyStudy-1.0.0.zip MyStudy.hwattakplugin \
-  -i 'MyStudy.hwattakplugin/manifest.json' \
-     'MyStudy.hwattakplugin/README.md' \
-     'MyStudy.hwattakplugin/LICENSE'
-unzip -l MyStudy-1.0.0.zip
-shasum -a 256 MyStudy-1.0.0.zip
+zip -X MyExtension.zip \
+  MyExtension.hwattakplugin/manifest.json \
+  MyExtension.hwattakplugin/main.js \
+  MyExtension.hwattakplugin/README.md \
+  MyExtension.hwattakplugin/LICENSE
+unzip -l MyExtension.zip
 ```
 
-ZIP을 새 폴더에 풀어 **풀린 패키지**를 다시 검증한다. 허용되는 `LICENSE.md`나 `icon.png`를 실제 사용했다면 ZIP 목록에도 추가한다. 체크섬은 다운로드된 파일의 동일성을 확인하는 자료다. 제작자의 신원을 인증하지 않는다.
-
-업데이트 때 `identifier`를 유지하고 `version`을 올리며 변경한 권한·동작·호환성·해결한 문제를 릴리스 노트에 기록한다. 현재 앱은 같은 버전이나 낮은 버전으로의 교체도 허용한다. 제작자는 이전 배포 파일을 보관하고 되돌리는 방법을 안내한다. 자체 작성물에 적용할 라이선스를 명시하고, 예제나 타인의 자료를 재사용하면 해당 라이선스와 고지를 따른다. 저장소 예제에는 MPL-2.0이 적용된다.
-
-## 6. 문제가 생겼을 때
-
-| 메시지/증상 | 확인할 것 |
-| --- | --- |
-| `unsupported schemaVersion` | 앱이 해당 schema를 지원하는지. schema 3 명령을 schema 1이라고 바꾸면 해결되지 않음 |
-| `incompatibleHost` / 최소 버전 오류 | 플러그인이 요구하는 앱 버전과 실제 앱 확인 |
-| `capability mismatch` | 모든 action의 권한 합집합. 불필요한 권한도 제거 |
-| `required fields or field types` | 철자, 필수 `template`, 숫자 대신 문자열을 넣었는지 |
-| `unknown ... key` / `duplicate ... key` | 정의되지 않은 필드·JSON 주석·중복 키 제거 |
-| `unsupported package entry` | `.DS_Store`, 하위 폴더, `main.js`, `package.json` 등이 들어갔는지 |
-| `reserved ... identities` / 웹 패널 신뢰 오류 | 자신의 식별자를 사용하고 커뮤니티가 지원하는 출력만 선언 |
-| `installed manifest integrity check failed` | 설치본 직접 수정 여부. 원본을 관리 창에서 다시 검토·업데이트 |
-| 설치되지만 실행 불가 | 활성 상태, PDF/선택/모드, 비교 화면의 읽기 전용 문맥, 페이지 경계 |
-| 화면에 결과가 잘림/큰 선택에서 실패 | 템플릿·최종 결과·URL 상한. 선택을 줄이고 반복 토큰 줄이기 |
-
-일반 오류는 [버그 제보](https://github.com/SeederPowerDrop/HwattakPDF/issues/new/choose)에 앱/schema/플러그인 버전, 짧은 재현 순서, 실제 오류 문구를 남긴다. 민감한 문서·키·선택 원문은 제거한다. 취약점은 [비공개 보안 제보](../SECURITY.md)를 따른다.
-
-기능이 API에 없다면 내부 파일에 접근하는 우회법을 배포하기보다 [API 제안서](PLUGIN-COMPATIBILITY.md#5-아직-없는-기능을-추가하는-방법)를 작성한다. 사용자 문제, 필요한 입력·결과·권한, 취소·실행 취소와 대용량 조건이 담긴 작은 제안은 다음 API를 검토하는 출발점이 된다.
+받는 사람은 ZIP을 풀고 `MyExtension.hwattakplugin` 폴더를 설치하면 됩니다. 현재 공유·업데이트는 패키지를 전달하고 앱에서 검토해 설치하는 방식입니다. 공개 카탈로그와 자동 업데이트는 아직 제공하지 않습니다. 허용 파일·버전 규칙은 [패키지 형식 참조](PLUGINS.md), 보안 문제의 제보 방법은 [보안 정책](../SECURITY.md)에 있습니다.

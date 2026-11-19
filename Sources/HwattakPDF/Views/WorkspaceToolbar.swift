@@ -37,23 +37,25 @@ struct WorkspaceToolbar: View {
     /// toolbar only advertises the mode-appropriate command.
     let shareNote: () -> Void
     let enterFocusMode: () -> Void
+    var canCompareDocuments = false
+    var compareDocuments: () -> Void = {}
 
     @EnvironmentObject private var pluginManager: PluginManager
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openWindow) private var openWindow
+    @AppStorage("compactContinuousSpreads") private var compactContinuousSpreads = true
     // 팝오버 열림 여부처럼 문서에 저장할 필요가 없는 짧은 UI 상태만 @State다.
     @State private var showingViewOptions = false
     @State private var showingSearchField = false
-    @State private var showingPenSettings = false
     @State private var showingHighlightSettings = false
     @State private var showingPluginActions = false
     @State private var pendingPluginToolbarAction: (() -> Void)?
-    @State private var lastSubmittedSearchText = ""
     @FocusState private var searchFieldFocused: Bool
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,7 +64,7 @@ struct WorkspaceToolbar: View {
             // Study owns its purpose-built second row in StudyModePalette.
             // Viewer and Editing use the contextual row below, so every mode
             // has one stable workspace row and one mode-specific tool row.
-            if modeToolsVisible, workspace.mode != .study {
+            if modeToolsVisible, workspace.mode != .study, !workspace.isPageGalleryVisible {
                 contextualToolbarRow
             }
         }
@@ -74,11 +76,6 @@ struct WorkspaceToolbar: View {
             showingSearchField = true
             DispatchQueue.main.async { searchFieldFocused = true }
         }
-        .onReceive(workspace.$searchCompletedQuery) { completedQuery in
-            if let completedQuery {
-                lastSubmittedSearchText = completedQuery
-            }
-        }
         .onChange(of: workspace.mode) { _, mode in
             modeToolsVisible = mode != .viewer
             showingViewOptions = false
@@ -87,7 +84,6 @@ struct WorkspaceToolbar: View {
             if !mode.allows(.aiAssistance) {
                 aiPanelVisible = false
             }
-            showingPenSettings = false
             if !mode.toolbarSections.contains(.markup) {
                 showingHighlightSettings = false
             }
@@ -99,7 +95,6 @@ struct WorkspaceToolbar: View {
         }
         .onChange(of: modeToolsVisible) { _, isVisible in
             guard !isVisible else { return }
-            showingPenSettings = false
             showingHighlightSettings = false
         }
     }
@@ -111,98 +106,127 @@ struct WorkspaceToolbar: View {
             GeometryReader { geometry in
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 10) {
-                        Picker(
-                            L10n.string("mode.picker.label", defaultValue: "PDF 사용 모드"),
-                            selection: Binding(
-                                get: { workspace.mode },
-                                set: { workspace.setMode($0) }
-                            )
-                        ) {
-                            ForEach(PDFWorkspaceMode.allCases) { mode in
-                                Text(mode.shortTitle).tag(mode).help(mode.summary)
+                        Group {
+                            Picker(
+                                L10n.string("mode.picker.label", defaultValue: "PDF 사용 모드"),
+                                selection: Binding(
+                                    get: { workspace.mode },
+                                    set: { workspace.setMode($0) }
+                                )
+                            ) {
+                                ForEach(PDFWorkspaceMode.allCases) { mode in
+                                    Text(mode.shortTitle).tag(mode).help(mode.summary)
+                                }
                             }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 186)
-                        .help(workspace.mode.summary)
-                        .accessibilityLabel(L10n.string("mode.picker.label", defaultValue: "PDF 사용 모드"))
-                        .accessibilityValue(workspace.mode.title)
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            // Rebuild only this native segmented control when
+                            // its prelocalized labels change; keep the reader,
+                            // bindings, and any inline draft in place.
+                            .id(locale.identifier)
+                            .frame(width: 186)
+                            .help(workspace.mode.summary)
+                            .accessibilityLabel(L10n.string("mode.picker.label", defaultValue: "PDF 사용 모드"))
+                            .accessibilityValue(workspace.mode.title)
 
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.16)) {
-                                modeToolsVisible.toggle()
+                            Button {
+                                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+                                    modeToolsVisible.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text(L10n.string("도구"))
+                                    Image(systemName: modeToolsVisible ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 8, weight: .semibold))
+                                }
+                                .font(.system(size: 12))
+                                .padding(.horizontal, 7)
+                                .frame(height: 28)
+                                .background(modeToolsVisible ? theme.dropHighlight : Color.clear,
+                                            in: RoundedRectangle(cornerRadius: 6))
+                                .contentShape(Rectangle())
                             }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Text(L10n.string("도구"))
-                                Image(systemName: modeToolsVisible ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8, weight: .semibold))
-                            }
-                            .font(.system(size: 12))
-                            .padding(.horizontal, 7)
-                            .frame(height: 28)
-                            .background(modeToolsVisible ? theme.dropHighlight : Color.clear,
-                                        in: RoundedRectangle(cornerRadius: 6))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(L10n.string(modeToolsVisible ? "toolbar.mode_tools.hide" : "toolbar.mode_tools.show"))
-                        .accessibilityLabel(L10n.string(modeToolsVisible ? "toolbar.mode_tools.hide" : "toolbar.mode_tools.show"))
-                        .accessibilityIdentifier("mode-tools-toggle")
-                        .accessibilityAddTraits(modeToolsVisible ? .isSelected : [])
-                        .accessibilityValue(L10n.string(modeToolsVisible ? "selection.selected" : "selection.not_selected"))
+                            .buttonStyle(.plain)
+                            .help(L10n.string(modeToolsVisible ? "toolbar.mode_tools.hide" : "toolbar.mode_tools.show"))
+                            .accessibilityLabel(L10n.string(modeToolsVisible ? "toolbar.mode_tools.hide" : "toolbar.mode_tools.show"))
+                            .accessibilityIdentifier("mode-tools-toggle")
+                            .accessibilityAddTraits(modeToolsVisible ? .isSelected : [])
+                            .accessibilityValue(L10n.string(modeToolsVisible ? "selection.selected" : "selection.not_selected"))
+                            .disabled(workspace.isPageGalleryVisible)
 
-                        toolbarDivider
-
-                        iconButton(
-                            pageOverviewPlacement.systemImage,
-                            help: sidebarVisible ? L10n.string("페이지 패널 가리기") : L10n.string("페이지 패널 보기")
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.16)) { sidebarVisible.toggle() }
-                        }
-                        .disabled(workspace.document == nil)
-
-                        PageJumpControl(workspace: workspace)
-                        viewOptionsButton
-
-                        if workspace.mode != .viewer || workspace.isDirty
-                            || editCommandRouter.canUndo(documentCanUndo: workspace.canUndo)
-                            || editCommandRouter.canRedo(documentCanRedo: workspace.canRedo) {
                             toolbarDivider
-                            toolbarGroup {
-                                saveButton
-                                iconButton("arrow.uturn.backward", help: undoButtonTitle) {
-                                    editCommandRouter.performUndo { workspace.undo() }
-                                }
-                                .disabled(!editCommandRouter.canUndo(documentCanUndo: workspace.canUndo))
-                                iconButton("arrow.uturn.forward", help: redoButtonTitle) {
-                                    editCommandRouter.performRedo { workspace.redo() }
-                                }
-                                .disabled(!editCommandRouter.canRedo(documentCanRedo: workspace.canRedo))
-                            }
-                        }
 
-                        Spacer(minLength: 12)
-
-                        if workspace.mode.toolbarSections.contains(.search) {
-                            if showingSearchField || searchFieldFocused || !workspace.searchText.isEmpty || workspace.isSearching {
-                                searchControl
-                            } else {
-                                iconButton("magnifyingglass", help: L10n.string("문서 검색") + " (⌘F)") {
-                                    showingSearchField = true
-                                    DispatchQueue.main.async { searchFieldFocused = true }
+                            iconButton(
+                                pageOverviewPlacement.systemImage,
+                                help: sidebarVisible && !workspace.isPageGalleryVisible
+                                    ? L10n.string("페이지 패널 가리기") : L10n.string("페이지 패널 보기"),
+                                isActive: sidebarVisible && !workspace.isPageGalleryVisible
+                            ) {
+                                if workspace.isPageGalleryVisible {
+                                    closePageGallery()
+                                    sidebarVisible = true
+                                } else {
+                                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) { sidebarVisible.toggle() }
                                 }
                             }
-                        }
+                            .disabled(workspace.document == nil)
 
-                        iconButton(
-                            "arrow.up.left.and.arrow.down.right",
-                            help: L10n.string("view.focus.enter", defaultValue: "집중 보기"),
-                            action: enterFocusMode
-                        )
-                        .accessibilityIdentifier("focus-mode-enter")
+                            PageJumpControl(workspace: workspace)
+                            pageGalleryButton
+                            viewOptionsButton
+                            if workspace.mode == .viewer {
+                                togetherViewButton
+                            }
+
+                            if workspace.mode != .viewer || workspace.isDirty
+                                || editCommandRouter.canUndo(documentCanUndo: workspace.canUndo)
+                                || editCommandRouter.canRedo(documentCanRedo: workspace.canRedo) {
+                                toolbarDivider
+                                toolbarGroup {
+                                    saveButton
+                                    iconButton("arrow.uturn.backward", help: undoButtonTitle) {
+                                        editCommandRouter.performUndo { workspace.undo() }
+                                    }
+                                    .disabled(!editCommandRouter.canUndo(documentCanUndo: workspace.canUndo))
+                                    iconButton("arrow.uturn.forward", help: redoButtonTitle) {
+                                        editCommandRouter.performRedo { workspace.redo() }
+                                    }
+                                    .disabled(!editCommandRouter.canRedo(documentCanRedo: workspace.canRedo))
+                                }
+                            }
+
+                            Spacer(minLength: 12)
+
+                            ReadingThemeToolbarButton()
+
+                            if workspace.mode.toolbarSections.contains(.search) {
+                                if showingSearchField || searchFieldFocused || !workspace.searchText.isEmpty || workspace.isSearching {
+                                    searchControl
+                                } else {
+                                    iconButton("magnifyingglass", help: L10n.string("문서 검색") + " (⌘F)") {
+                                        showingSearchField = true
+                                        DispatchQueue.main.async { searchFieldFocused = true }
+                                    }
+                                }
+                            }
+
+                            Button(action: enterFocusMode) {
+                                Label(L10n.string("view.focus.enter", defaultValue: "집중 보기"),
+                                      systemImage: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 28)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(EmberToolbarButtonStyle())
+                            .help(L10n.string("view.focus.enter", defaultValue: "집중 보기"))
+                            .accessibilityIdentifier("focus-mode-enter")
+                        }
+                        .environment(\.layoutDirection, layoutDirection)
                     }
+                    // Keep physical toolbar positions stable while each control
+                    // retains the selected language's text and menu direction.
+                    .environment(\.layoutDirection, .leftToRight)
                     .controlSize(.regular)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
@@ -212,11 +236,13 @@ struct WorkspaceToolbar: View {
                 }
             }
             pluginToolbarMenu
+                .environment(\.layoutDirection, layoutDirection)
                 .padding(.trailing, 10)
                 .foregroundStyle(theme.secondaryText)
                 .tint(theme.accent)
         }
-        .frame(height: 42)
+        .environment(\.layoutDirection, .leftToRight)
+        .frame(height: 46)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.panel)
         .overlay(alignment: .bottom) {
@@ -230,6 +256,77 @@ struct WorkspaceToolbar: View {
         Rectangle().fill(theme.border).frame(width: 1, height: 18)
     }
 
+    private var pageGalleryButton: some View {
+        Button(action: togglePageGallery) {
+            Label(
+                L10n.string("page_gallery.title", defaultValue: "페이지 갤러리"),
+                systemImage: "rectangle.grid.3x2"
+            )
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(
+                workspace.isPageGalleryVisible ? theme.dropHighlight : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(EmberToolbarButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+        .disabled(workspace.document == nil)
+        .help(pageGalleryToggleTitle)
+        .accessibilityLabel(pageGalleryToggleTitle)
+        .accessibilityIdentifier("page-gallery-toggle")
+        .accessibilityAddTraits(workspace.isPageGalleryVisible ? .isSelected : [])
+        .accessibilityValue(L10n.string(workspace.isPageGalleryVisible ? "selection.selected" : "selection.not_selected"))
+    }
+
+    private var pageGalleryToggleTitle: String {
+        workspace.isPageGalleryVisible
+            ? L10n.string("page_gallery.close", defaultValue: "읽기로 돌아가기")
+            : L10n.string("page_gallery.open", defaultValue: "페이지 갤러리 보기")
+    }
+
+    private func togglePageGallery() {
+        if workspace.isPageGalleryVisible {
+            closePageGallery()
+        } else {
+            guard workspace.document != nil else { return }
+            // Settle view-owned drafts while the PDF surface still exists.
+            // Failed inline edits must remain visible for correction.
+            workspace.prepareForDeactivation()
+            guard workspace.pendingInlineTextEdit == nil else { return }
+            workspace.isPageGalleryVisible = true
+        }
+    }
+
+    private func closePageGallery() {
+        guard workspace.isPageGalleryVisible else { return }
+        // Invalidate before recreating the PDF view, which reads this state
+        // during makeNSView rather than waiting for a SwiftUI onChange.
+        workspace.invalidatePDFViewportScrollPosition()
+        workspace.isPageGalleryVisible = false
+    }
+
+    private var togetherViewButton: some View {
+        Button(action: compareDocuments) {
+            HStack(spacing: 6) {
+                TogetherViewIcon(size: 18, color: theme.primaryText)
+                Text(L10n.string("comparison.entry.open"))
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(EmberToolbarButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+        .disabled(!canCompareDocuments)
+        .help(L10n.string("comparison.entry.help"))
+        .accessibilityLabel(L10n.string("comparison.entry.open"))
+        .accessibilityIdentifier("together-view-open")
+    }
+
     private var viewOptionsButton: some View {
         Button { showingViewOptions.toggle() } label: {
             HStack(spacing: 5) {
@@ -241,7 +338,7 @@ struct WorkspaceToolbar: View {
             .frame(width: 38, height: 28)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(EmberToolbarButtonStyle())
         .help(L10n.string("toolbar.view_layout", defaultValue: "화면 배치"))
         .accessibilityLabel(L10n.string("toolbar.view_layout", defaultValue: "화면 배치"))
         .accessibilityIdentifier("view-options-button")
@@ -249,7 +346,54 @@ struct WorkspaceToolbar: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(L10n.string("toolbar.view_layout", defaultValue: "화면 배치"))
                     .font(.headline)
+                Button {
+                    togglePageGallery()
+                    showingViewOptions = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Label(
+                            L10n.string("page_gallery.title", defaultValue: "페이지 갤러리"),
+                            systemImage: "rectangle.grid.3x2"
+                        )
+                        Spacer()
+                        if workspace.isPageGalleryVisible {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .padding(9)
+                    .background(
+                        workspace.isPageGalleryVisible ? theme.dropHighlight : theme.card,
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(workspace.document == nil)
+                .help(pageGalleryToggleTitle)
+                .accessibilityLabel(pageGalleryToggleTitle)
+                .accessibilityIdentifier("layout-page-gallery")
+                .accessibilityAddTraits(workspace.isPageGalleryVisible ? .isSelected : [])
                 viewLayoutControls
+                if !workspace.isPageGalleryVisible,
+                   workspace.pageColumns == 2, workspace.twoPageDisplayMode == .continuous {
+                    Toggle(isOn: Binding(
+                        get: { compactContinuousSpreads },
+                        set: { enabled in
+                            guard compactContinuousSpreads != enabled else { return }
+                            workspace.invalidatePDFViewportScrollPosition()
+                            compactContinuousSpreads = enabled
+                        }
+                    )) {
+                        Text(L10n.string("view.two_page.compact.title", defaultValue: "두 페이지 간격 자동 맞춤"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .disabled(gridPagingDirection == .horizontal)
+                    .help(L10n.string("view.two_page.compact.help", defaultValue: "너비가 다른 페이지도 가까이 붙여 연속으로 봅니다."))
+                    .accessibilityIdentifier("layout-two-page-compact")
+                }
                 Divider()
                 Text(L10n.string("페이지 패널 위치"))
                     .font(.caption).foregroundStyle(theme.secondaryText)
@@ -261,7 +405,11 @@ struct WorkspaceToolbar: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .accessibilityValue(pageOverviewPlacement.title)
-                .onChange(of: pageOverviewPlacement) { _, _ in sidebarVisible = true }
+                .onChange(of: pageOverviewPlacement) { _, _ in
+                    closePageGallery()
+                    sidebarVisible = true
+                }
+
             }
             .padding(16)
             .frame(width: 282)
@@ -278,30 +426,20 @@ struct WorkspaceToolbar: View {
                 HStack(spacing: 8) {
                 if workspace.mode.toolbarSections.contains(.inputTools) {
                     toolbarGroup(spacing: 7) {
-                        Picker(L10n.string("도구"), selection: $workspace.activeTool) {
-                            ForEach(workspace.mode.availableTools) { tool in
-                                Label(
-                                    workspace.mode.title(for: tool),
-                                    systemImage: tool.systemImage
-                                )
-                                .tag(tool)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: workspace.mode.availableTools.count > 2 ? 218 : 126)
-                        .disabled(workspace.pageColumns > 2)
-
                         if workspace.mode.toolbarSections.contains(.penSettings) {
-                            iconButton(
-                                "slider.horizontal.3",
-                                help: L10n.string("펜 설정")
-                            ) {
-                                showingPenSettings.toggle()
+                            WritingToolStrip(workspace: workspace)
+                        } else {
+                            Picker(L10n.string("도구"), selection: Binding(
+                                get: { workspace.activeTool },
+                                set: { workspace.selectTool($0) }
+                            )) {
+                                ForEach(workspace.mode.availableTools) { tool in
+                                    Label(workspace.mode.title(for: tool), systemImage: tool.systemImage).tag(tool)
+                                }
                             }
-                            .popover(isPresented: $showingPenSettings, arrowEdge: .bottom) {
-                                PenSettingsPopover(settings: $workspace.inkSettings)
-                            }
+                            .labelsHidden().pickerStyle(.segmented)
+                            .frame(minWidth: 126).fixedSize(horizontal: true, vertical: false)
+                            .disabled(workspace.pageColumns > 2)
                         }
                     }
                 }
@@ -401,34 +539,37 @@ struct WorkspaceToolbar: View {
         toolbarGroup(spacing: 3) {
             layoutIconButton(
                 help: L10n.format("view.pages_at_once", 1),
-                isSelected: workspace.pageColumns == 1,
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageColumns == 1,
                 identifier: "layout-one-page"
             ) {
                 Image(systemName: "rectangle.portrait")
                     .font(.system(size: 13, weight: .medium))
             } action: {
+                closePageGallery()
                 workspace.pageColumns = 1
             }
 
             layoutIconButton(
                 help: L10n.string("view.two_page.continuous.title"),
-                isSelected: workspace.pageColumns == 2
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageColumns == 2
                     && workspace.twoPageDisplayMode == .continuous,
                 identifier: "layout-two-page-continuous"
             ) {
                 TwoPageLayoutIcon(mode: .continuous)
             } action: {
+                closePageGallery()
                 workspace.selectTwoPageDisplayMode(.continuous)
             }
 
             layoutIconButton(
                 help: L10n.string("view.two_page.paged.title"),
-                isSelected: workspace.pageColumns == 2
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageColumns == 2
                     && workspace.twoPageDisplayMode == .paged,
                 identifier: "layout-two-page-paged"
             ) {
                 TwoPageLayoutIcon(mode: .paged)
             } action: {
+                closePageGallery()
                 workspace.selectTwoPageDisplayMode(.paged)
             }
 
@@ -438,11 +579,12 @@ struct WorkspaceToolbar: View {
                     gridLayoutDescription(gridLayoutMode),
                     gridPagingDirection.title
                 ),
-                isSelected: workspace.pageColumns == 4,
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageColumns == 4,
                 identifier: "layout-four-page"
             ) {
                 FourPageLayoutIcon(mode: gridLayoutMode)
             } action: {
+                closePageGallery()
                 workspace.pageColumns = 4
             }
 
@@ -453,24 +595,26 @@ struct WorkspaceToolbar: View {
 
             layoutIconButton(
                 help: L10n.string("view.fit.width"),
-                isSelected: workspace.pageFitMode == .width,
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageFitMode == .width,
                 identifier: "fit-page-width"
             ) {
                 Image(systemName: "arrow.left.and.right")
                     .font(.system(size: 13, weight: .medium))
             } action: {
+                closePageGallery()
                 workspace.selectPageFitMode(workspace.pageFitMode == .width ? nil : .width)
             }
             .disabled(workspace.document == nil)
 
             layoutIconButton(
                 help: L10n.string("view.fit.height"),
-                isSelected: workspace.pageFitMode == .height,
+                isSelected: !workspace.isPageGalleryVisible && workspace.pageFitMode == .height,
                 identifier: "fit-page-height"
             ) {
                 Image(systemName: "arrow.up.and.down")
                     .font(.system(size: 13, weight: .medium))
             } action: {
+                closePageGallery()
                 workspace.selectPageFitMode(workspace.pageFitMode == .height ? nil : .height)
             }
             .disabled(workspace.document == nil)
@@ -541,6 +685,9 @@ struct WorkspaceToolbar: View {
     private var pageToolsMenu: some View {
         Menu {
             Button(L10n.string("PDF 병합…"), action: mergeDocument)
+            Button(L10n.string("compression.menu", defaultValue: "PDF 용량 줄이기…")) {
+                workspace.requestPDFCompression()
+            }.disabled(!workspace.canRequestPDFCompression)
             Menu(L10n.string("menu.export_selected_pages")) {
                 Button(
                     L10n.string("menu.export_selected_pages.combined"),
@@ -684,7 +831,7 @@ struct WorkspaceToolbar: View {
 
     private var aiButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.16)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
                 aiPanelVisible.toggle()
             }
         } label: {
@@ -770,6 +917,7 @@ struct WorkspaceToolbar: View {
                     return .handled
                 }
                 .onExitCommand(perform: performSearchEscape)
+                .accessibilityIdentifier("document-search-field")
                 .accessibilityHint(
                     L10n.string(
                         "search.navigator.field_hint",
@@ -777,7 +925,7 @@ struct WorkspaceToolbar: View {
                     )
                 )
 
-            if workspace.isSearching {
+            if workspace.isSearchBusy {
                 ProgressView()
                     .controlSize(.mini)
                     .frame(width: 24, height: 24)
@@ -785,7 +933,8 @@ struct WorkspaceToolbar: View {
                     .accessibilityLabel(
                         L10n.string("search.navigator.searching", defaultValue: "문서 검색 중")
                     )
-            } else if !workspace.searchText.isEmpty {
+            }
+            if !workspace.searchText.isEmpty {
                 Button(action: clearSearch) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
@@ -815,24 +964,28 @@ struct WorkspaceToolbar: View {
             }
 
             searchButton("chevron.up", help: L10n.string("이전 검색 결과")) {
-                navigateSearch(backwards: true)
+                performSearchSubmission(backwards: true)
             }
-            .disabled(workspace.isSearching || normalizedSearchText.isEmpty)
+            .disabled(normalizedSearchText.isEmpty)
+            .accessibilityIdentifier("document-search-previous")
             searchButton("chevron.down", help: L10n.string("다음 검색 결과")) {
-                navigateSearch(backwards: false)
+                performSearchSubmission(backwards: false)
             }
-            .disabled(workspace.isSearching || normalizedSearchText.isEmpty)
+            .disabled(normalizedSearchText.isEmpty)
+            .accessibilityIdentifier("document-search-next")
 
             searchButton(
-                sidebarMode == .search ? "sidebar.right" : "list.bullet.rectangle",
+                searchNavigatorVisible ? "sidebar.right" : "list.bullet.rectangle",
                 help: L10n.string(
-                    "search.navigator.show_results",
-                    defaultValue: "검색 결과 탐색기 보기"
+                    searchNavigatorVisible ? "search.navigator.hide_results" : "search.navigator.show_results",
+                    defaultValue: searchNavigatorVisible ? "검색 결과 탐색기 가리기" : "검색 결과 탐색기 보기"
                 )
             ) {
-                revealSearchNavigator()
+                toggleSearchNavigator()
             }
-            .accessibilityAddTraits(sidebarMode == .search ? .isSelected : [])
+            .accessibilityIdentifier("document-search-sidebar-toggle")
+            .accessibilityAddTraits(searchNavigatorVisible ? .isSelected : [])
+            .accessibilityValue(L10n.string(searchNavigatorVisible ? "selection.selected" : "selection.not_selected"))
         }
         .padding(.leading, 10)
         .padding(.trailing, 4)
@@ -848,53 +1001,39 @@ struct WorkspaceToolbar: View {
         workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func performSearchSubmission(backwards: Bool) {
-        let query = normalizedSearchText
-        guard !query.isEmpty else {
-            workspace.performSearch()
-            revealSearchNavigator()
-            return
-        }
-
-        if
-            !workspace.isSearching,
-            query == lastSubmittedSearchText,
-            !workspace.searchNavigatorResults.isEmpty
-        {
-            navigateSearch(backwards: backwards)
-        } else {
-            lastSubmittedSearchText = query
-            workspace.performSearch()
-            revealSearchNavigator()
-        }
+    private var searchNavigatorVisible: Bool {
+        sidebarVisible && sidebarMode == .search && !workspace.isPageGalleryVisible
     }
 
-    private func navigateSearch(backwards: Bool) {
-        guard !workspace.isSearching else { return }
-        if
-            workspace.searchNavigatorResults.isEmpty
-                || normalizedSearchText != lastSubmittedSearchText
-        {
-            lastSubmittedSearchText = normalizedSearchText
-            workspace.performSearch()
-        } else {
-            workspace.showNextSearchResult(backwards: backwards)
-        }
+    private func performSearchSubmission(backwards: Bool) {
+        // The model owns the submitted query and pending navigation, so Return
+        // and arrows can advance during scanning without restarting the job.
+        workspace.submitSearch(backwards: backwards)
         revealSearchNavigator()
     }
 
     private func revealSearchNavigator() {
+        closePageGallery()
         sidebarMode = .search
         if !sidebarVisible {
-            withAnimation(.easeInOut(duration: 0.16)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
                 sidebarVisible = true
             }
         }
     }
 
+    private func toggleSearchNavigator() {
+        if searchNavigatorVisible {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+                sidebarVisible = false
+            }
+        } else {
+            revealSearchNavigator()
+        }
+    }
+
     private func clearSearch() {
         workspace.clearSearch()
-        lastSubmittedSearchText = ""
         searchFieldFocused = true
     }
 
@@ -903,7 +1042,6 @@ struct WorkspaceToolbar: View {
             workspace.cancelSearch()
         }
         workspace.clearSearch()
-        lastSubmittedSearchText = ""
         sidebarMode = .pages
         searchFieldFocused = false
         showingSearchField = false
@@ -975,22 +1113,37 @@ struct WorkspaceToolbar: View {
     private func iconButton(
         _ systemImage: String,
         help: String,
+        isActive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .medium))
-                .frame(width: 27, height: 27)
+                .foregroundStyle(isActive ? theme.accent : theme.secondaryText)
+                .frame(width: 30, height: 28)
+                .background(isActive ? theme.selectionFill : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(EmberToolbarButtonStyle())
         .help(help)
         .accessibilityLabel(help)
     }
 
     private var saveButton: some View {
         Button(action: saveDocument) {
-            Label(L10n.string("action.save"), systemImage: "square.and.arrow.down")
+            HStack(spacing: 5) {
+                if workspace.isSaving {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 12, height: 12)
+                        .accessibilityHidden(true)
+                } else {
+                    Image(systemName: "square.and.arrow.down")
+                        .accessibilityHidden(true)
+                }
+                Text(L10n.string(workspace.isSaving ? "action.saving" : "action.save"))
+            }
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 9)
                 .frame(height: 27)
@@ -1002,13 +1155,15 @@ struct WorkspaceToolbar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!workspace.canSaveNormally || !workspace.isDirty)
+        .disabled(workspace.isSaving || !workspace.canSaveNormally || !workspace.isDirty)
         .help(
-            workspace.document?.isEncrypted == true
+            workspace.isSaving
+                ? L10n.format("status.saving_file", workspace.displayName)
+                : workspace.document?.isEncrypted == true
                 ? L10n.string("security.save_protected_copy_required")
                 : L10n.string("save.options.help")
         )
-        .accessibilityLabel(L10n.string("action.save"))
+        .accessibilityLabel(L10n.string(workspace.isSaving ? "action.saving" : "action.save"))
         .accessibilityHint(
             workspace.document?.isEncrypted == true
                 ? L10n.string("security.save_protected_copy_required")

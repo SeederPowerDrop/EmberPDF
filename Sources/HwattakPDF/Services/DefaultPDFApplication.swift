@@ -108,7 +108,7 @@ enum DefaultPDFSetupFile {
         }
         let directory = cacheRoot.appendingPathComponent("HwattakPDF/DefaultPDFApplication", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("HwattakPDF.pdf")
+        let url = directory.appendingPathComponent("EmberPDF.pdf")
 
         // Re-create a valid file if a previous setup PDF was edited or deleted.
         let data = NSMutableData()
@@ -120,7 +120,7 @@ enum DefaultPDFSetupFile {
         context.beginPDFPage(nil)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-        ("HwattakPDF" as NSString).draw(
+        ("EmberPDF" as NSString).draw(
             at: NSPoint(x: 48, y: 742),
             withAttributes: [.font: NSFont.systemFont(ofSize: 28), .foregroundColor: NSColor.black]
         )

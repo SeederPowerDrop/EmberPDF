@@ -14,6 +14,7 @@ final class PDFArrowKeyRepeater: ObservableObject {
     private let windowIsActive: @MainActor (NSWindow) -> Bool
     private var heldKeyCode: UInt16?
     private var heldModifiers: NSEvent.ModifierFlags = []
+    private var heldAllowsOption = false
     private weak var heldWindow: NSWindow?
     private var navigationAction: (() -> Bool)?
     private var repeatTimer: Timer?
@@ -35,30 +36,39 @@ final class PDFArrowKeyRepeater: ObservableObject {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
-    static func accepts(modifiers: NSEvent.ModifierFlags) -> Bool {
-        speedMultiplier(for: modifiers) != nil
+    static func accepts(modifiers: NSEvent.ModifierFlags, allowsOption: Bool = false) -> Bool {
+        speedMultiplier(for: modifiers, allowsOption: allowsOption) != nil
     }
 
-    static func speedMultiplier(for modifiers: NSEvent.ModifierFlags) -> Double? {
-        // Option arrows retain PDFKit's page navigation and native text-editing
-        // shortcuts. The new base is 1.8× faster; Shift reaches 4× the old pace.
-        guard modifiers.intersection([.command, .control, .option]).isEmpty else { return nil }
+    static func speedMultiplier(
+        for modifiers: NSEvent.ModifierFlags,
+        allowsOption: Bool = false
+    ) -> Double? {
+        // Only a focused all-direction page surface opts into Option arrows.
+        // Other surfaces retain native Option and text-selection shortcuts.
+        guard modifiers.intersection([.command, .control]).isEmpty else { return nil }
+        if modifiers.contains(.option) {
+            return allowsOption && !modifiers.contains(.shift) ? 1 : nil
+        }
+        // The base is 1.8× faster; Shift reaches 4× the old pace.
         if modifiers.contains(.shift) { return 4 / 1.8 }
         return 1
     }
 
     static func effectiveRepeatInterval(
         speed: PDFKeyboardNavigationSpeed,
-        modifiers: NSEvent.ModifierFlags
+        modifiers: NSEvent.ModifierFlags,
+        allowsOption: Bool = false
     ) -> TimeInterval? {
-        speedMultiplier(for: modifiers).map { speed.repeatInterval / $0 }
+        speedMultiplier(for: modifiers, allowsOption: allowsOption).map { speed.repeatInterval / $0 }
     }
 
     static func effectiveInitialDelay(
         speed: PDFKeyboardNavigationSpeed,
-        modifiers: NSEvent.ModifierFlags
+        modifiers: NSEvent.ModifierFlags,
+        allowsOption: Bool = false
     ) -> TimeInterval? {
-        speedMultiplier(for: modifiers).map { speed.initialDelay / $0 }
+        speedMultiplier(for: modifiers, allowsOption: allowsOption).map { speed.initialDelay / $0 }
     }
 
     @discardableResult
@@ -67,15 +77,17 @@ final class PDFArrowKeyRepeater: ObservableObject {
         modifiers: NSEvent.ModifierFlags,
         isRepeat: Bool,
         window: NSWindow?,
+        allowsOption: Bool = false,
         action: @escaping () -> Bool
     ) -> Bool {
         // Reject shortcut modifiers before swallowing an OS-generated repeat.
-        guard (123...126).contains(keyCode), Self.accepts(modifiers: modifiers) else {
+        guard (123...126).contains(keyCode),
+              Self.accepts(modifiers: modifiers, allowsOption: allowsOption) else {
             stop()
             return false
         }
         if isRepeat {
-            if heldKeyCode == keyCode, heldWindow === window {
+            if heldKeyCode == keyCode, heldWindow === window, heldAllowsOption == allowsOption {
                 updateModifiers(modifiers)
             } else {
                 stop()
@@ -95,11 +107,14 @@ final class PDFArrowKeyRepeater: ObservableObject {
         guard let window, windowIsActive(window) else { return true }
         heldKeyCode = keyCode
         heldModifiers = modifiers
+        heldAllowsOption = allowsOption
         heldWindow = window
         navigationAction = action
         isRepeating = true
         installObservers(for: window)
-        scheduleRepeat(after: Self.effectiveInitialDelay(speed: speedProvider(), modifiers: modifiers)!)
+        scheduleRepeat(after: Self.effectiveInitialDelay(
+            speed: speedProvider(), modifiers: modifiers, allowsOption: heldAllowsOption
+        )!)
         return true
     }
 
@@ -122,6 +137,7 @@ final class PDFArrowKeyRepeater: ObservableObject {
         notificationObservers.removeAll()
         heldKeyCode = nil
         heldModifiers = []
+        heldAllowsOption = false
         heldWindow = nil
         navigationAction = nil
         if isRepeating { isRepeating = false }
@@ -144,7 +160,7 @@ final class PDFArrowKeyRepeater: ObservableObject {
         // A callback can change focus/layout and cancel the hold synchronously.
         guard generation == currentGeneration, isRepeating,
               let interval = Self.effectiveRepeatInterval(
-                speed: speedProvider(), modifiers: heldModifiers
+                speed: speedProvider(), modifiers: heldModifiers, allowsOption: heldAllowsOption
               ) else { return }
         scheduleRepeat(after: interval)
     }
@@ -158,14 +174,15 @@ final class PDFArrowKeyRepeater: ObservableObject {
             _ = handleKeyUp(keyCode: event.keyCode)
         case .keyDown:
             guard event.window === heldWindow, event.keyCode == keyCode,
-                  Self.accepts(modifiers: event.modifierFlags), event.isARepeat else {
+                  Self.accepts(modifiers: event.modifierFlags, allowsOption: heldAllowsOption),
+                  event.isARepeat else {
                 stop()
                 return event
             }
             updateModifiers(event.modifierFlags)
             return nil
         case .flagsChanged:
-            guard Self.accepts(modifiers: event.modifierFlags) else {
+            guard Self.accepts(modifiers: event.modifierFlags, allowsOption: heldAllowsOption) else {
                 stop()
                 return event
             }
@@ -182,7 +199,9 @@ final class PDFArrowKeyRepeater: ObservableObject {
         let relevant = modifiers.intersection([.command, .control, .shift, .option])
         guard relevant != heldModifiers.intersection([.command, .control, .shift, .option]) else { return }
         heldModifiers = modifiers
-        guard let interval = Self.effectiveRepeatInterval(speed: speedProvider(), modifiers: modifiers) else {
+        guard let interval = Self.effectiveRepeatInterval(
+            speed: speedProvider(), modifiers: modifiers, allowsOption: heldAllowsOption
+        ) else {
             stop()
             return
         }

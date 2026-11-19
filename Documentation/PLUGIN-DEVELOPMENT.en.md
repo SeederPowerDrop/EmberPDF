@@ -1,104 +1,245 @@
-# Build a HwattakPDF plugin
+# Make your first EmberPDF extension
 
-Turn a useful reading or study workflow into a package other people can install. This guide describes the **2026-09-05 stabilization source**. A package declares host commands or text templates; it does not execute JavaScript, Swift, Wasm, or a custom web panel.
+An EmberPDF extension can add its own commands, keep state, respond to document events, and compose a native panel. Your JavaScript defines the behavior; the app provides permission-checked APIs for documents, notes, navigation, reading colors, and storage. The examples are starting points for new workflows.
 
-[한국어 가이드](PLUGIN-DEVELOPMENT.md) · [Command API](PLUGIN-HOST-API.md) · [Compatibility and proposals](PLUGIN-COMPATIBILITY.md) · [Security](PLUGIN-SECURITY.md) · [Examples](../Examples/Plugins/README.md)
+This tutorial targets **EmberPDF 0.9.0, build 27**, on **macOS 14 or later**. Use that build or a later build supporting schema 6 and API 1; the version number `0.9.0` alone does not identify the required build. You need a plain-text editor and the repository's example folder. You do not need a PDF, Node.js, or a Swift compiler for this tutorial.
 
-## Start without a compiler
+[한국어](PLUGIN-DEVELOPMENT.md) · [API reference](PLUGIN-HOST-API.md) · [TypeScript types](PluginSDK/emberpdf.d.ts) · [Examples](../Examples/Plugins/README.md)
 
-You need macOS 14+, HwattakPDF, a plain-text editor, and a test PDF without personal data. You do **not** need Node.js or a Swift build to write a plugin.
+## 1. Install an example that already works
 
-1. Copy `Examples/Plugins/OfflineChecklist.hwattakplugin` or `CommunityStarter.hwattakplugin` into your development directory.
-2. Replace the example `identifier`, `displayName`, and `author`. Keep your identifier stable across updates; do not publish using the shared `org.example.*` placeholder.
-3. Edit the manifest in UTF-8. Use the plugin manager to select the **directory**, review its permissions, and install it.
-4. Execute from the Plugins menu. For document actions, open a test PDF and use **Shift–Command–P** to search commands. The current palette requires an open PDF; the static checklist also works from the menu without one.
-5. Edit the source package and select it again in the manager to perform a reviewed update. Editing the installed copy directly can trigger quarantine.
+Copy the complete [HelloEmber.hwattakplugin](../Examples/Plugins/HelloEmber.hwattakplugin) folder to a place where you can edit it. Keep its contents unchanged for this first run. Run the following command from the repository root, with a destination that does not already exist. If `work/MyExtension.hwattakplugin` exists, choose a different folder name to avoid nesting one package inside another.
 
-Here is a complete, zero-permission manifest. Save it as `manifest.json` inside a directory named `MyChecklist.hwattakplugin`:
+```sh
+mkdir -p work
+cp -R Examples/Plugins/HelloEmber.hwattakplugin work/MyExtension.hwattakplugin
+```
+
+`MyExtension.hwattakplugin` is a folder. `manifest.json` and `main.js` must be directly inside it, alongside the example's README and license.
+
+1. In EmberPDF, choose **Plugins → Manage Plugins… → Install Plugin…** and select `MyExtension.hwattakplugin`.
+2. Review its one permission, **Run while using the app**, then install it. This lets the extension remain available while the app window is open.
+3. Return to the main EmberPDF window. Press **Shift–Command–P**, search for **Hello Ember**, and press Enter. You can also run **Hello Ember** from the **Plugins** menu.
+4. In the panel, click **Record an idea**. The count changes from `0` to `1`.
+5. Click **Close panel**, then run **Hello Ember** again. The count is still `1`.
+
+The counter belongs to this window's running extension. Closing its panel preserves it; stopping/restarting the extension, closing the window, or quitting the app resets it. Another window gets its own counter. This example does not save data or read any document.
+
+If the command is missing, check that the plugin is enabled and **Pause all plugins** is off. The command palette belongs to the main window; close or move focus away from the plugin manager first.
+
+## 2. Understand the two working files
+
+`manifest.json` tells EmberPDF which package it is loading, which code to run, and which permissions to review. This is the complete manifest from the example:
 
 ```json
 {
-  "schemaVersion": 1,
-  "identifier": "org.example.my-checklist",
-  "displayName": "My Reading Checklist",
+  "schemaVersion": 6,
+  "identifier": "org.emberpdf.examples.hello-ember",
+  "displayName": "Hello Ember",
   "version": "1.0.0",
-  "author": "Your name",
-  "description": "Displays a local reading checklist without reading PDF text.",
-  "minimumHostVersion": "0.8.0",
-  "capabilities": [],
-  "actions": [
-    {
-      "id": "show-checklist",
-      "title": "Show reading checklist",
-      "output": "showText",
-      "template": "Read. Mark one key idea. Explain it. Save your PDF."
-    }
-  ]
+  "author": "EmberPDF SDK Examples",
+  "description": "A first independent extension with its own command, panel and per-window counter. Works without an open PDF.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": ["backgroundExecution"],
+  "actions": [],
+  "runtime": {
+    "apiVersion": 1,
+    "entry": "main.js",
+    "sha256": "4c2e55462065cbd4d5a71c1e869bd9ab5fbdfe51b1cd5361381dec50b386afc3",
+    "activation": "window",
+    "capabilities": ["backgroundExecution"]
+  }
 }
 ```
 
-## Choose the smallest useful API
+For your own published plugin, replace `identifier`, `displayName`, and `author`. Keep your identifier stable across updates, and do not publish under the example identifier. Renaming the folder does not change the plugin's identity.
 
-| Task | API / required permission |
+The important fields are:
+
+| Field | Meaning in this example |
 | --- | --- |
-| Static instructions | `showText`, no permissions |
-| Selected text in a template | `{{selection}}` / `selectedText` |
-| Filename and page reference | metadata tokens / `documentMetadata` |
-| Copy a Markdown quote | `copyText` / `clipboardWrite` plus token permissions |
-| Search a public HTTPS site | `openURL` / `externalURL` plus token permissions; user confirmation on every invocation |
-| Highlight or underline | schema 3 `documentCommand` / `annotationWrite` |
-| Pen, eraser, selection | schema 3 `documentCommand` / `toolControl` |
-| Mode or page navigation | schema 3 `documentCommand` / `workspaceNavigation` |
+| `schemaVersion: 6` | An extension that runs for the lifetime of an app window |
+| `runtime.entry` | The JavaScript file to execute; API 1 uses `main.js` |
+| `runtime.sha256` | The SHA-256 of the exact `main.js` bytes being approved |
+| `activation: "window"` | Start after approval while this app window is open |
+| Both `capabilities` arrays | Permissions used by the runtime; here, only `backgroundExecution` |
+| `actions: []` | No declarative actions; JavaScript registers its own command |
 
-Declare the **exact union** of the permissions required by all actions. Unused permissions also fail validation. Host highlighting uses the current selection without exporting its text and does not require `selectedText`.
+`main.js` implements the counter and its panel. These are the exact bytes used for the manifest digest above, including the final newline:
 
-For document commands, `template` is an empty string and `command` contains one supported `kind`. There are ten kinds: `highlight`, `underline`, `pen`, `eraser`, `selection`, `viewerMode`, `editingMode`, `studyMode`, `nextPage`, and `previousPage`. Styles are limited to `color` (`#RRGGBB`), `width` (0.2–32), and `opacity` (0.1–1); pen does not accept opacity. See the [command reference](PLUGIN-HOST-API.md) for defaults and conditions.
+```javascript
+// SPDX-License-Identifier: MIT
+let count = 0;
 
-Use [CommunityStarter](../Examples/Plugins/CommunityStarter.hwattakplugin/manifest.json) for executable presets. Study mode and pen selection are separate commands; action sequences are not supported. Annotation edits use host Undo/Redo and save behavior. Disabling a plugin does not remove annotations already added to the PDF.
+async function renderPanel() {
+  await ember.ui.render({
+    title: 'Hello Ember',
+    text: `Ideas recorded in this window: ${count}`,
+    actions: [
+      { id: 'add-idea', label: 'Record an idea' },
+      { id: 'close', label: 'Close panel' }
+    ]
+  });
+}
 
-## Compatibility matters
+ember.commands.register({
+  id: 'open-hello',
+  title: 'Hello Ember',
+  run: async () => {
+    await renderPanel();
+    await ember.ui.open();
+  }
+});
 
-The current **0.9.0/build 19** source and local build support schemas **1, 2, and 3**. This source update does not publish a new downloadable GitHub Release. Earlier binaries also labeled **0.8.0/build 18** may not support schema 3. `minimumHostVersion: "0.8.0"` cannot distinguish them. Record the exact tested artifact/source revision and installation result in your README. Do not add an unsupported `minimumHostBuild` key.
-
-Plugin `version` and `minimumHostVersion` use three numeric components; prerelease suffixes and version ranges are unsupported. The manager permits reviewed replacement with the same or a lower plugin version, so publish clear release notes and retain rollback artifacts.
-
-Obsidian `main.js`, its API, vault access, settings tabs, and `obsidian://` links are not directly supported. You can use [MarkdownQuote](../Examples/Plugins/MarkdownQuote.hwattakplugin/manifest.json) to copy text and paste it into an Obsidian note. This is a text exchange workflow, not automatic vault synchronization. Sidecar/pen input is handled by the Mac host; a pen preset is not an iPad application or device driver.
-
-## Validate with the real host rules
-
-Optional command-line checks require this source checkout and its macOS Swift/Xcode toolchain. Run from the repository root:
-
-```sh
-zsh scripts/validate_plugin.sh Examples/Plugins/CommunityStarter.hwattakplugin
-zsh scripts/validate_plugin.sh --examples
+ember.on('view.action', async ({ id }) => {
+  if (id === 'add-idea') {
+    count += 1;
+    await renderPanel();
+  } else if (id === 'close') {
+    await ember.ui.close();
+  }
+});
 ```
 
-The first run builds the test module. A successful result includes `PLUGIN VALID:` and a zero exit status. This invokes the native package validator and community installation trust rules using a temporary registry. It does not install the package into your user registry or execute package code.
+`commands.register` adds **Hello Ember** to the window's command surfaces. `ui.render` supplies the panel's text and buttons, and `ui.open` shows it. Clicking a button emits `view.action`; its `id` selects the corresponding behavior. `ui.close` hides the panel while the JavaScript state remains alive.
 
-An optional second argument supplies a host version string to the **current** validator:
+The panel is native EmberPDF UI described with data. It supports text, lists, fields, and buttons; it does not run HTML or CSS. Use the [UI types](PluginSDK/emberpdf.d.ts) for accepted fields.
+
+## 3. Change the code and install the update
+
+Make one visible change first: change `Record an idea` to `Count an idea` in **your copied** `main.js`. Then:
+
+1. Save `main.js` as UTF-8 plain text.
+2. Calculate its new digest from the repository root:
+
+   ```sh
+   shasum -a 256 work/MyExtension.hwattakplugin/main.js
+   ```
+
+3. Copy the first 64 hexadecimal characters into `runtime.sha256` in your copied `manifest.json`. Do not include the filename.
+4. Change the plugin's `version` to `1.0.1`. Keep its identifier unchanged for this update.
+5. Use **Install Plugin…** again and select the same development folder. Review and approve the replacement.
+6. Return to the main window and run **Hello Ember**. The renamed button should appear, and the new runtime starts with count `0`.
+
+Editing your development folder does not update the installed copy automatically. Reinstall after every code or manifest change; do not edit the app's installed package directly. Even a whitespace or line-ending change in `main.js` requires a new digest. The digest checks that approved code has not changed; it does not verify who published it.
+
+With this source checkout and the macOS Swift/Xcode toolchain, you can also run the optional package validator:
 
 ```sh
-zsh scripts/validate_plugin.sh Examples/Plugins/CommunityStarter.hwattakplugin 0.7.0
+zsh scripts/validate_plugin.sh work/MyExtension.hwattakplugin
 ```
 
-That must fail because the example declares a 0.8.0 minimum. It does not emulate an older binary, parser, OS, or PDFKit. Test every host version you claim to support in the actual app.
+Expect `PLUGIN VALID:` and a zero exit status. The first run builds the validator's test module. This checks package structure, permissions, and hashes without installing into your user registry or executing the extension. Try the update in the app as well.
 
-Check normal use, missing selections, unsupported modes, first/last pages, Undo/Redo, save/reopen, disable/update/remove, and cancellation of external-link confirmation. Static validation does not prove runtime PDF behavior or performance.
+## 4. Add one document API
 
-## Package and publish
+Now show the active PDF's name and page next to the counter. This needs the **Read document name and page information** permission (`documentMetadata`). It does not need permission to read PDF text.
 
-Only these files are allowed directly inside the package: `manifest.json`, `README.md`, `LICENSE`, `LICENSE.md`, `icon.png`. No subdirectories, hidden files, symlinks, executable files, or developer-generated `installation.json`. The PNG is currently signature-checked but not displayed as a plugin icon.
+In your copied manifest, change **both** the root `capabilities` and `runtime.capabilities` arrays to `["backgroundExecution", "documentMetadata"]`. With no declarative actions, these arrays contain the same permissions.
 
-Limits: 32 installed packages, 24 actions per package, 5 files / 2 MiB total, 128 KiB manifest, 1 MiB per auxiliary file. See the [full format reference](PLUGINS.md) for field and output limits.
+Replace the entire `renderPanel` function in `main.js` with this function. Leave the counter, command registration, and button event handler unchanged:
 
-Keep screenshots, changelogs, tests, repository metadata, and CI configuration **outside** the installable directory. Publish a directory or a ZIP users must extract before installation. Validate the extracted package before release. Source code and release provenance, a license, supported host/OS versions, permission/data-flow explanations, issue contact, and a private security reporting channel belong in the README. Fields such as `homepage`, `settings`, `hotkeys`, and `repository` are not supported manifest keys.
+```javascript
+async function renderPanel() {
+  const context = await ember.call('app.getContext');
+  let documentLabel = 'No PDF is open.';
+  if (context.hasDocument) {
+    try {
+      const info = await ember.call('document.getInfo');
+      documentLabel = `${info.name} · ${info.pageNumber}/${info.pageCount}`;
+    } catch (error) {
+      // The PDF may have closed between checking and reading it.
+      if ((await ember.call('app.getContext')).hasDocument) throw error;
+    }
+  }
+  await ember.ui.render({
+    title: 'Hello Ember',
+    text: `${documentLabel}\nIdeas recorded in this window: ${count}`,
+    actions: [
+      { id: 'add-idea', label: 'Count an idea' },
+      { id: 'close', label: 'Close panel' }
+    ]
+  });
+}
+```
 
-The current app has no online marketplace, auto-updater, publisher signature verification, or automated malware certification. Manifest digests detect changes; they do not authenticate the publisher. Packages must not contain API keys, private PDF samples, or personal information. URL encoding is not anonymization, and clipboard writes use the system clipboard. Existing host recovery settings can retain local copies of document edits.
+Repeat the update steps: calculate the new `main.js` digest, replace `runtime.sha256`, increment the version, and reinstall. The review now includes the new document permission. The runtime needs all its declared permissions; revoking a required permission stops it.
 
-Repository examples are MPL-2.0 licensed. Preserve applicable notices when reusing them. Make your own licensing and support terms clear.
+Run **Hello Ember** without a PDF to see `No PDF is open.` Then open a test PDF and run the command again to see its name and page. This example refreshes when the command or counter button runs. To refresh automatically as the reader moves, subscribe to document/page events as shown in [Research Trail](../Examples/Plugins/ResearchTrail.hwattakplugin/main.js).
 
-## Help shape the next API
+`app.getContext` is safe to call without a PDF. Document calls refer to the active document when called. If the context changes during a request, `CONTEXT_CHANGED` tells the extension to discard that request and use the new context.
 
-If a feature needs computation, events, new document access, or custom UI, describe the user problem, bounded inputs/results, permissions, cancellation, Undo, document replacement, resource budget, and compatibility tests in an [API proposal](https://github.com/SeederPowerDrop/HwattakPDF/issues/new/choose). New host functionality currently requires a core change and a new app build.
+## 5. Build your own workflow
 
-A future executable SDK or community directory needs separate design and review; it is not available today. The [compatibility document](PLUGIN-COMPATIBILITY.md) records proposed stages without presenting them as shipping APIs. Report vulnerabilities through [SECURITY.md](../SECURITY.md), not public issues containing sensitive data.
+Choose an API according to the information or operation your feature needs:
+
+| Goal | API and permission |
+| --- | --- |
+| Read the active document's name/page | `document.getInfo` · `documentMetadata` |
+| Read selected text | `document.getSelection` · `selectedText` |
+| Read the current page | `document.getPageText` · `currentPageText` or `documentTextRead` |
+| Read another page without navigating | `document.getPageText({pageNumber})` · `documentTextRead` |
+| List/search already open documents | `workspace.listDocuments/search` · `openDocumentsRead` |
+| Navigate to an open tab/page | `workspace.navigate` · `workspaceNavigation` |
+| Add a native highlight or underline | `commands.execute` · `annotationWrite` and `selectedText` |
+| Append to the current note | `notes.append` · `notesWrite`; attached files also need `fileReadWrite` |
+| Change reading colors | `appearance.get/set` · `appearanceWrite` |
+| Keep data between runtime launches | `storage.get/set/compareAndSet` · `pluginStorage` |
+
+Declare every permission you use in `runtime.capabilities` and the root `capabilities`. The root must equal the union of runtime and declarative-action requirements. Permission settings let users revoke individual grants. PDF copy/edit restrictions and the host's Undo/save rules still apply.
+
+Start with these references when extending the example:
+
+- [SDK API and UI declarations](PluginSDK/emberpdf.d.ts): exact parameters, results, and events. TypeScript is optional; if used, bundle it into one `main.js` and keep development files outside the package.
+- [Host API reference](PLUGIN-HOST-API.md): permission boundaries and native operations.
+- [Research Trail](../Examples/Plugins/ResearchTrail.hwattakplugin/README.md): document/page events and persistent reading history while the panel is closed. Shared storage is per plugin across windows; its bounded compare-and-set loop prevents one window overwriting another's update.
+- [Compatibility](PLUGIN-COMPATIBILITY.md), [package format](PLUGINS.md), and [security](PLUGIN-SECURITY.md): versions, limits, and installation behavior.
+
+Register event handlers at the top level or synchronously inside `load`. An asynchronous `load` does not delay `app.ready`; subscribing after an awaited call can miss the first event. `ember.dispose` is for best-effort local cleanup. Save important data during normal operation because forced termination may skip cleanup callbacks.
+
+Extensions use isolated JavaScript workers, with at most eight across the app. They have execution, call-rate, and message-size limits. The SDK has no Node.js, DOM, direct filesystem/network, or shell access. New JavaScript logic using existing APIs ships as a plugin; a native resource not exposed by the SDK needs an [API proposal](PLUGIN-COMPATIBILITY.md).
+
+For new independent extensions, start with schema 6. Earlier formats remain supported for these uses:
+
+| Schema | Use |
+| --- | --- |
+| 1–2 | Declarative text, links, and supported host panels |
+| 3 | Preset native document commands; see [Community Starter](../Examples/Plugins/CommunityStarter.hwattakplugin/README.md) |
+| 4 | Additional host panels such as notes and reading colors |
+| 5 | JavaScript tied to one document panel; see [Reading Lab](../Examples/Plugins/ReadingLab.hwattakplugin/README.md) |
+
+A schema-6 package may also declare supported host actions, but it cannot contain a legacy `scriptPanel` action alongside its runtime. Historical build differences belong in the compatibility reference; test against every actual app build you claim to support.
+
+## 6. Troubleshoot and share
+
+| Symptom | Check |
+| --- | --- |
+| Installation rejects the code hash | Recalculate the digest after saving, and update `runtime.sha256` |
+| Installation rejects permissions | Check both arrays, their spelling, and the required `backgroundExecution` |
+| The command is missing | Focus the main window; check enabled status, permission grants, and **Pause all plugins** |
+| The extension stopped | Look at its error in the **Extensions** panel; fix/reinstall it and restart. Check whether the eight-worker limit was reached |
+| A document call fails | Check the permission, open document, PDF restrictions, and `CONTEXT_CHANGED` |
+| The count reset | This example keeps only in-memory state; install/update/restart/window closure starts it again |
+| The source change is invisible | Reinstall the copied development folder; it is separate from the installed package |
+
+Before sharing, test installation, your command, closing/reopening the panel, permission revocation, disable/re-enable, and replacement. Test document-dependent features with harmless sample files and without an open document.
+
+Include `manifest.json` **and** `main.js`. Keep the README and applicable license notices. Do not put project dependencies, hidden files, subdirectories, or symlinks inside the installable folder. The [format reference](PLUGINS.md) lists all allowed files and limits.
+
+For this tutorial's folder, create and inspect a ZIP from the repository root:
+
+```sh
+cd work
+zip -X -r MyExtension-1.0.1.zip MyExtension.hwattakplugin \
+  -i 'MyExtension.hwattakplugin/manifest.json' \
+     'MyExtension.hwattakplugin/main.js' \
+     'MyExtension.hwattakplugin/README.md' \
+     'MyExtension.hwattakplugin/LICENSE'
+unzip -l MyExtension-1.0.1.zip
+```
+
+Use your actual version in the ZIP name. The recipient extracts it and selects the `.hwattakplugin` folder in **Install Plugin…**. Validate and try that extracted folder before publishing it.
+
+Before your first public release, choose your own identifier, such as `dev.yourname.my-extension`, and replace the example name and author. Changing the identifier creates a separate installed plugin; keep it stable for later updates.
+
+In the README, explain what the plugin does, its permissions, whether it saves or sends data, the exact tested app build/OS, and how to report problems. Preserve Hello Ember's MIT license notices when reusing its code. EmberPDF currently has no online marketplace, automatic plugin updates, or publisher identity verification. Never package private PDFs, personal information, or API keys.

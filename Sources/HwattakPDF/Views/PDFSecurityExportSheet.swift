@@ -19,7 +19,7 @@ struct PDFSecurityExportSheet: View {
         case confirmation
     }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {

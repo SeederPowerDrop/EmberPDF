@@ -150,7 +150,11 @@ final class HelpTutorialContentTests: XCTestCase {
         )
         XCTAssertEqual(
             HelpTutorialContent.topics(matching: "구분선").map(\.id),
-            ["view", "compare"]
+            ["view"]
+        )
+        XCTAssertEqual(
+            HelpTutorialContent.topics(matching: "분할선").map(\.id),
+            ["compare"]
         )
     }
 
@@ -213,8 +217,9 @@ final class HelpTutorialContentTests: XCTestCase {
             ["⌃1", "⌃2", "⌃3"]
         )
         XCTAssertTrue(modes.entries[0].detail.contains("본문 직접 편집"))
-        XCTAssertTrue(modes.entries[1].detail.contains("오버레이"))
-        XCTAssertTrue(modes.entries[1].detail.contains("원본"))
+        XCTAssertTrue(modes.entries[1].detail.contains("드래그한 뒤 본문 편집(가T)"))
+        XCTAssertTrue(modes.entries[1].detail.contains("글자를 직접 수정"))
+        XCTAssertTrue(modes.entries[1].detail.contains("빈 곳을 클릭하면 새 글"))
         XCTAssertTrue(modes.entries[2].detail.contains("계산"))
         XCTAssertTrue(modes.entries[3].detail.contains("미리보기"))
         XCTAssertTrue(modes.entries[3].detail.contains("Sidecar"))

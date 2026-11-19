@@ -29,6 +29,7 @@ struct LocalRelatedPDFSearchService {
         query: String,
         workspace: MultiDocumentWorkspaceState,
         excluding excludedURL: URL? = nil,
+        includeRecentDocuments: Bool = true,
         budget: PDFRelatedSearchBudget = .standard
     ) async -> [PDFRelatedDocumentResult] {
         let queryTerms = PDFLexicalRelevanceEngine.orderedTerms(
@@ -57,7 +58,7 @@ struct LocalRelatedPDFSearchService {
             )
         }
 
-        if let recentStore = workspace.recentDocumentsStore {
+        if includeRecentDocuments, let recentStore = workspace.recentDocumentsStore {
             for recent in workspace.recentDocuments {
                 guard let access = try? recentStore.resolve(id: recent.id) else {
                     continue

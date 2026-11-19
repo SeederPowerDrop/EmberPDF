@@ -37,13 +37,36 @@ jobs:
         shell: zsh {0}
         run: ./scripts/validate_project.sh
 
+      # Catch release-only compiler failures before the longer UI test batches.
+      - name: Build and verify app archive
+        shell: zsh {0}
+        run: ./scripts/build_app.sh
+
       - name: Run isolated test batches
         shell: zsh {0}
         run: ./scripts/run_test_batches.sh
 
-      - name: Build and verify app archive
+      - name: Install independent PDF validators
         shell: zsh {0}
-        run: ./scripts/build_app.sh
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          set -euo pipefail
+          brew install qpdf poppler
+          python3 -m venv work/pdf-oracle-venv
+          work/pdf-oracle-venv/bin/python -m pip install 'pypdf==6.10.0' 'Pillow==12.3.0'
+
+      - name: Validate app-generated PDFs with independent engines
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          work/pdf-oracle-venv/bin/python -m unittest discover -s Tests/ExternalValidation
+          EMBER_EXTERNAL_FIXTURE_DIRECTORY="$PWD/work/pdf-oracle-fixtures" \
+            swift test --disable-sandbox --filter PDFExternalValidationFixtureTests
+          work/pdf-oracle-venv/bin/python scripts/verify_pdf_outputs.py \
+            --manifest work/pdf-oracle-fixtures/manifest.json \
+            --output-directory work/pdf-oracle-results
 
   pdfkit-integration-macos-26:
     name: PDFKit integration on macOS 26 arm64

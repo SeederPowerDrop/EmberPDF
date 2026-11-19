@@ -5,6 +5,132 @@ import Combine
 import Foundation
 import PDFKit
 
+/// Synchronous boundaries let attached viewers retain their exact viewport
+/// while PDFKit removes and reinserts a same-sized edited page (also on undo).
+enum PDFBodyPageReplacementEvents {
+    static let willReplace = Notification.Name("EmberPDF.bodyPageWillReplace")
+    static let didReplace = Notification.Name("EmberPDF.bodyPageDidReplace")
+}
+
+/// A one-page content transaction keeps the live document and every original
+/// annotation identity intact. Destination points are already in PDF page
+/// coordinates; unlike OCR replacement they must never be normalized/rotated.
+@MainActor
+private final class PDFBodyPageReplacement {
+    let document: PDFDocument
+    let pageIndex: Int
+    let original: PDFPage
+    let replacement: PDFPage
+    let annotations: [PDFAnnotation]
+    private var destinationChanges: [(apply: () -> Void, undo: () -> Void)] = []
+
+    init(document: PDFDocument, pageIndex: Int, original: PDFPage, replacement: PDFPage) throws {
+        self.document = document
+        self.pageIndex = pageIndex
+        self.original = original
+        self.replacement = replacement
+        annotations = original.annotations
+        // Structured documents retain their original whole-document tag context.
+        // Plain documents still need only the edited page's annotation lineage.
+        let metadataPageIndexes: [Int]? = PDFCatalogStructurePreserver.shouldPreserve(document) ? nil : [pageIndex]
+        try PDFCatalogStructurePreserver.prepare(document, force: true, pageIndexes: metadataPageIndexes)
+        PDFCatalogStructurePreserver.inheritMetadata(from: original, to: replacement)
+        // The engine's detached snapshot contains serialized annotation copies.
+        // The live instances carry trust and existing history references.
+        replacement.annotations.forEach { replacement.removeAnnotation($0) }
+        func mapped(_ destination: PDFDestination) -> PDFDestination? {
+            guard destination.page === original else { return nil }
+            let result = PDFDestination(page: replacement, at: destination.point)
+            result.zoom = destination.zoom
+            return result
+        }
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            for annotation in page.annotations {
+                if let before = annotation.destination, let after = mapped(before) {
+                    destinationChanges.append((
+                        apply: { annotation.destination = after },
+                        undo: { annotation.destination = before }
+                    ))
+                }
+            }
+        }
+        var outlines = document.outlineRoot.map { [$0] } ?? []
+        var visited: Set<ObjectIdentifier> = []
+        while let outline = outlines.popLast() {
+            guard visited.insert(ObjectIdentifier(outline)).inserted else { continue }
+            guard visited.count <= 50_000,
+                  outline.numberOfChildren <= 50_000 - outlines.count else {
+                throw WorkspaceError.operationFailed(L10n.string("body_text.error.too_complex"))
+            }
+            if let before = outline.destination, let after = mapped(before) {
+                destinationChanges.append((
+                    apply: {
+                        PDFCatalogStructurePreserver.rebindOutlineDestination(outline, from: before, to: after)
+                        outline.destination = after
+                    },
+                    undo: {
+                        PDFCatalogStructurePreserver.rebindOutlineDestination(outline, from: after, to: before)
+                        outline.destination = before
+                    }
+                ))
+            }
+            for index in 0..<outline.numberOfChildren {
+                if let child = outline.child(at: index) { outlines.append(child) }
+            }
+        }
+    }
+
+    func apply() throws {
+        try replace(expected: original, with: replacement)
+        destinationChanges.forEach { $0.apply() }
+    }
+
+    func undo() throws {
+        try replace(expected: replacement, with: original)
+        destinationChanges.forEach { $0.undo() }
+    }
+
+    private func replace(expected: PDFPage, with target: PDFPage) throws {
+        guard document.page(at: pageIndex) === expected,
+              document.index(for: target) == NSNotFound,
+              target.annotations.isEmpty,
+              expected.annotations.count == annotations.count,
+              zip(expected.annotations, annotations).allSatisfy({ $0.0 === $0.1 }) else {
+            throw WorkspaceError.operationFailed(L10n.string("error.undo_page_state"))
+        }
+        let relationships = try PDFAnnotationRelationshipPreserver.captureForMove(from: expected)
+        annotations.forEach { expected.removeAnnotation($0) }
+        NotificationCenter.default.post(name: PDFBodyPageReplacementEvents.willReplace,
+            object: document, userInfo: ["pageIndex": pageIndex])
+        defer {
+            PDFCatalogStructurePreserver.refreshMarker(document)
+            NotificationCenter.default.post(name: PDFBodyPageReplacementEvents.didReplace,
+                object: document, userInfo: ["pageIndex": pageIndex])
+        }
+        document.removePage(at: pageIndex)
+        document.insert(target, at: pageIndex)
+        annotations.forEach { target.addAnnotation($0) }
+        do {
+            try relationships.complete(on: target)
+        } catch {
+            let applyError = error
+            // Restore the original painting and exact saved objects before
+            // reporting failure. Only this transaction's owned annotations
+            // move back; unknown target annotations are never deleted here.
+            annotations.forEach { target.removeAnnotation($0) }
+            document.removePage(at: pageIndex)
+            document.insert(expected, at: pageIndex)
+            annotations.forEach { expected.addAnnotation($0) }
+            // Restore captured scalars/targets after any partial SDK cleanup,
+            // then validate the original graph. A failed restoration remains
+            // an error, never an applied edit without a matching history item.
+            try relationships.restore(on: expected)
+            throw applyError
+        }
+    }
+}
+
 private struct PDFWidgetUndoValue {
     let apply: () -> Void
 }
@@ -67,23 +193,69 @@ final class PDFWorkspaceState: ObservableObject {
     /// hibernation and tab switches, while provider requests are cancelled
     /// when the tab is no longer visible.
     let aiAssistantSession: AIAssistantSessionModel
+    private var aiConversationHistoryStore: (any AIConversationHistoryPersisting)?
+
+    /// Production UI opts into local history when PDF AI is used. Ordinary
+    /// model construction remains in-memory, including unit-test workspaces.
+    func enableAIConversationHistoryPersistence(
+        store: any AIConversationHistoryPersisting = AIConversationHistoryStore()
+    ) {
+        if aiConversationHistoryStore == nil { aiConversationHistoryStore = store }
+        bindAIConversationHistoryIfLoaded()
+    }
+
+    private func bindAIConversationHistoryIfLoaded() {
+        guard let store = aiConversationHistoryStore,
+              let document, let documentURL else { return }
+        aiAssistantSession.bindConversationHistory(
+            documentURL: imageSourceURL ?? documentURL,
+            isEncrypted: document.isEncrypted,
+            store: store
+        )
+    }
 
     // @Published는 값이 바뀌면 관찰 중인 SwiftUI view를 다시 계산하게 한다.
     // private(set)은 화면이 속성을 직접 고치지 못하고 모델의 검증된 메서드를
     // 거치게 해 상태 불변식(invariant)을 지킨다.
-    @Published private(set) var document: PDFDocument?
+    @Published private(set) var document: PDFDocument? {
+        didSet {
+            if oldValue !== document {
+                PDFBodyTextDocumentFonts.invalidate(oldValue)
+                if let oldValue { PageImageCache.shared.removeImages(for: oldValue) }
+                studyNotesIndex.reset()
+                cancelPendingSearch()
+            }
+        }
+    }
     @Published private(set) var documentURL: URL?
     /// Page metadata retained while a clean, inactive PDF document is
     /// hibernated. Keeping this separate from `PDFDocument` lets tab and
     /// session UI remain complete without retaining PDFKit's page/cache graph.
     @Published private(set) var hibernatedPageCount: Int?
-    @Published private(set) var revision = UUID()
+    @Published private(set) var revision = UUID() {
+        didSet { if revision != oldValue { cancelPendingSearch() } }
+    }
+    /// A localization redraw invalidates pointer/search generations, but does
+    /// not change the applied PDF that a background comparison captured.
+    private(set) var comparisonRevision = UUID()
     @Published private(set) var isDirty = false
+    @Published private(set) var isSaving = false
+    private var saveTask: Task<Bool, Never>?
+    private var saveOperationID: UUID?
+    private var saveCancellation: PDFSaveCancellation?
+    @Published private(set) var isExportingSelectedPages = false
+    private var selectedPDFExportTask: Task<Bool, Never>?
+    private var selectedPDFExportDrains: [UUID: Task<Void, Never>] = [:]
+    private var selectedPDFExportSession: PDFBackgroundExportSession?
+    private var selectedPDFExportOperationID: UUID?
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
     @Published private(set) var undoActionName: String?
     @Published private(set) var redoActionName: String?
     @Published var selectedPages: Set<Int> = []
+    /// A page-management surface belonging to this document tab. Its selection
+    /// remains shared with the sidebar and the existing page commands.
+    @Published var isPageGalleryVisible = false
     @Published var currentPageIndex = 0
     @Published var pageColumns = 1 {
         didSet {
@@ -107,6 +279,11 @@ final class PDFWorkspaceState: ObservableObject {
     @Published var overviewScale: CGFloat = 1.0
     @Published private(set) var pageFitMode: PDFPageFitMode?
     @Published var sidebarVisible = true
+    @Published var studyNotesVisible = false
+    @Published var studyNoteLayoutSelection: StudyNoteLayoutSelection?
+    @Published var studyNoteRevealRequest: StudyNoteRevealRequest?
+    @Published var eraserMode: PDFEraserMode = .stroke
+    @Published var eraserSize: CGFloat = 12
     @Published var gridLayoutMode: PDFGridLayoutMode = .balanced
     /// Mode belongs to this tab rather than the application. Two neighboring
     /// PDFs can therefore remain in viewer and study mode independently.
@@ -122,8 +299,16 @@ final class PDFWorkspaceState: ObservableObject {
             // draft before allowing a pen/eraser/image gesture to mutate the
             // page. Preserve the requested next tool because committing text
             // intentionally returns the editor itself to Select.
-            if pendingInlineTextEdit != nil, oldValue == .text, normalized != .text {
+            if !isSettlingInlineTextForToolChange,
+               let pending = pendingInlineTextEdit, oldValue != normalized,
+               oldValue == .text || pending.purpose == .bodyText {
+                isSettlingInlineTextForToolChange = true
+                defer { isSettlingInlineTextForToolChange = false }
                 commitPendingInlineTextDraftIfNeeded()
+                if pendingInlineTextEdit != nil {
+                    if activeTool != oldValue { activeTool = oldValue }
+                    return
+                }
                 if activeTool != normalized {
                     activeTool = normalized
                 }
@@ -138,6 +323,7 @@ final class PDFWorkspaceState: ObservableObject {
             }
         }
     }
+    private var isSettlingInlineTextForToolChange = false
     @Published var inkSettings = InkSettings()
     /// 학습 팔레트의 현재 표식 설정이다. 슬라이더 조작 자체는 문서 편집이 아니며,
     /// 사용자가 적용할 때만 PDF annotation과 undo 기록이 만들어진다.
@@ -146,12 +332,73 @@ final class PDFWorkspaceState: ObservableObject {
     @Published private(set) var markupSelectionClearRequestID: UUID?
     @Published var signatureSettings = SignatureSettings()
     @Published var pendingTextEdit: PendingTextEdit?
+    @Published var noteEditorFloating = false
+    let studyNotesIndex = StudyNotesIndex()
     /// Draft currently owned by the on-page AppKit text editor. It is separate
     /// from `pendingTextEdit`, which intentionally remains the review sheet
     /// used for AI drafts and the legacy comment workflow.
     @Published private(set) var pendingInlineTextEdit: PendingInlineTextEdit?
     private(set) var inlineTextEditRejectionReason: InlineTextEditRejectionReason?
-    @Published var currentSelection: PDFSelection?
+    private var selectionStorage: PDFSelection?
+    private var selectionPreviewID: UUID?
+    private var selectionPreviewChanged = false
+
+    /// Commands always read the latest pointer selection. Publishing is deferred
+    /// until its gesture ends so a drag does not rebuild the entire workspace.
+    var currentSelection: PDFSelection? {
+        get { selectionStorage }
+        set {
+            // An external write owns selection from now on, including nil to
+            // nil. A pending pointer update must not revive an obsolete drag.
+            selectionPreviewID = nil
+            selectionPreviewChanged = false
+            guard selectionStorage !== newValue else { return }
+            objectWillChange.send()
+            selectionStorage = newValue
+        }
+    }
+
+    func beginSelectionPreview() -> UUID {
+        let id = UUID()
+        selectionPreviewID = id
+        selectionPreviewChanged = false
+        return id
+    }
+
+    @discardableResult
+    func updateSelectionPreview(_ value: PDFSelection?, id: UUID) -> Bool {
+        guard ownsSelectionPreview(id) else { return false }
+        if selectionStorage !== value {
+            selectionStorage = value
+            selectionPreviewChanged = true
+        }
+        return true
+    }
+
+    func ownsSelectionPreview(_ id: UUID) -> Bool {
+        selectionPreviewID == id
+    }
+
+    @discardableResult
+    func commitSelectionPreview(_ id: UUID) -> Bool {
+        guard ownsSelectionPreview(id) else { return false }
+        // The value is already readable, but observers have not been told
+        // about it. Commit must notify even when its identity stays the same.
+        objectWillChange.send()
+        selectionPreviewID = nil
+        selectionPreviewChanged = false
+        return true
+    }
+
+    func cancelSelectionPreview(_ id: UUID) {
+        guard ownsSelectionPreview(id) else { return }
+        if selectionStorage != nil || selectionPreviewChanged {
+            objectWillChange.send()
+        }
+        selectionStorage = nil
+        selectionPreviewID = nil
+        selectionPreviewChanged = false
+    }
     @Published var searchText = "" {
         didSet {
             guard searchText != oldValue else { return }
@@ -163,19 +410,43 @@ final class PDFWorkspaceState: ObservableObject {
     @Published private(set) var searchResultIndex = 0
     @Published var activeSearchSelection: PDFSelection?
     @Published private(set) var isSearching = false
+    @Published private(set) var isSearchPending = false
+    var isSearchBusy: Bool { isSearchPending || isSearching }
+    var searchHasCompletedCurrentQuery: Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !query.isEmpty && searchCompletedQuery == query && searchProgress.phase == .completed
+    }
     @Published private(set) var searchProgress = PDFSearchProgress.idle
     @Published private(set) var searchRequiresOCR = false
     @Published private(set) var searchUnsearchablePageCount = 0
     @Published private(set) var searchResultsWereTruncated = false
     @Published private(set) var activeSearchQuery: String?
     @Published private(set) var searchCompletedQuery: String?
+    @Published private(set) var searchAnchorPageIndex: Int?
     /// A tab-local, host-rendered companion request created by a declarative
     /// plug-in action. It contains bounded immutable text/URLs only and never
     /// participates in PDF revision, undo, saving, or session persistence.
     @Published var pluginPanelRequest: PluginPanelRequest?
+    /// Keep host-owned notes alive across panel changes, permission revocation,
+    /// hibernation and PDF replacement. Window/tab teardown uses the same
+    /// deferred unsaved-changes guard as PDF edits before releasing this owner.
+    let pluginNotesSession = PluginNotesSession()
     @Published var statusMessage = L10n.string("status.ready")
     @Published var presentedError: String?
     @Published var pendingProtectedExport: PDFProtectedExportPresentation?
+    @Published var pendingImageInsertion: ImageInsertionRequest?
+    @Published var pendingPDFCompression: PDFCompressionRequest?
+    @Published private(set) var isPreparingPDFCompression = false
+    var compressionPreparationTask: Task<Void, Never>?
+    var compressionPreparationID: UUID?
+
+    var compressionStoredByteCount: Int? {
+        guard !isDirty, let version = sourceFileVersion,
+              version.fileSize <= UInt64(Int.max) else { return nil }
+        return Int(version.fileSize)
+    }
+
+    func setPreparingPDFCompression(_ value: Bool) { isPreparingPDFCompression = value }
     @Published private(set) var ocrState: OCRRunState = .idle
     @Published private(set) var ocrCheckpoint: OCRCheckpoint?
     @Published private(set) var ocrConfiguration = OCRConfiguration()
@@ -216,7 +487,7 @@ final class PDFWorkspaceState: ObservableObject {
         recoveryTask?.cancel()
         guard let recoveryStore else { return }
         if !isDirty { recoveryStore.remove(id: recoveryID); return }
-        guard let document, !document.isEncrypted,
+        guard !isSaving, let document, !document.isEncrypted,
               UserDefaults.standard.object(forKey: PDFRecoveryStore.enabledKey) as? Bool != false else { return }
         // Serialization runs only after an editing pause. Large textbooks use
         // a longer debounce so pointer input and continuous editing stay fast.
@@ -227,13 +498,29 @@ final class PDFWorkspaceState: ObservableObject {
                 try Task.checkCancellation()
                 guard let self, let document, self.document === document, self.isDirty,
                       !document.isEncrypted, !self.ocrState.isActivelyProcessing,
-                      !self.isWritingOCRResult,
+                      !self.isWritingOCRResult, !self.isSaving,
                       self.officeExportTask == nil,
                       UserDefaults.standard.object(forKey: PDFRecoveryStore.enabledKey) as? Bool != false else { return }
-                try recoveryStore.save(document: document, id: self.recoveryID, displayName: self.displayName)
+                let capturedRevision = self.revision
+                let snapshot = try PDFRecoverySnapshot(capturing: document, retainingAccess: self.scopedAccess)
+                let prepared = try await PDFRecoveryBackgroundWriter.stage(snapshot, store: recoveryStore,
+                    id: self.recoveryID, displayName: self.displayName)
+                defer { recoveryStore.discard(prepared) }
+                try Task.checkCancellation()
+                // Close, Save, Undo, replacement documents and newer edits can
+                // all happen while the worker writes its private snapshot.
+                // Publishing is synchronous on MainActor after these checks,
+                // so a late worker can never resurrect a cleared recovery.
+                guard self.document === document, self.revision == capturedRevision,
+                      self.isDirty, !self.isSaving, !document.isEncrypted,
+                      UserDefaults.standard.object(forKey: PDFRecoveryStore.enabledKey) as? Bool != false else { return }
+                try recoveryStore.publish(prepared)
                 self.recoveryWarning = nil
             } catch is CancellationError {
-            } catch { self?.recoveryWarning = error.localizedDescription }
+            } catch {
+                guard !Task.isCancelled, let self, self.document === document, self.isDirty else { return }
+                self.recoveryWarning = error.localizedDescription
+            }
         }
     }
     @Published private(set) var officeExportProgress: Double?
@@ -281,10 +568,18 @@ final class PDFWorkspaceState: ObservableObject {
     private var completedOCRSourceVersion: PDFSourceFileVersion?
     private var completedOCRFingerprint: String?
     private var searchTask: Task<Void, Never>?
+    private var searchDebounceTask: Task<Void, Never>?
+    private let searchDebounceDelay: @Sendable () async throws -> Void
     private var searchGeneration = UUID()
+    private var searchQueryForResults: String?
+    /// Desired index may lie beyond published results while scanning. Negative
+    /// indexes mean a backward wrap, resolved only when the final count is known.
+    private var pendingSearchResultIndex: Int?
     private let searchEngineConfiguration: PDFSearchEngine.Configuration
     private let ocrRecognizer: WorkspaceOCRRecognizer
     private let pdfWriter: WorkspacePDFWriter
+    private let backgroundExportSession: @MainActor (PDFDocument, [SecurityScopedAccess]) throws -> PDFBackgroundExportSession
+    private let backgroundSaveWriter: (PDFRecoverySnapshot, PDFBackgroundSaveRequest, PDFSaveCancellation) async throws -> PDFSourceFileAccess.SavedDocument
     private let passwordProvider: WorkspacePDFPasswordProvider
     private var widgetValueSnapshot: [String: String] = [:]
     private var widgetUndoValueSnapshot: [String: PDFWidgetUndoValue] = [:]
@@ -317,6 +612,10 @@ final class PDFWorkspaceState: ObservableObject {
     ] = [:]
     private weak var pendingTextAnnotation: PDFAnnotation?
     private weak var pendingInlineTextAnnotation: PDFAnnotation?
+    private var pendingBodyTextTarget: PDFBodyTextTarget?
+    private weak var pendingBodyTextPage: PDFPage?
+    private var pendingBodyTextFocus: (draftID: UUID, lines: [CGRect])?
+    private var pendingBodyTextSelectionLines: (draftID: UUID, lines: [CGRect])?
     /// Identifies the one visible overlay allowed to push NSTextView values
     /// into the pending draft. SwiftUI can briefly keep an outgoing PDFView
     /// alive after its replacement has appeared; draft UUID alone cannot
@@ -386,11 +685,16 @@ final class PDFWorkspaceState: ObservableObject {
             // budget; resuming it asks for the password again instead of
             // keeping every unlocked batch item resident indefinitely.
             && !isDirty
+            && !isSaving
+            && !isExportingSelectedPages
             && pendingTextEdit == nil
             && pendingInlineTextEdit == nil
             && ocrTask == nil
             && !isWritingOCRResult
             && officeExportTask == nil
+            && pendingImageInsertion == nil
+            && pendingPDFCompression == nil
+            && !isPreparingPDFCompression
             && !ocrState.isActivelyProcessing
     }
 
@@ -463,6 +767,7 @@ final class PDFWorkspaceState: ObservableObject {
     ) -> Bool {
         guard allowsAnnotationEditing(kind) else { return false }
         if mode == .editing { return true }
+        if kind == .freeText, isExplicitlySelectedStudyNote(annotation) { return true }
         return isRuntimeTrustedAnnotation(annotation)
     }
 
@@ -525,7 +830,9 @@ final class PDFWorkspaceState: ObservableObject {
         // It deliberately does *not* apply the separate Viewer/Study review or
         // AI draft sheet, which remains pending until the user presses Apply.
         prepareForDeactivation()
+        guard pendingInlineTextEdit == nil else { return }
 
+        cancelImageInsertion()
         mode = newMode
         activeTool = PDFWorkspaceModePolicy.normalizedTool(activeTool, for: newMode)
         if !newMode.allows(.aiAssistance) {
@@ -550,6 +857,9 @@ final class PDFWorkspaceState: ObservableObject {
 
     init(
         searchEngineConfiguration: PDFSearchEngine.Configuration = .standard,
+        searchDebounceDelay: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(nanoseconds: 250_000_000)
+        },
         /// Tests can inject a session whose context extraction pauses at an
         /// exact point. Production callers omit it and receive the normal
         /// privacy-preserving AI session.
@@ -566,8 +876,15 @@ final class PDFWorkspaceState: ObservableObject {
             try AtomicPDFWriter.write(
                 document,
                 to: url,
-                validateDestinationBeforeCommit: validateDestination
+                validateDestinationBeforeCommit: validateDestination,
+                allowDirectOverwriteFallback: false
             )
+        },
+        backgroundSaveWriter: @escaping (PDFRecoverySnapshot, PDFBackgroundSaveRequest, PDFSaveCancellation) async throws -> PDFSourceFileAccess.SavedDocument = { snapshot, request, cancellation in
+            try await PDFBackgroundSaveWriter.write(snapshot: snapshot, request: request, cancellation: cancellation)
+        },
+        backgroundExportSession: @escaping @MainActor (PDFDocument, [SecurityScopedAccess]) throws -> PDFBackgroundExportSession = { document, access in
+            try PDFBackgroundExportSession(consuming: document, retainingAccess: access)
         },
         passwordProvider: @escaping WorkspacePDFPasswordProvider = { url, wasRejected in
             PDFPasswordPrompt.requestPassword(for: url, wasRejected: wasRejected)
@@ -575,8 +892,11 @@ final class PDFWorkspaceState: ObservableObject {
     ) {
         self.aiAssistantSession = aiAssistantSession ?? AIAssistantSessionModel()
         self.searchEngineConfiguration = searchEngineConfiguration
+        self.searchDebounceDelay = searchDebounceDelay
         self.ocrRecognizer = ocrRecognizer
         self.pdfWriter = pdfWriter
+        self.backgroundSaveWriter = backgroundSaveWriter
+        self.backgroundExportSession = backgroundExportSession
         self.passwordProvider = passwordProvider
     }
 
@@ -650,6 +970,7 @@ final class PDFWorkspaceState: ObservableObject {
         guard try PDFSourceFileVersion.capture(at: url) == loaded.version else {
             throw WorkspaceError.cannotOpen(url)
         }
+        PDFRemoteNavigationPreserver.captureOriginalActions(in: loaded.document)
         return loaded
     }
 
@@ -660,8 +981,12 @@ final class PDFWorkspaceState: ObservableObject {
         // an on-page draft before checking dirty state so opening another PDF
         // cannot silently detach the draft from document A and later commit it
         // onto document B.
+        guard !isSaving else {
+            presentedError = L10n.string("error.save_in_progress")
+            return false
+        }
         prepareForDeactivation()
-        if isDirty || hasPendingReviewTextDraft {
+        if isDirty || hasPendingReviewTextDraft || pendingInlineTextEdit != nil {
             presentedError = L10n.string("error.unsaved_open")
             return false
         }
@@ -689,6 +1014,8 @@ final class PDFWorkspaceState: ObservableObject {
         aiAssistantSession.documentDidChange()
         pluginPanelRequest = nil
         pendingProtectedExport = nil
+        cancelImageInsertion()
+        cancelPDFCompression()
         cancelSearchAndInvalidate(clearResults: true)
         runtimeTrustedAnnotations.removeAll(keepingCapacity: false)
         recoveryTask?.cancel()
@@ -706,6 +1033,7 @@ final class PDFWorkspaceState: ObservableObject {
         editHistory.reset()
         synchronizeHistoryPresentation()
         selectedPages = loaded.document.pageCount > 0 ? [0] : []
+        isPageGalleryVisible = false
         currentPageIndex = 0
         sidebarVisible = true
         gridLayoutMode = .balanced
@@ -728,6 +1056,7 @@ final class PDFWorkspaceState: ObservableObject {
             primeWidgetValues(on: firstPage)
         }
         refresh(L10n.format("status.opened_pages", loaded.document.pageCount))
+        bindAIConversationHistoryIfLoaded()
         return true
     }
 
@@ -736,8 +1065,13 @@ final class PDFWorkspaceState: ObservableObject {
         // unsaved-changes coordinator. Inline text is materialized, while a
         // review/AI sheet draft remains unapplied and therefore blocks close.
         // `closeDiscardingChanges()` is the explicit destructive API.
+        guard !isSaving else {
+            presentedError = L10n.string("error.save_in_progress")
+            return
+        }
         prepareForDeactivation()
-        guard !isDirty, !hasPendingReviewTextDraft else {
+        guard !isDirty, !hasPendingReviewTextDraft, pendingInlineTextEdit == nil,
+              !pluginNotesSession.isModified else {
             presentedError = L10n.string("error.unsaved_close")
             return
         }
@@ -750,6 +1084,14 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     private func resetDocumentState() {
+        cancelSelectedPagePDFExport()
+        saveCancellation?.cancel()
+        saveTask?.cancel()
+        saveTask = nil
+        saveOperationID = nil
+        saveCancellation = nil
+        isSaving = false
+        studyNoteRevealRequest = nil
         recoveryTask?.cancel()
         recoveryTask = nil
         recoveryStore?.remove(id: recoveryID)
@@ -763,6 +1105,8 @@ final class PDFWorkspaceState: ObservableObject {
         aiAssistantSession.documentDidChange()
         pluginPanelRequest = nil
         pendingProtectedExport = nil
+        cancelImageInsertion()
+        cancelPDFCompression()
         abandonOCR()
         cancelSearchAndInvalidate(clearResults: true)
         document = nil
@@ -805,6 +1149,7 @@ final class PDFWorkspaceState: ObservableObject {
         guard canHibernate, let document else { return false }
         prepareForDeactivation()
         guard canHibernate else { return false }
+        aiAssistantSession.cancelActiveRequest()
 
         hibernatedPageCount = document.pageCount
         pluginPanelRequest = nil
@@ -827,6 +1172,7 @@ final class PDFWorkspaceState: ObservableObject {
             ImagePDFConverter.removePreview(at: managedImagePreviewURL)
             self.managedImagePreviewURL = nil
         }
+        comparisonRevision = UUID()
         revision = UUID()
         return true
     }
@@ -839,6 +1185,7 @@ final class PDFWorkspaceState: ObservableObject {
         if let imageSourceURL,
            documentURL == imageSourceURL || documentURL.map({ !FileManager.default.fileExists(atPath: $0.path) }) == true {
             do {
+                aiAssistantSession.cancelActiveRequest()
                 documentURL = try ImagePDFConverter.makePreviewPDF(from: imageSourceURL)
                 managedImagePreviewURL = documentURL
             } catch {
@@ -877,10 +1224,12 @@ final class PDFWorkspaceState: ObservableObject {
             primeWidgetValues(on: page)
         }
         presentedError = nil
+        comparisonRevision = UUID()
         revision = UUID()
         // A recovered copy can be dirty while restored lazily. Once its PDF
         // graph is available it needs the same recovery protection as edits.
         if isDirty { scheduleRecoverySnapshot() }
+        bindAIConversationHistoryIfLoaded()
         return true
     }
 
@@ -892,7 +1241,7 @@ final class PDFWorkspaceState: ObservableObject {
         currentPageIndex requestedPageIndex: Int = 0,
         selectedPages requestedSelection: Set<Int> = []
     ) {
-        guard !isDirty, !hasPendingReviewTextDraft else { return }
+        guard !isDirty, !hasPendingReviewTextDraft, pendingInlineTextEdit == nil else { return }
         resetDocumentState()
         scopedAccess = SecurityScopedAccess(url: url)
         documentURL = url
@@ -907,7 +1256,18 @@ final class PDFWorkspaceState: ObservableObject {
             selectedPages = [currentPageIndex]
         }
         statusMessage = L10n.format("status.opened_pages", max(0, pageCount))
+        comparisonRevision = UUID()
         revision = UUID()
+    }
+
+    /// Retain a fresh grant selected by the user without replacing the loaded
+    /// document or its unsaved edits. A path hint is not an authorized URL.
+    func retainAuthorizedAccess(to url: URL) {
+        guard url.isFileURL, let documentURL,
+              PDFSourceFileVersion.refersToSameLocation(documentURL, url) else { return }
+        if documentURL != url { aiAssistantSession.cancelActiveRequest() }
+        scopedAccess = SecurityScopedAccess(url: url)
+        self.documentURL = url
     }
 
     func save() {
@@ -916,6 +1276,121 @@ final class PDFWorkspaceState: ObservableObject {
 
     func save(as url: URL) {
         _ = saveSynchronously(as: url)
+    }
+
+    /// A content token for staged close decisions. Localization and navigation
+    /// can change while saving without invalidating this exact PDF checkpoint.
+    var editStateID: UUID { editHistory.checkpoint }
+
+    func waitForSave() async { _ = await saveTask?.value }
+
+    func cancelSave() {
+        saveCancellation?.cancel()
+        saveTask?.cancel()
+    }
+
+    /// Capture one detached document on main, then confine all serialization,
+    /// catalog/tag work, validation and file coordination to the save worker.
+    /// Editing the live document may continue while this captured state saves.
+    @discardableResult
+    func saveAsynchronously(as requestedURL: URL? = nil) async -> Bool {
+        guard !isSaving, !isWritingOCRResult else { return false }
+        prepareForDeactivation()
+        guard pendingInlineTextEdit == nil else {
+            presentedError = presentedError ?? L10n.string("error.finish_inline_text_before_export")
+            return false
+        }
+        guard let document else {
+            presentedError = WorkspaceError.noDocument.localizedDescription
+            return false
+        }
+        do { try PDFDocumentSecurityPolicy.validateOrdinarySaveAllowed(document) }
+        catch { presentedError = error.localizedDescription; return false }
+        guard !requiresSaveDestination || requestedURL != nil,
+              let destination = requestedURL ?? documentURL else {
+            presentedError = L10n.string("error.choose_save_location")
+            return false
+        }
+        if let imageSourceURL, PDFSourceFileVersion.refersToSameLocation(imageSourceURL, destination) {
+            presentedError = L10n.string("error.save_copy_same_as_original")
+            return false
+        }
+        if requestedURL != nil, let original = documentURL,
+           PDFSourceFileVersion.refersToSameLocation(original, destination) {
+            presentedError = L10n.string("error.save_copy_same_as_original")
+            return false
+        }
+        let originalURL = documentURL
+        let checkpoint = editHistory.checkpoint
+        let operationID = UUID()
+        let cancellation = PDFSaveCancellation()
+        let writer = backgroundSaveWriter
+        let destinationAccess = SecurityScopedAccess(url: destination)
+        isSaving = true
+        saveOperationID = operationID
+        saveCancellation = cancellation
+        // Keep the last published recovery until a successful commit; only
+        // cancel its pending/private generation, which could duplicate tag work.
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        presentedError = nil
+        statusMessage = L10n.format("status.saving_file", destination.lastPathComponent)
+        do {
+            let request = try PDFBackgroundSaveRequest(destinationURL: destination,
+                originalURL: originalURL, imageSourceURL: imageSourceURL,
+                expectedSourceVersion: sourceFileVersion,
+                overwritingOriginal: requestedURL == nil,
+                retainingSourceAccess: scopedAccess)
+            let snapshot = try PDFRecoverySnapshot(capturing: document, retainingAccess: scopedAccess)
+            let task = Task { @MainActor [weak self] in
+                guard let self else { return false }
+                defer {
+                    if self.saveOperationID == operationID {
+                        self.saveOperationID = nil
+                        self.saveCancellation = nil
+                        self.isSaving = false
+                        self.saveTask = nil
+                        if self.isDirty { self.scheduleRecoverySnapshot() }
+                    }
+                }
+                do {
+                    let saved = try await writer(snapshot, request, cancellation)
+                    guard self.saveOperationID == operationID,
+                          self.document === document,
+                          self.documentURL == originalURL else { return false }
+                    // Mark the captured history position, not newer edits or
+                    // an unrelated localization refresh made while awaiting.
+                    self.acceptSavedDocument(saved, requestedURL: destination,
+                        retainingAccess: destinationAccess, document: document,
+                        checkpoint: checkpoint, refreshWidgetBaseline: false)
+                    return true
+                } catch is CancellationError {
+                    if self.saveOperationID == operationID {
+                        self.statusMessage = L10n.string("status.save_cancelled")
+                    }
+                    return false
+                } catch {
+                    if self.saveOperationID == operationID { self.presentedError = error.localizedDescription }
+                    return false
+                }
+            }
+            saveTask = task
+            return await withTaskCancellationHandler {
+                await task.value
+            } onCancel: {
+                cancellation.cancel()
+                task.cancel()
+            }
+        } catch {
+            if saveOperationID == operationID {
+                saveOperationID = nil
+                saveCancellation = nil
+                isSaving = false
+                presentedError = error.localizedDescription
+                if isDirty { scheduleRecoverySnapshot() }
+            }
+            return false
+        }
     }
 
     /// Ordinary PDFKit serialization is intentionally unavailable for an
@@ -1056,7 +1531,7 @@ final class PDFWorkspaceState: ObservableObject {
     func saveSynchronously(as requestedURL: URL? = nil) -> Bool {
         // [학습 05] 모델은 메뉴·화면·테스트에서 공통으로 사용하는 저장 절차를 담당합니다. 호출한 화면에서
         // 검사했더라도 이곳에서 편집 내용의 확정 여부, 권한, 저장 위치, 파일 버전을 다시 확인합니다.
-        guard !isWritingOCRResult else { return false }
+        guard !isWritingOCRResult, !isSaving else { return false }
         // `WorkspaceSaveCoordinator` already prepares the visible tab, but
         // this model API is also called directly by tests and future
         // integrations. Treat the model itself as the final durability
@@ -1068,6 +1543,10 @@ final class PDFWorkspaceState: ObservableObject {
         // This is idempotent. The first preparation clears a committed inline
         // draft, and subsequent calls merely observe the synchronized state.
         prepareForDeactivation()
+        guard pendingInlineTextEdit == nil else {
+            presentedError = presentedError ?? L10n.string("error.finish_inline_text_before_export")
+            return false
+        }
         guard let document else {
             presentedError = WorkspaceError.noDocument.localizedDescription
             return false
@@ -1154,31 +1633,45 @@ final class PDFWorkspaceState: ObservableObject {
                     version: try PDFSourceFileVersion.capture(at: resultingURL)
                 )
             }
-            let resultingURL = saved.url
-            // Keep the old backing file until PDFKit no longer depends on it.
-            // On successful Save As, future hibernation resumes the durable PDF.
-            imageSourceURL = nil
-            imageSourceAccess = nil
-            isRecoveryCopy = false
-            recoveryTask?.cancel()
-            recoveryStore?.remove(id: recoveryID)
-            recoveryWarning = nil
-            scopedAccess = resultingURL == url ? access : SecurityScopedAccess(url: resultingURL)
-            documentURL = resultingURL
-            sourceFileVersion = saved.version
-            hibernatedPageCount = nil
-            // OCR hashing is deliberately lazy and runs off the main actor.
-            // [학습 04·05] 저장해도 실행 취소(undo) 기록은 유지합니다. 파일 쓰기에 성공하면 현재 이력 위치를
-            // 저장 지점으로 표시하므로, 실행 취소로 이 위치에 돌아오면 미저장 변경이 없는 상태(clean)가 됩니다.
-            editHistory.markSaved()
-            synchronizeHistoryPresentation()
-            refreshPrimedWidgetValueSnapshot()
-            statusMessage = L10n.format("status.saved_file", resultingURL.lastPathComponent)
+            acceptSavedDocument(saved, requestedURL: url, retainingAccess: access,
+                document: document, checkpoint: editHistory.checkpoint)
             return true
         } catch {
             presentedError = error.localizedDescription
             return false
         }
+    }
+
+    /// The caller has already checked the document/generation identity. The
+    /// file can represent an earlier history position than the current editor.
+    private func acceptSavedDocument(_ saved: PDFSourceFileAccess.SavedDocument,
+                                     requestedURL: URL, retainingAccess access: SecurityScopedAccess,
+                                     document: PDFDocument, checkpoint: UUID,
+                                     refreshWidgetBaseline: Bool = true) {
+        let resultingURL = saved.url
+        imageSourceURL = nil
+        imageSourceAccess = nil
+        isRecoveryCopy = false
+        recoveryTask?.cancel()
+        recoveryStore?.remove(id: recoveryID)
+        recoveryWarning = nil
+        scopedAccess = resultingURL == requestedURL ? access : SecurityScopedAccess(url: resultingURL)
+        if documentURL?.standardizedFileURL != resultingURL.standardizedFileURL {
+            aiAssistantSession.documentDidChange()
+        }
+        documentURL = resultingURL
+        sourceFileVersion = saved.version
+        hibernatedPageCount = nil
+        editHistory.markSaved(at: checkpoint)
+        synchronizeHistoryPresentation()
+        // A field may have new input while the captured state writes. Its
+        // baseline was synchronized at capture; replacing it now could hide
+        // a not-yet-deactivated form edit from subsequent dirty detection.
+        if refreshWidgetBaseline { refreshPrimedWidgetValueSnapshot() }
+        statusMessage = L10n.format(isDirty ? "status.saved_earlier_edits" : "status.saved_file",
+                                   resultingURL.lastPathComponent)
+        appendSignedAssemblyNotice(for: document)
+        bindAIConversationHistoryIfLoaded()
     }
 
     func merge(urls: [URL], insertionIndex: Int? = nil) {
@@ -1195,84 +1688,51 @@ final class PDFWorkspaceState: ObservableObject {
 
         do {
             let beforeNavigation = navigationSnapshot
-            var pages: [PDFPage] = []
+            var imports: [PDFPageStructurePreserver.Import] = []
             for url in urls {
                 let access = SecurityScopedAccess(url: url)
-                let copiedPages: [PDFPage]? = try withExtendedLifetime(access) {
+                let imported: PDFPageStructurePreserver.Import? = try withExtendedLifetime(access) {
                     guard let loaded = try loadUnlockedDocument(at: url) else {
                         // Cancelling one protected input cancels the entire
                         // merge before the destination has been mutated.
                         return nil
                     }
                     let source = loaded.document
-                    try PDFDocumentSecurityPolicy.validateCanExtractPages(source)
-                    return try (0..<source.pageCount).map { index in
-                        guard
-                            let sourcePage = source.page(at: index),
-                            let copiedPage = PDFPageOperations.detachedCopy(of: sourcePage)
-                        else {
-                            throw WorkspaceError.operationFailed(
-                                L10n.format(
-                                    "error.copy_page_from_file",
-                                    url.lastPathComponent,
-                                    index + 1
-                                )
-                            )
-                        }
-                        return copiedPage
-                    }
+                    return try PDFPageStructurePreserver.prepareImport(
+                        from: source, indexes: Array(0..<source.pageCount))
                 }
-                guard let copiedPages else { return }
-                pages.append(contentsOf: copiedPages)
+                guard let imported else { return }
+                imports.append(imported)
             }
 
-            guard !pages.isEmpty else { return }
+            guard imports.contains(where: { !$0.pages.isEmpty }) else { return }
             // Page insertion changes indexes. Commit an editor whose draft is
             // addressed by page index while that index still identifies the
             // page on which the person typed.
             prepareForPageStructureMutation()
+            guard pendingInlineTextEdit == nil else { return }
             let requestedIndex = insertionIndex ?? document.pageCount
             let start = max(0, min(requestedIndex, document.pageCount))
-            for (offset, page) in pages.enumerated() {
-                document.insert(page, at: start + offset)
-            }
+            // Pages, internal destinations and the outline are one edit. Undo
+            // must restore all three together, including after saving.
+            let transaction = try PDFPageStructurePreserver.prepareMerge(
+                imports: imports, into: document, at: start)
+            try transaction.apply()
+            let pages = transaction.pages
             selectedPages = Set(start..<(start + pages.count))
             currentPageIndex = start
             resetWidgetSnapshotsAfterPageStructureMutation()
             let insertedCount = pages.count
             recordEdit(
                 actionName: L10n.format("status.merged_pages", insertedCount),
+                actionLocalization: .init(key: "status.merged_pages", integerArguments: [insertedCount]),
                 beforeNavigation: beforeNavigation,
                 invalidatingDocumentSelections: true,
                 retainedPageCost: insertedCount,
-                undo: {
-                    let indexes = pages.map(document.index(for:))
-                    guard indexes.allSatisfy({ $0 != NSNotFound }) else {
-                        throw WorkspaceError.operationFailed(
-                            L10n.string(
-                                "error.undo_page_state",
-                                defaultValue: "The pages are no longer in the expected state."
-                            )
-                        )
-                    }
-                    for index in indexes.sorted().reversed() {
-                        document.removePage(at: index)
-                    }
-                },
-                redo: {
-                    guard pages.allSatisfy({ document.index(for: $0) == NSNotFound }) else {
-                        throw WorkspaceError.operationFailed(
-                            L10n.string(
-                                "error.undo_page_state",
-                                defaultValue: "The pages are no longer in the expected state."
-                            )
-                        )
-                    }
-                    for (offset, page) in pages.enumerated() {
-                        document.insert(page, at: min(start + offset, document.pageCount))
-                    }
-                }
+                undo: { try transaction.undo() },
+                redo: { try transaction.redo() }
             )
+            appendSignedAssemblyNotice(for: document)
         } catch {
             presentedError = error.localizedDescription
         }
@@ -1290,13 +1750,13 @@ final class PDFWorkspaceState: ObservableObject {
             target >= 0,
             target <= document.pageCount,
             source != target,
-            source + 1 != target,
-            let page = document.page(at: source)
+            source + 1 != target
         else { return }
 
         // Moving the page first could make an index-addressed text draft land
         // on a different page. Text therefore becomes an earlier transaction.
         prepareForPageStructureMutation()
+        guard pendingInlineTextEdit == nil, let page = document.page(at: source) else { return }
         let beforeNavigation = navigationSnapshot
         document.removePage(at: source)
         let insertion = source < target ? target - 1 : target
@@ -1320,6 +1780,7 @@ final class PDFWorkspaceState: ObservableObject {
         }
         recordEdit(
             actionName: L10n.string("status.pages_reordered"),
+            actionLocalization: .init(key: "status.pages_reordered"),
             beforeNavigation: beforeNavigation,
             invalidatingDocumentSelections: true,
             undo: { try movePageObject(source) },
@@ -1334,6 +1795,70 @@ final class PDFWorkspaceState: ObservableObject {
         guard allows(.pageEditing) else { return }
         guard source >= 0, source < pageCount, source != pageCount - 1 else { return }
         movePage(from: source, before: pageCount)
+    }
+
+    /// Moves a discontiguous selection as one ordered group and one undoable
+    /// command. `target` addresses a gap before a page in the original PDF;
+    /// passing `pageCount` moves the selection to the end.
+    func moveSelectedPages(before target: Int) {
+        guard allows(.pageEditing) else { return }
+        guard
+            let document,
+            let plan = PDFPageGalleryMovePlan(
+                selectedPages: selectedPages,
+                before: target,
+                pageCount: document.pageCount
+            ),
+            plan.changesOrder
+        else { return }
+
+        // Settle page-indexed text and form edits before capturing page objects.
+        prepareForPageStructureMutation()
+        guard pendingInlineTextEdit == nil else { return }
+        let pages = plan.sourceIndexes.compactMap(document.page(at:))
+        guard pages.count == plan.sourceIndexes.count else { return }
+        let beforeNavigation = navigationSnapshot
+
+        let relocatePages: ([Int]) throws -> Void = { destinations in
+            let currentIndexes = pages.map(document.index(for:))
+            guard
+                currentIndexes.allSatisfy({ $0 != NSNotFound }),
+                Set(currentIndexes).count == pages.count,
+                destinations.count == pages.count,
+                destinations.allSatisfy({ $0 >= 0 && $0 < document.pageCount })
+            else {
+                throw WorkspaceError.operationFailed(
+                    L10n.string(
+                        "error.undo_page_state",
+                        defaultValue: "The pages are no longer in the expected state."
+                    )
+                )
+            }
+            for index in currentIndexes.sorted().reversed() {
+                document.removePage(at: index)
+            }
+            for (page, destination) in zip(pages, destinations) {
+                document.insert(page, at: destination)
+            }
+        }
+
+        do {
+            try relocatePages(plan.destinationIndexes)
+        } catch {
+            presentedError = error.localizedDescription
+            return
+        }
+        selectedPages = Set(plan.destinationIndexes)
+        currentPageIndex = plan.insertionIndex
+        resetWidgetSnapshotsAfterPageStructureMutation()
+        recordEdit(
+            actionName: L10n.string("status.pages_reordered"),
+            actionLocalization: .init(key: "status.pages_reordered"),
+            beforeNavigation: beforeNavigation,
+            invalidatingDocumentSelections: true,
+            undo: { try relocatePages(plan.sourceIndexes) },
+            redo: { try relocatePages(plan.destinationIndexes) }
+        )
     }
 
     func moveSelectedPage(by offset: Int) {
@@ -1363,13 +1888,12 @@ final class PDFWorkspaceState: ObservableObject {
             return
         }
 
+        // Capture page objects only after a body edit has replaced its page.
+        prepareForPageStructureMutation()
+        guard pendingInlineTextEdit == nil else { return }
         let oldSelection = selectedPages.sorted()
         let removedPages = oldSelection.compactMap(document.page(at:))
         guard removedPages.count == oldSelection.count else { return }
-
-        // A draft on a deleted page must be materialized before its PDFPage is
-        // detached from the document graph.
-        prepareForPageStructureMutation()
         let beforeNavigation = navigationSnapshot
         for index in oldSelection.reversed() {
             document.removePage(at: index)
@@ -1380,6 +1904,7 @@ final class PDFWorkspaceState: ObservableObject {
         resetWidgetSnapshotsAfterPageStructureMutation()
         recordEdit(
             actionName: L10n.format("status.deleted_pages", oldSelection.count),
+            actionLocalization: .init(key: "status.deleted_pages", integerArguments: [oldSelection.count]),
             beforeNavigation: beforeNavigation,
             invalidatingDocumentSelections: true,
             retainedPageCost: removedPages.count,
@@ -1421,6 +1946,8 @@ final class PDFWorkspaceState: ObservableObject {
             presentedError = WorkspaceError.noPagesSelected.localizedDescription
             return
         }
+        commitPendingInlineTextDraftIfNeeded()
+        guard pendingInlineTextEdit == nil else { return }
         let beforeNavigation = navigationSnapshot
         let rotations: [(page: PDFPage, before: Int, after: Int)] = selectedPages.sorted().compactMap {
             guard let page = document.page(at: $0) else { return nil }
@@ -1434,7 +1961,6 @@ final class PDFWorkspaceState: ObservableObject {
         guard !rotations.isEmpty else { return }
         // This also fixes history chronology for type -> toolbar rotate: text
         // is older, rotation is newer, so the first Undo reverses rotation.
-        commitPendingInlineTextDraftIfNeeded()
         rotations.forEach { $0.page.rotation = $0.after }
         let applyRotations: (Bool) throws -> Void = { usesFinalValue in
             guard rotations.allSatisfy({ document.index(for: $0.page) != NSNotFound }) else {
@@ -1449,6 +1975,7 @@ final class PDFWorkspaceState: ObservableObject {
         }
         recordEdit(
             actionName: L10n.string("status.rotated_pages"),
+            actionLocalization: .init(key: "status.rotated_pages"),
             beforeNavigation: beforeNavigation,
             invalidatingDocumentSelections: true,
             undo: { try applyRotations(false) },
@@ -1513,6 +2040,7 @@ final class PDFWorkspaceState: ObservableObject {
                 requestedIndexes.count,
                 url.lastPathComponent
             )
+            appendSignedAssemblyNotice(for: extracted)
         } catch {
             presentedError = error.localizedDescription
         }
@@ -1560,6 +2088,134 @@ final class PDFWorkspaceState: ObservableObject {
             )
         } catch {
             presentedError = error.localizedDescription
+        }
+    }
+
+    /// UI entry points keep the existing synchronous compatibility methods,
+    /// but serialize only a fresh selected-page document on the export worker.
+    @discardableResult
+    func exportSelectedPagesAsCombinedPDFAsynchronously(to url: URL) async -> Bool {
+        await exportSelectedPagesAsPDFAsynchronously(to: url, individually: false)
+    }
+
+    @discardableResult
+    func exportSelectedPagesAsIndividualPDFsAsynchronously(to directory: URL) async -> Bool {
+        await exportSelectedPagesAsPDFAsynchronously(to: directory, individually: true)
+    }
+
+    func waitForSelectedPagePDFExport() async {
+        while !selectedPDFExportDrains.isEmpty {
+            let pending = Array(selectedPDFExportDrains.values)
+            for drain in pending { await drain.value }
+        }
+    }
+
+    func cancelSelectedPagePDFExport() {
+        selectedPDFExportSession?.cancel()
+        selectedPDFExportTask?.cancel()
+        selectedPDFExportTask = nil
+        selectedPDFExportSession = nil
+        selectedPDFExportOperationID = nil
+        isExportingSelectedPages = false
+    }
+
+    private func exportSelectedPagesAsPDFAsynchronously(to destination: URL, individually: Bool) async -> Bool {
+        guard !isExportingSelectedPages else { return false }
+        guard document != nil, !selectedPages.isEmpty else {
+            presentedError = WorkspaceError.noPagesSelected.localizedDescription
+            return false
+        }
+        prepareForDeactivation()
+        guard pendingInlineTextEdit == nil else {
+            presentedError = L10n.string("error.finish_inline_text_before_export")
+            return false
+        }
+        guard let document else { return false }
+        let sourceURL = documentURL
+        let sourceIdentity = ObjectIdentifier(document)
+        let protectedURLs = [sourceURL, document.documentURL, imageSourceURL].compactMap { $0 }
+        let requestedIndexes = selectedPages.sorted()
+        do {
+            try PDFDocumentSecurityPolicy.validateCanExtractPages(document)
+            try PDFBackgroundExportSession.validateAdmissionAvailable()
+            let indexes = try PDFPageOperations.normalizedSelection(requestedIndexes, pageCount: document.pageCount)
+            let access = SecurityScopedAccess(url: destination)
+            var retainedAccess = [access]
+            if let scopedAccess { retainedAccess.append(scopedAccess) }
+            let precondition: PDFDestinationPrecondition?
+            if individually { precondition = nil }
+            else {
+                guard !protectedURLs.contains(where: { PDFSourceFileVersion.refersToSameLocation($0, destination) }) else {
+                    throw WorkspaceError.operationFailed(L10n.string("error.save_copy_same_as_original"))
+                }
+                precondition = try PDFDestinationPrecondition(destination: destination)
+            }
+            // This boundary also supports permission-authorized encrypted
+            // page extraction; RecoverySnapshot deliberately does not.
+            let extracted = try PDFPageOperations.extract(from: document, indexes: indexes)
+            let signedNotice = PDFCatalogStructurePreserver.needsMaterialization(extracted)
+                && PDFCatalogStructurePreserver.containsSignedOriginal(extracted)
+            let session = try backgroundExportSession(extracted, retainedAccess)
+            let operation = UUID()
+            isExportingSelectedPages = true
+            selectedPDFExportOperationID = operation
+            selectedPDFExportSession = session
+            presentedError = nil
+            statusMessage = L10n.format("status.saving_file", destination.lastPathComponent)
+            let task = Task { @MainActor [weak self] in
+                defer {
+                    session.cancel()
+                    if self?.selectedPDFExportOperationID == operation {
+                        self?.selectedPDFExportTask = nil
+                        self?.selectedPDFExportSession = nil
+                        self?.selectedPDFExportOperationID = nil
+                        self?.isExportingSelectedPages = false
+                    }
+                }
+                do {
+                    let savedURL: URL
+                    if individually {
+                        savedURL = try await session.exportIndividually(to: destination,
+                            originalPageIndices: indexes, sourceURL: sourceURL).directoryURL
+                    } else {
+                        savedURL = try await session.write(to: destination, protectedSourceURLs: protectedURLs,
+                            destinationPrecondition: precondition)
+                    }
+                    guard let self, self.selectedPDFExportOperationID == operation,
+                          let current = self.document, ObjectIdentifier(current) == sourceIdentity,
+                          self.documentURL == sourceURL else { return false }
+                    self.statusMessage = L10n.format(individually ? "status.exported_pages_individual" : "status.exported_pages_combined",
+                        indexes.count, savedURL.lastPathComponent)
+                    if !individually, signedNotice {
+                        self.statusMessage += " · " + L10n.string("page_structure.signed_original_notice")
+                    }
+                    return true
+                } catch is CancellationError {
+                    if self?.selectedPDFExportOperationID == operation {
+                        self?.statusMessage = L10n.string("builder.status.cancelled")
+                    }
+                    return false
+                } catch {
+                    if self?.selectedPDFExportOperationID == operation { self?.presentedError = error.localizedDescription }
+                    return false
+                }
+            }
+            selectedPDFExportTask = task
+            // Cancellation can finish the Task before its queued owner has
+            // released the PDF/admission. Keep every operation until the
+            // actual serial cleanup barrier, including successive cancels.
+            selectedPDFExportDrains[operation] = Task { @MainActor [weak self] in
+                _ = await task.value
+                await session.waitForCompletion()
+                _ = self?.selectedPDFExportDrains.removeValue(forKey: operation)
+            }
+            return await withTaskCancellationHandler { await task.value } onCancel: {
+                session.cancel()
+                task.cancel()
+            }
+        } catch {
+            presentedError = error.localizedDescription
+            return false
         }
     }
 
@@ -1653,9 +2309,16 @@ final class PDFWorkspaceState: ObservableObject {
         }
     }
 
+    func invalidatePDFViewportScrollPosition() {
+        pdfViewportState.invalidateScrollPosition()
+    }
+
     func preparePDFViewportForNavigationMode(_ mode: PDFPageNavigationMode) {
         guard pdfViewportState.navigationMode != mode else { return }
-        pdfViewportState.invalidateScrollPosition()
+        // The all-arrow option changes keys, not vertical page geometry.
+        if (pdfViewportState.navigationMode == .horizontalPaging) != (mode == .horizontalPaging) {
+            pdfViewportState.invalidateScrollPosition()
+        }
         pdfViewportState.navigationMode = mode
     }
 
@@ -1691,9 +2354,12 @@ final class PDFWorkspaceState: ObservableObject {
         autoScales: Bool,
         scaleFactor: CGFloat,
         scrollProgress: PDFScrollProgress?,
-        context: PDFViewerViewportContext = .normal
+        context: PDFViewerViewportContext = .normal,
+        usesCompactSpreads: Bool = false
     ) {
         var viewport = pdfViewportState(for: context)
+        if viewport.usesCompactSpreads != usesCompactSpreads { viewport.invalidateScrollPosition() }
+        viewport.usesCompactSpreads = usesCompactSpreads
         viewport.autoScales = autoScales
         if scaleFactor.isFinite, scaleFactor > 0 {
             viewport.scaleFactor = scaleFactor
@@ -1728,7 +2394,8 @@ final class PDFWorkspaceState: ObservableObject {
         verticalScrollProgress requestedVertical: CGFloat?,
         capturedPageIndex requestedCapturedPageIndex: Int? = nil,
         navigationMode requestedNavigationMode: PDFPageNavigationMode = .verticalScroll,
-        context: PDFViewerViewportContext = .normal
+        context: PDFViewerViewportContext = .normal,
+        usesCompactSpreads: Bool = false
     ) {
         let scaleFactor: CGFloat?
         if
@@ -1742,6 +2409,7 @@ final class PDFWorkspaceState: ObservableObject {
         }
 
         var restored = PDFViewerViewportState()
+        restored.usesCompactSpreads = context == .normal && usesCompactSpreads
         restored.navigationMode = context == .normal ? requestedNavigationMode : .verticalScroll
         restored.autoScales = requestedAutoScales != false || scaleFactor == nil
         restored.scaleFactor = scaleFactor
@@ -1774,6 +2442,8 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func requestTextEdit(pageIndex: Int, point: CGPoint, annotation: PDFAnnotation?) {
+        guard allows(.typedNotes), settleBodyTextBeforeMutation(),
+              let page = document?.page(at: pageIndex) else { return }
         if let annotation {
             let subtype = annotation.type?.trimmingCharacters(
                 in: CharacterSet(charactersIn: "/")
@@ -1781,7 +2451,7 @@ final class PDFWorkspaceState: ObservableObject {
             // The legacy sheet may adopt an unowned FreeText comment, but it
             // must never reinterpret a Widget, Stamp, Link, or other subtype
             // merely because those objects also expose a `contents` property.
-            guard subtype == "FreeText" else { return }
+            guard subtype == "FreeText", page.annotations.contains(where: { $0 === annotation }) else { return }
         }
         let initialText = annotation?.contents ?? ""
         let limited = InlineTextDraftLimiter.limit(initialText)
@@ -1796,6 +2466,8 @@ final class PDFWorkspaceState: ObservableObject {
             )
             return
         }
+        // A click in the PDF while writing must not replace the live draft.
+        guard pendingTextEdit == nil else { return }
         pendingTextAnnotation = annotation
         pendingTextEdit = PendingTextEdit(
             pageIndex: pageIndex,
@@ -1803,6 +2475,9 @@ final class PDFWorkspaceState: ObservableObject {
             isEditingExistingAnnotation: annotation != nil,
             initialText: limited.text
         )
+        // Keep the PDF available for selecting passages to insert in the note.
+        activeTool = .select
+        studyNotesVisible = true
     }
 
     /// Synchronizes the review sheet's local editor with the document model.
@@ -1812,15 +2487,226 @@ final class PDFWorkspaceState: ObservableObject {
     /// prevents a late callback from an outgoing sheet from overwriting a newer
     /// request that happens to use the same workspace.
     func updatePendingTextDraft(id: UUID, text: String) {
-        guard var pending = pendingTextEdit, pending.id == id else { return }
+        guard let pending = pendingTextEdit, pending.id == id else { return }
         let limited = InlineTextDraftLimiter.limit(text)
-        pending.initialText = limited.text
-        pendingTextEdit = pending
+        if pending.initialText != limited.text { pending.initialText = limited.text }
         if limited.wasTruncated {
             statusMessage = L10n.format(
                 "inline_text.length_limit",
                 InlineTextDraftLimiter.maximumCharacterCount
             )
+        }
+    }
+
+    /// Resolve the whole current selection before changing tools. A selection
+    /// spanning unsupported runs stays selected instead of editing its first word.
+    func selectTool(_ tool: WorkspaceTool) {
+        if tool == .text, allowsInlineTextEditing,
+           let draft = pendingInlineTextEdit, draft.purpose == .bodyText {
+            // An existing editor already transferred the selection to TextKit.
+            // The explicit button reveals that same draft; it must not commit
+            // and close it merely because its original PDFSelection is gone.
+            if let selectedLines = pendingBodyTextSelectionLines, selectedLines.draftID == draft.id {
+                pendingBodyTextFocus = selectedLines
+            }
+            isSettlingInlineTextForToolChange = true
+            defer { isSettlingInlineTextForToolChange = false }
+            activeTool = .text
+            return
+        }
+        if tool == .text, allowsInlineTextEditing, let selection = currentSelection {
+            if !requestBodyTextEdit(selection: selection, preservesSelectionTool: false),
+               presentedError == nil {
+                presentedError = L10n.string("body_text.error.unsupported")
+            }
+            // A selected passage is an edit request. Never turn a failed
+            // lookup into insertion mode and create a blank box on the next click.
+            return
+        }
+        activeTool = tool
+    }
+
+    /// Editing mode uses the ordinary drag selection as the initial NSTextView
+    /// range. Opening this draft is presentation only; typing replaces that
+    /// substring while its native run's prefix/suffix remain in the editor.
+    @discardableResult
+    func requestBodyTextEdit(
+        selection: PDFSelection,
+        preservesSelectionTool: Bool = true
+    ) -> Bool {
+        guard allowsInlineTextEditing, pendingTextEdit == nil,
+              let document, selection.pages.count == 1,
+              let page = selection.pages.first else { return false }
+        commitPendingInlineTextDraftIfNeeded()
+        guard pendingInlineTextEdit == nil else { return false }
+        let pageIndex = document.index(for: page)
+        guard pageIndex != NSNotFound else { return false }
+        do {
+            guard let target = try PDFBodyTextEditor.target(on: page, selection: selection),
+                  let selectedRange = target.initialSelectedRange else { return false }
+            // Set the mode before publishing a draft: activeTool's mutation
+            // boundary must not immediately commit the editor we're opening.
+            activeTool = preservesSelectionTool ? .select : .text
+            pendingBodyTextTarget = target
+            pendingBodyTextPage = page
+            let draft = PendingInlineTextEdit(
+                pageIndex: pageIndex, bounds: target.bounds,
+                isEditingExistingAnnotation: false, purpose: .bodyText,
+                text: target.text, style: target.style,
+                initialSelectedRange: selectedRange,
+                bodyTextBaseline: target.baseline,
+                bodyTextLineHeight: target.lineHeight,
+                bodyTextFirstLineIndent: target.firstLineIndent,
+                bodyTextSourceText: target.text, bodyTextSourceStyle: target.style,
+                bodyTextSourceRuns: target.sourceRuns,
+                bodyTextPreviewPaperColor: target.previewPaperColor
+            )
+            let lines = selection.selectionsByLine().map { $0.bounds(for: page) }.filter {
+                !$0.isEmpty && !$0.isNull
+                    && [$0.minX, $0.minY, $0.width, $0.height].allSatisfy(\.isFinite)
+            }
+            pendingBodyTextSelectionLines = lines.isEmpty ? nil : (draft.id, lines)
+            pendingBodyTextFocus = preservesSelectionTool ? nil : pendingBodyTextSelectionLines
+            pendingInlineTextEdit = draft
+            currentPageIndex = pageIndex
+            selectedPages = [pageIndex]
+            presentedError = nil
+            statusMessage = L10n.string("body_text.edit_hint", defaultValue:
+                "본문을 바로 수정합니다. 페이지의 다른 곳을 누르거나 ⌘Return을 누르면 적용됩니다.")
+            return true
+        } catch {
+            // Explicit button requests report failures. Programmatic selection
+            // previews keep ordinary selection/copy without a modal error.
+            if !preservesSelectionTool { presentedError = error.localizedDescription }
+            return false
+        }
+    }
+
+    /// The explicit Edit Text button reveals its selected lines once. Keeping
+    /// the request on the draft prevents a recreated overlay from scrolling
+    /// back after the user has navigated elsewhere.
+    func consumePendingBodyTextFocus(draftID: UUID) -> [CGRect]? {
+        guard pendingInlineTextEdit?.id == draftID,
+              let request = pendingBodyTextFocus, request.draftID == draftID else { return nil }
+        pendingBodyTextFocus = nil
+        return request.lines
+    }
+
+    /// Opens an exact native text run; blank page positions create real PDF
+    /// text. No annotation cover is created by this workflow.
+    @discardableResult
+    func requestBodyTextEdit(
+        pageIndex: Int,
+        point: CGPoint,
+        allowsInsertion: Bool = true
+    ) -> Bool {
+        guard allowsInlineTextEditing, pendingTextEdit == nil else { return false }
+        commitPendingInlineTextDraftIfNeeded()
+        guard pendingInlineTextEdit == nil,
+              let page = document?.page(at: pageIndex) else { return false }
+        do {
+            let target = try PDFBodyTextEditor.target(on: page, at: point)
+            guard target != nil || allowsInsertion else { return false }
+            let text = target?.text ?? ""
+            guard !InlineTextDraftLimiter.limit(text).wasTruncated else {
+                presentedError = L10n.format("inline_text.existing_length_limit",
+                                             InlineTextDraftLimiter.maximumCharacterCount)
+                return false
+            }
+            let bounds = target?.bounds ?? InlineTextGeometry.defaultBounds(
+                at: point, within: page.bounds(for: .cropBox)
+            )
+            guard !bounds.isEmpty else { return false }
+            // Select the tool before publishing the draft, just as the drag
+            // entry point does. A later tool change settles an existing draft.
+            activeTool = .text
+            pendingBodyTextTarget = target
+            pendingBodyTextPage = page
+            pendingInlineTextEdit = PendingInlineTextEdit(
+                pageIndex: pageIndex, bounds: bounds,
+                isEditingExistingAnnotation: false, purpose: .bodyText,
+                text: text, style: target?.style ?? .standard(for: .bodyText),
+                bodyTextBaseline: target?.baseline,
+                bodyTextLineHeight: target?.lineHeight,
+                bodyTextFirstLineIndent: target?.firstLineIndent ?? 0,
+                bodyTextSourceText: target?.text, bodyTextSourceStyle: target?.style,
+                bodyTextSourceRuns: target?.sourceRuns ?? [],
+                bodyTextPreviewPaperColor: target?.previewPaperColor
+            )
+            currentPageIndex = pageIndex
+            selectedPages = [pageIndex]
+            presentedError = nil
+            statusMessage = L10n.string("body_text.edit_hint", defaultValue:
+                "본문을 바로 수정합니다. 페이지의 다른 곳을 누르거나 ⌘Return을 누르면 적용됩니다.")
+            return true
+        } catch {
+            presentedError = error.localizedDescription
+            return false
+        }
+    }
+
+    private func commitPendingBodyText(
+        _ pending: PendingInlineTextEdit,
+        text: String,
+        style requestedStyle: InlineTextStyle,
+        bounds: CGRect
+    ) {
+        guard allowsInlineTextEditing, let document,
+              let page = document.page(at: pending.pageIndex), page === pendingBodyTextPage else {
+            presentedError = L10n.string("error.body_text_stale", defaultValue:
+                "편집 중인 페이지가 변경되었습니다. 편집을 취소한 뒤 텍스트를 다시 선택하세요.")
+            return
+        }
+        var style = requestedStyle
+        style.normalize()
+        let target = pendingBodyTextTarget
+        // Clicking then leaving a run must not replace its original font or
+        // produce an undo entry. A blank new draft is likewise a cancellation.
+        if (target == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            || (target?.text == text && target.map { original in
+                original.style.fontName == style.fontName
+                    && abs(original.style.fontSize - style.fontSize) < 0.0001
+                    && abs(original.style.horizontalScale - style.horizontalScale) < 0.0001
+                    && original.style.alignment == style.alignment
+                    && original.style.textColor.visuallyEquals(style.textColor)
+                    && original.style.backgroundColor.visuallyEquals(style.backgroundColor)
+            } == true && target?.bounds == bounds) {
+            clearPendingInlineTextEdit()
+            activeTool = .select
+            return
+        }
+        var failurePhase: PDFBodyTextFitDiagnostics.ApplyPhase = .replacementPage
+        do {
+            let replacement = try PDFBodyTextEditor.replacementPage(
+                for: page, target: target, text: text, style: style, bounds: bounds
+            )
+            failurePhase = .pageTransactionPreparation
+            let transaction = try PDFBodyPageReplacement(
+                document: document, pageIndex: pending.pageIndex,
+                original: page, replacement: replacement
+            )
+            let beforeNavigation = navigationSnapshot
+            failurePhase = .pageTransactionApply
+            try transaction.apply()
+            // Publish only after the edit is valid; a rejected edit keeps its
+            // draft available and Save refuses to omit it.
+            clearPendingInlineTextEdit()
+            activeTool = .select
+            resetWidgetSnapshotsAfterPageStructureMutation()
+            let actionKey: String
+            if text.isEmpty { actionKey = "status.body_text_deleted" }
+            else if target == nil { actionKey = "status.body_text_added" }
+            else { actionKey = "status.body_text_updated" }
+            let localization = PDFEditActionLocalization(key: actionKey)
+            recordEdit(actionName: localization.resolve(), actionLocalization: localization,
+                       beforeNavigation: beforeNavigation,
+                       invalidatingDocumentSelections: true, retainedPageCost: 1,
+                       preservesUntouchedLinkState: true,
+                       undo: { try transaction.undo() }, redo: { try transaction.apply() })
+            presentedError = nil
+        } catch {
+            PDFBodyTextFitDiagnostics.recordApplyFailure(failurePhase, error: error)
+            presentedError = error.localizedDescription
         }
     }
 
@@ -1841,13 +2727,14 @@ final class PDFWorkspaceState: ObservableObject {
         inlineTextEditRejectionReason = nil
         guard
             allowsInlineTextEditing,
-            pendingTextEdit == nil,
-            let page = document?.page(at: pageIndex)
+            pendingTextEdit == nil
         else { return false }
 
         // A programmatic request can arrive while a previous view is being
         // replaced. Preserve that draft before starting another transaction.
         commitPendingInlineTextDraftIfNeeded()
+        guard pendingInlineTextEdit == nil,
+              let page = document?.page(at: pageIndex) else { return false }
 
         let purpose: InlineTextEditPurpose
         let bounds: CGRect
@@ -1963,10 +2850,9 @@ final class PDFWorkspaceState: ObservableObject {
         let limited = InlineTextDraftLimiter.limit(text)
         pending.text = limited.text
         pending.style = style
-        pending.bounds = InlineTextGeometry.clamped(
-            requestedBounds,
-            within: page.bounds(for: .cropBox)
-        )
+        pending.bounds = pending.purpose == .bodyText && pendingBodyTextTarget != nil
+            ? pending.bounds
+            : InlineTextGeometry.clamped(requestedBounds, within: page.bounds(for: .cropBox))
         pendingInlineTextEdit = pending
         if limited.wasTruncated {
             let lengthNotice = L10n.format(
@@ -2011,6 +2897,14 @@ final class PDFWorkspaceState: ObservableObject {
         pendingInlineTextEditorOwnerID = nil
     }
 
+    /// A body commit replaces its PDFPage. Every new mutation must cross this
+    /// boundary before it acquires page objects or selections for its history.
+    private func settleBodyTextBeforeMutation() -> Bool {
+        guard pendingInlineTextEdit?.purpose == .bodyText else { return true }
+        commitPendingInlineTextDraftIfNeeded()
+        return pendingInlineTextEdit == nil
+    }
+
     /// Commits the last synchronized draft. Mode switching, saving, closing,
     /// tab switching, and PDFView dismantling all share this boundary.
     func commitPendingInlineTextDraftIfNeeded() {
@@ -2045,6 +2939,11 @@ final class PDFWorkspaceState: ObservableObject {
                 "inline_text.length_limit",
                 InlineTextDraftLimiter.maximumCharacterCount
             )
+            return
+        }
+
+        if pending.purpose == .bodyText {
+            commitPendingBodyText(pending, text: limited.text, style: requestedStyle, bounds: requestedBounds)
             return
         }
 
@@ -2099,6 +2998,7 @@ final class PDFWorkspaceState: ObservableObject {
                     "status.inline_text_updated",
                     defaultValue: "Text and appearance updated."
                 ),
+                actionLocalization: .init(key: "status.inline_text_updated"),
                 beforeNavigation: beforeNavigation,
                 undo: { original.apply(to: annotation) },
                 redo: { edited.apply(to: annotation) }
@@ -2132,6 +3032,8 @@ final class PDFWorkspaceState: ObservableObject {
                     defaultValue: "A visual text replacement was added; the original text remains underneath."
                 )
                 : L10n.string("status.text_added"),
+            actionLocalization: .init(key: pending.purpose == .visualReplacement
+                ? "status.visual_text_replacement_added" : "status.text_added"),
             beforeNavigation: beforeNavigation
         )
     }
@@ -2144,6 +3046,10 @@ final class PDFWorkspaceState: ObservableObject {
     private func clearPendingInlineTextEdit() {
         pendingInlineTextEdit = nil
         pendingInlineTextAnnotation = nil
+        pendingBodyTextTarget = nil
+        pendingBodyTextPage = nil
+        pendingBodyTextFocus = nil
+        pendingBodyTextSelectionLines = nil
         pendingInlineTextEditorOwnerID = nil
         inlineTextEditRejectionReason = nil
     }
@@ -2249,6 +3155,7 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func commitPendingText(_ text: String) {
+        guard allows(.typedNotes), settleBodyTextBeforeMutation() else { return }
         guard
             let pending = pendingTextEdit,
             let page = document?.page(at: pending.pageIndex)
@@ -2283,28 +3190,57 @@ final class PDFWorkspaceState: ObservableObject {
                 ) == "FreeText",
                 page.annotations.contains(where: { $0 === annotation })
             else { return }
+            if commitExistingStudyNoteText(annotation, on: page, text: committedText) { return }
             let originalText = annotation.contents
             let originalName = annotation.value(forAnnotationKey: .name) as? String
             let originalKind = EditableAnnotationIdentity.storedKind(of: annotation)
             let originalModificationDate = annotation.modificationDate
-            guard originalText != committedText else {
+            let originalBounds = annotation.bounds
+            let originalBackground = annotation.color
+            let originalForeground = annotation.fontColor
+            let isOwnedNote = EditableAnnotationIdentity.kind(of: annotation) == .freeText
+            let ink = PDFTextColor(annotation.fontColor ?? .black)
+            let hasDarkInk = max(ink.red, ink.green, ink.blue) < 0.3
+            let needsReadableBackground = isOwnedNote && hasDarkInk && annotation.color.alphaComponent < 0.05
+            let isReadableNote = isOwnedNote && hasDarkInk
+                && (needsReadableBackground || PDFTextColor(annotation.color).visuallyEquals(PDFTextColor(PDFStudyNoteAppearance.background)))
+            guard originalText != committedText || needsReadableBackground else {
                 activeTool = .select
                 return
             }
             annotation.contents = committedText
+            if needsReadableBackground {
+                annotation.color = PDFStudyNoteAppearance.background
+                annotation.fontColor = PDFStudyNoteAppearance.foreground
+            }
+            if isReadableNote {
+                annotation.bounds = PDFStudyNoteAppearance.bounds(
+                    text: committedText, font: annotation.font ?? .systemFont(ofSize: 15),
+                    anchor: CGPoint(x: originalBounds.minX, y: originalBounds.maxY),
+                    pageBounds: page.bounds(for: .cropBox), preferredWidth: originalBounds.width
+                )
+            }
             annotation.modificationDate = Date()
             _ = ensureID(for: annotation)
             EditableAnnotationIdentity.assign(.freeText, to: annotation)
             let editedName = annotation.value(forAnnotationKey: .name) as? String
             let editedKind = EditableAnnotationIdentity.storedKind(of: annotation)
             let editedModificationDate = annotation.modificationDate
+            let editedBounds = annotation.bounds
+            let editedBackground = annotation.color
+            let editedForeground = annotation.fontColor
             trustRuntimeAnnotation(annotation)
             activeTool = .select
             recordEdit(
                 actionName: L10n.string("status.text_updated"),
+                actionLocalization: .init(key: "status.text_updated"),
                 beforeNavigation: beforeNavigation,
+                affectedPageIndexes: [pending.pageIndex],
                 undo: {
                     annotation.contents = originalText
+                    annotation.bounds = originalBounds
+                    annotation.color = originalBackground
+                    annotation.fontColor = originalForeground
                     if let originalName {
                         annotation.setValue(originalName, forAnnotationKey: .name)
                     } else {
@@ -2315,6 +3251,9 @@ final class PDFWorkspaceState: ObservableObject {
                 },
                 redo: {
                     annotation.contents = committedText
+                    annotation.bounds = editedBounds
+                    annotation.color = editedBackground
+                    annotation.fontColor = editedForeground
                     if let editedName {
                         annotation.setValue(editedName, forAnnotationKey: .name)
                     } else {
@@ -2324,38 +3263,66 @@ final class PDFWorkspaceState: ObservableObject {
                     annotation.modificationDate = editedModificationDate
                 }
             )
+            if mode == .study { studyNotesVisible = true }
             return
         }
 
         let pageBounds = page.bounds(for: .cropBox)
-        let width = min(260.0, pageBounds.width * 0.55)
-        let height = 64.0
-        let origin = CGPoint(
-            x: min(max(pending.point.x, pageBounds.minX), pageBounds.maxX - width),
-            y: min(max(pending.point.y - height, pageBounds.minY), pageBounds.maxY - height)
-        )
-        let annotation = PDFAnnotation(
-            bounds: CGRect(origin: origin, size: CGSize(width: width, height: height)),
-            forType: .freeText,
-            withProperties: nil
+        let font = NSFont.systemFont(ofSize: 15)
+        let annotation = PDFStudyNoteAnnotation(
+            bounds: PDFStudyNoteAppearance.bounds(text: committedText, font: font,
+                                                  anchor: pending.point, pageBounds: pageBounds),
+            contents: committedText, font: font,
+            background: PDFStudyNoteAppearance.background, foreground: PDFStudyNoteAppearance.foreground
         )
         PDFAnnotationPrivacy.clearImplicitAuthor(on: annotation)
         annotation.contents = committedText
-        annotation.font = NSFont.systemFont(ofSize: 15)
-        annotation.fontColor = NSColor.black
-        annotation.color = .clear
+        annotation.font = font
+        annotation.fontColor = PDFStudyNoteAppearance.foreground
+        annotation.color = PDFStudyNoteAppearance.background
         let border = PDFBorder()
         border.lineWidth = 0
         annotation.border = border
         _ = ensureID(for: annotation)
+        _ = StudyLinkNoteIdentity.assignIfNeeded(to: annotation)
         EditableAnnotationIdentity.assign(.freeText, to: annotation)
         page.addAnnotation(annotation)
         activeTool = .select
         registerAnnotationAdditions(
             [(page: page, annotation: annotation)],
             message: L10n.string("status.text_added"),
+            actionLocalization: .init(key: "status.text_added"),
             beforeNavigation: beforeNavigation
         )
+        if mode == .study { studyNotesVisible = true }
+    }
+
+    /// Linking a concrete note may add a durable PDF identifier. This is a
+    /// reversible document edit, not authority inherited from PDF metadata.
+    @discardableResult
+    func ensureStudyLinkNoteIdentifier(_ annotation: PDFAnnotation) -> Bool {
+        guard let document, let page = annotation.page,
+              document.index(for: page) != NSNotFound,
+              page.annotations.contains(where: { $0 === annotation }),
+              annotation.type?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == "FreeText"
+        else { return false }
+        if StudyLinkNoteIdentity.identifier(in: annotation) != nil { return true }
+        guard allows(.typedNotes), pendingTextEdit == nil else { return false }
+        prepareForDeactivation()
+        guard self.document === document, document.index(for: page) != NSNotFound,
+              page.annotations.contains(where: { $0 === annotation }),
+              pendingInlineTextEdit == nil else { return false }
+        let original = annotation.value(forAnnotationKey: StudyLinkNoteIdentity.key)
+        let identifier = StudyLinkNoteIdentity.assignIfNeeded(to: annotation)
+        recordEdit(actionName: L10n.string("study.links.add"),
+                actionLocalization: .init(key: "study.links.add"), beforeNavigation: navigationSnapshot,
+                   affectedPageIndexes: [document.index(for: page)], undo: {
+            if let original { annotation.setValue(original, forAnnotationKey: StudyLinkNoteIdentity.key) }
+            else { annotation.removeValue(forAnnotationKey: StudyLinkNoteIdentity.key) }
+        }, redo: {
+            annotation.setValue(identifier, forAnnotationKey: StudyLinkNoteIdentity.key)
+        })
+        return true
     }
 
     func cancelPendingText() {
@@ -2427,6 +3394,9 @@ final class PDFWorkspaceState: ObservableObject {
 
     /// Plug-in edits use exactly the same permission and Undo boundary as UI marks.
     func applyPluginMarkup(kind: StudyMarkupKind, color: NSColor, width: CGFloat?, opacity: CGFloat?) throws {
+        guard allows(.markup), settleBodyTextBeforeMutation() else {
+            throw PluginSystemError.actionUnavailable(presentedError ?? L10n.string("plugins.command.unavailable"))
+        }
         guard allows(.markup), let document, let selection = currentSelection,
               !selection.pages.isEmpty,
               selection.pages.allSatisfy({ document.index(for: $0) != NSNotFound }) else {
@@ -2447,7 +3417,10 @@ final class PDFWorkspaceState: ObservableObject {
         thickness: CGFloat?,
         opacity: CGFloat
     ) {
-        guard let selection = currentSelection else {
+        guard allows(.markup), settleBodyTextBeforeMutation() else { return }
+        guard let selection = currentSelection,
+              let document,
+              selection.pages.allSatisfy({ document.index(for: $0) != NSNotFound }) else {
             presentedError = L10n.string("error.select_text_first")
             return
         }
@@ -2522,6 +3495,7 @@ final class PDFWorkspaceState: ObservableObject {
             message: kind == .highlight
                 ? L10n.string("status.highlight_added")
                 : L10n.string("study.status.underline_added", defaultValue: "밑줄을 추가했습니다."),
+            actionLocalization: .init(key: kind == .highlight ? "status.highlight_added" : "study.status.underline_added"),
             beforeNavigation: beforeNavigation
         )
     }
@@ -2531,7 +3505,7 @@ final class PDFWorkspaceState: ObservableObject {
         // A signature sheet is presented asynchronously. The user can switch
         // to Study mode through the global mode shortcut while that sheet is
         // still alive, so the final model mutation must re-check capability.
-        guard allows(.signature) else { return false }
+        guard allows(.signature), settleBodyTextBeforeMutation() else { return false }
         guard
             let document,
             !strokes.isEmpty,
@@ -2657,72 +3631,96 @@ final class PDFWorkspaceState: ObservableObject {
         registerAnnotationAdditions(
             [(page: page, annotation: annotation)],
             message: L10n.string("status.signature_added"),
+            actionLocalization: .init(key: "status.signature_added"),
             beforeNavigation: beforeNavigation
         )
         return true
     }
 
+    /// Every UI/integration entry point requests explicit quality approval.
     func insertImage(url: URL) {
-        // The open panel/drop target already follows the toolbar policy, but a
-        // stale callback or direct model caller must not bypass the mode. This
-        // early guard also avoids reading a security-scoped file when the
-        // operation is no longer authorized.
-        guard allows(.imageInsertion) else { return }
-        guard
-            let document,
-            let page = document.page(at: min(currentPageIndex, max(0, document.pageCount - 1)))
-        else {
-            presentedError = WorkspaceError.noDocument.localizedDescription
-            return
+        requestImageInsertion(urls: [url])
+    }
+
+    func requestImageInsertion(urls: [URL]) {
+        guard allows(.imageInsertion), !urls.isEmpty, urls.count <= 100,
+              pendingImageInsertion == nil, pendingPDFCompression == nil,
+              !isPreparingPDFCompression, !isWritingOCRResult,
+              settleBodyTextBeforeMutation(), let document,
+              let page = document.page(at: currentPageIndex) else { return }
+        prepareForDeactivation()
+        guard pendingInlineTextEdit == nil, !hasPendingReviewTextDraft else { return }
+        pendingImageInsertion = ImageInsertionRequest(urls: urls,
+            documentIdentity: ObjectIdentifier(document), documentRevision: revision,
+            pageIdentity: ObjectIdentifier(page), pageIndex: currentPageIndex)
+        presentedError = nil
+    }
+
+    func cancelImageInsertion() { pendingImageInsertion = nil }
+
+    @discardableResult
+    func approveImageInsertion(_ request: ImageInsertionRequest,
+                               images: [PreparedImageInsertion]) -> Bool {
+        guard pendingImageInsertion?.id == request.id else { return false }
+        prepareForDeactivation()
+        guard allows(.imageInsertion), let document,
+              ObjectIdentifier(document) == request.documentIdentity,
+              revision == request.documentRevision,
+              let page = document.page(at: request.pageIndex),
+              ObjectIdentifier(page) == request.pageIdentity,
+              pendingInlineTextEdit == nil, !hasPendingReviewTextDraft,
+              images.count == request.urls.count,
+              zip(images, request.urls).allSatisfy({ $0.sourceURL == $1 }) else {
+            cancelImageInsertion()
+            presentedError = L10n.string("compression.document_changed",
+                defaultValue: "문서가 변경되었습니다. 다시 시도해 주세요.")
+            return false
         }
         let beforeNavigation = navigationSnapshot
-        let access = SecurityScopedAccess(url: url)
-        let image: NSImage
-        do {
-            image = try BoundedImageLoader().load(at: url)
-        } catch {
-            _ = access
-            presentedError = error.localizedDescription
-            return
-        }
-
         let pageBounds = page.bounds(for: .cropBox)
-        let maximum = CGSize(width: pageBounds.width * 0.44, height: pageBounds.height * 0.34)
-        let scale = min(maximum.width / image.size.width, maximum.height / image.size.height, 1)
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let bounds = CGRect(
-            x: pageBounds.midX - size.width / 2,
-            y: pageBounds.midY - size.height / 2,
-            width: size.width,
-            height: size.height
-        )
-        let annotation = ImageStampAnnotation(image: image, bounds: bounds)
-        _ = ImageAnnotationIdentity.assign(to: annotation)
-        annotation.color = .clear
-        let border = PDFBorder()
-        border.lineWidth = 0
-        annotation.border = border
-        // Image decoding can invoke framework work before returning. Recheck
-        // immediately beside the PDF mutation, matching the signature path's
-        // final authority boundary.
-        guard allows(.imageInsertion) else {
-            _ = access
-            return
+        // Build the entire batch before mutating the page. Cancel/failure never
+        // leaves a partially inserted batch or a hidden change in undo history.
+        var additions: [(page: PDFPage, annotation: PDFAnnotation)] = []
+        for prepared in images {
+            let image = prepared.image
+            guard image.size.width.isFinite, image.size.height.isFinite,
+                  image.size.width > 0, image.size.height > 0 else { return false }
+            let maximum = CGSize(width: pageBounds.width * 0.44, height: pageBounds.height * 0.34)
+            let scale = min(maximum.width / image.size.width, maximum.height / image.size.height, 1)
+            let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            let bounds = CGRect(x: pageBounds.midX - size.width / 2,
+                y: pageBounds.midY - size.height / 2, width: size.width, height: size.height)
+            let annotation = ImageStampAnnotation(image: image, bounds: bounds,
+                originalJPEG: prepared.originalJPEG)
+            _ = ImageAnnotationIdentity.assign(to: annotation)
+            annotation.color = .clear
+            let border = PDFBorder()
+            border.lineWidth = 0
+            annotation.border = border
+            additions.append((page, annotation))
         }
-        page.addAnnotation(annotation)
-        _ = access
+        cancelImageInsertion()
+        additions.forEach { $0.page.addAnnotation($0.annotation) }
         activeTool = .select
-        registerAnnotationAdditions(
-            [(page: page, annotation: annotation)],
-            message: L10n.string("status.image_added"),
-            beforeNavigation: beforeNavigation
-        )
+        registerAnnotationAdditions(additions, message: L10n.string("status.image_added"),
+            actionLocalization: .init(key: "status.image_added"), beforeNavigation: beforeNavigation)
+        return true
     }
 
     /// Reverses the latest edit belonging to this document. Navigation and
     /// dirty state are restored from the same command, so each tab has an
     /// independent 22-step history and its own saved checkpoint.
     func undo() {
+        // A drag can still own unregistered page changes when Cmd-Z arrives.
+        // Settle it before choosing which document command to undo.
+        commitRegisteredViewEditors()
+        // The AppKit router handles character-level undo while the text view
+        // owns focus. A document-level command must settle the draft before
+        // traversing earlier page objects retained by history.
+        if pendingInlineTextEdit?.purpose == .bodyText {
+            commitPendingInlineTextDraftIfNeeded()
+            guard pendingInlineTextEdit == nil else { return }
+        }
         do {
             guard let command = try editHistory.undo() else { return }
             restoreNavigation(command.beforeNavigation)
@@ -2734,6 +3732,11 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func redo() {
+        commitRegisteredViewEditors()
+        if pendingInlineTextEdit?.purpose == .bodyText {
+            commitPendingInlineTextDraftIfNeeded()
+            guard pendingInlineTextEdit == nil else { return }
+        }
         do {
             guard let command = try editHistory.redo() else { return }
             restoreNavigation(command.afterNavigation)
@@ -2750,12 +3753,14 @@ final class PDFWorkspaceState: ObservableObject {
     func registerAddedAnnotation(
         _ annotation: PDFAnnotation,
         on page: PDFPage,
-        message: String
+        message: String,
+        actionLocalization: PDFEditActionLocalization? = nil
     ) {
         let before = navigationSnapshot
         registerAnnotationAdditions(
             [(page: page, annotation: annotation)],
             message: message,
+            actionLocalization: actionLocalization,
             beforeNavigation: before
         )
     }
@@ -2766,7 +3771,8 @@ final class PDFWorkspaceState: ObservableObject {
         _ annotation: PDFAnnotation,
         from page: PDFPage,
         originalIndex: Int,
-        message: String
+        message: String,
+        actionLocalization: PDFEditActionLocalization? = nil
     ) {
         let finalOrder = page.annotations
         var originalOrder = finalOrder
@@ -2778,7 +3784,8 @@ final class PDFWorkspaceState: ObservableObject {
             on: page,
             from: originalOrder,
             to: finalOrder,
-            message: message
+            message: message,
+            actionLocalization: actionLocalization
         )
     }
 
@@ -2790,7 +3797,8 @@ final class PDFWorkspaceState: ObservableObject {
         from originalBounds: CGRect,
         originalCropRect: CGRect? = nil,
         originalModificationDate: Date?,
-        message: String
+        message: String,
+        actionLocalization: PDFEditActionLocalization? = nil
     ) {
         guard
             let document,
@@ -2806,7 +3814,8 @@ final class PDFWorkspaceState: ObservableObject {
         // adoption surface: its concrete policy accepts a recognized persisted
         // object, and only a real change below grants current-session trust.
         guard
-            let kind = EditableAnnotationIdentity.kind(of: annotation),
+            let kind = EditableAnnotationIdentity.kind(of: annotation)
+                ?? (isExplicitlySelectedStudyNote(annotation) ? .freeText : nil),
             allowsAnnotationEditing(kind, annotation: annotation)
         else {
             annotation.bounds = originalBounds
@@ -2832,6 +3841,9 @@ final class PDFWorkspaceState: ObservableObject {
             annotation.modificationDate = originalModificationDate
             return
         }
+        if commitReopenedStudyNoteGeometry(annotation, on: page,
+            originalBounds: originalBounds, originalModificationDate: originalModificationDate,
+            message: message, actionLocalization: actionLocalization) { return }
         // A real, validated geometry change in Editing mode is an explicit
         // adoption action. This lets the same concrete signature/FreeText be
         // adjusted in Viewer after returning there, without ever trusting the
@@ -2841,7 +3853,9 @@ final class PDFWorkspaceState: ObservableObject {
         let before = navigationSnapshot
         recordEdit(
             actionName: message,
+            actionLocalization: actionLocalization,
             beforeNavigation: before,
+            affectedPageIndexes: [document.index(for: page)],
             undo: {
                 guard
                     document.index(for: page) != NSNotFound,
@@ -2887,7 +3901,8 @@ final class PDFWorkspaceState: ObservableObject {
         on page: PDFPage,
         from originalOrder: [PDFAnnotation],
         to finalOrder: [PDFAnnotation],
-        message: String
+        message: String,
+        actionLocalization: PDFEditActionLocalization? = nil
     ) {
         let owningDocument = document
         if let owningDocument, owningDocument.index(for: page) == NSNotFound {
@@ -2917,10 +3932,49 @@ final class PDFWorkspaceState: ObservableObject {
         }
         recordEdit(
             actionName: message,
+            actionLocalization: actionLocalization,
             beforeNavigation: before,
+            affectedPageIndexes: owningDocument.map { [$0.index(for: page)] },
             undo: { try restore(finalOrder, originalOrder) },
             redo: { try restore(originalOrder, finalOrder) }
         )
+    }
+
+    /// A multi-page visibility action is atomic and one history command.
+    /// Validate every target before applying any flag, including on Undo/Redo.
+    func applyStudyNoteVisibilityChanges(_ changes: [PDFStudyNoteVisibilityChange], actionName: String,
+                                         actionLocalization: PDFEditActionLocalization? = nil) -> Bool {
+        guard mode == .study, allows(.typedNotes), pendingTextEdit == nil, pendingInlineTextEdit == nil,
+              let owningDocument = document, !owningDocument.isLocked, !changes.isEmpty,
+              changes.allSatisfy({ $0.annotation.type?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == "FreeText" })
+        else { return false }
+        let restore: (Bool) throws -> Void = { useFinal in
+            guard changes.allSatisfy({ change in
+                owningDocument.index(for: change.page) != NSNotFound
+                    && change.page.annotations.contains(where: { $0 === change.annotation })
+                    && (useFinal ? change.original : change.final).matches(change.annotation)
+            }) else {
+                throw WorkspaceError.operationFailed(L10n.string("error.undo_annotation_state"))
+            }
+            for change in changes {
+                (useFinal ? change.final : change.original).apply(to: change.annotation)
+            }
+        }
+        do { try restore(true) } catch { return false }
+        recordEdit(actionName: actionName, actionLocalization: actionLocalization, beforeNavigation: navigationSnapshot,
+            affectedPageIndexes: Set(changes.map { owningDocument.index(for: $0.page) }),
+            undo: { try restore(false) }, redo: { try restore(true) })
+        return true
+    }
+
+    /// One completed eraser drag is one reversible annotation replacement.
+    func registerEraserGesture(on page: PDFPage, from original: [PDFAnnotation], to final: [PDFAnnotation]) {
+        guard let document, document.index(for: page) != NSNotFound else { return }
+        let originals = Set(original.map(ObjectIdentifier.init))
+        final.filter { !originals.contains(ObjectIdentifier($0)) }.forEach(trustRuntimeAnnotation)
+        registerAnnotationOrderChange(on: page, from: original, to: final,
+            message: L10n.string("eraser.changed", defaultValue: "필기를 지웠습니다."),
+            actionLocalization: .init(key: "eraser.changed"))
     }
 
     private static func approximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
@@ -2940,6 +3994,7 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func annotationChanged(message: String? = nil) {
+        if let document { PDFCatalogStructurePreserver.recordExplicitAnnotationEdit(in: document) }
         markChanged(message ?? L10n.string("status.annotation_changed"))
     }
 
@@ -3045,6 +4100,7 @@ final class PDFWorkspaceState: ObservableObject {
         }
         recordEdit(
             actionName: L10n.string("status.form_changed"),
+            actionLocalization: .init(key: "status.form_changed"),
             beforeNavigation: beforeNavigation,
             undo: { beforeValues.forEach { $0.apply() } },
             redo: { afterValues.forEach { $0.apply() } }
@@ -3060,7 +4116,9 @@ final class PDFWorkspaceState: ObservableObject {
             pageIndex != NSNotFound,
             !widgetSnapshotPrimedPages.contains(pageIndex)
         else { return }
-        widgetValueSnapshot.merge(currentWidgetValueSnapshot(on: page)) {
+        let values = currentWidgetValueSnapshot(on: page)
+        if !values.isEmpty { PDFCanonicalFormMaterializer.mark(document) }
+        widgetValueSnapshot.merge(values) {
             _, replacement in replacement
         }
         widgetUndoValueSnapshot.merge(currentWidgetUndoValueSnapshot(on: page)) {
@@ -3117,6 +4175,7 @@ final class PDFWorkspaceState: ObservableObject {
             invalidateDocumentSelections()
             editHistory.reset()
             synchronizeHistoryPresentation()
+            comparisonRevision = UUID()
             revision = UUID()
         }
 
@@ -3148,6 +4207,7 @@ final class PDFWorkspaceState: ObservableObject {
             if let page = recovered.document.page(at: currentPageIndex) {
                 primeWidgetValues(on: page)
             }
+            comparisonRevision = UUID()
             revision = UUID()
         } catch {
             clearUntrustedGraph()
@@ -3155,7 +4215,21 @@ final class PDFWorkspaceState: ObservableObject {
         presentedError = message
     }
 
+    /// Return and Shift-Return navigate an ongoing or completed search.
+    /// Submitting after a cancellation starts a fresh scan.
+    func submitSearch(backwards: Bool = false) {
+        cancelPendingSearch()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty, query == searchQueryForResults, searchProgress.phase != .cancelled {
+            showNextSearchResult(backwards: backwards)
+        } else {
+            performSearch()
+            if backwards, isSearching { pendingSearchResultIndex = -1 }
+        }
+    }
+
     func performSearch() {
+        let anchor = currentPageIndex
         let engine = PDFSearchEngine(configuration: searchEngineConfiguration)
         let query = engine.prepare(query: searchText)
         cancelSearchAndInvalidate(clearResults: true)
@@ -3170,6 +4244,9 @@ final class PDFWorkspaceState: ObservableObject {
         let generation = UUID()
         searchGeneration = generation
         let startingRevision = revision
+        let pageOrder = PDFSearchPageOrder(pageCount: document.pageCount, startingAt: anchor)
+        searchAnchorPageIndex = pageOrder.anchorPageIndex
+        searchQueryForResults = query.source
         activeSearchQuery = query.source
         searchCompletedQuery = nil
         isSearching = true
@@ -3193,7 +4270,7 @@ final class PDFWorkspaceState: ObservableObject {
             var scannedPages = 0
             var truncated = false
 
-            for pageIndex in 0..<document.pageCount {
+            for pageIndex in pageOrder {
                 guard
                     !Task.isCancelled,
                     self.searchIsCurrent(
@@ -3238,10 +4315,16 @@ final class PDFWorkspaceState: ObservableObject {
                 pendingResults.append(contentsOf: outcome.results)
                 pendingTextlessPages += outcome.hasExtractableText ? 0 : 1
                 truncated = truncated || outcome.reachedPageLimit
-                scannedPages = pageIndex + 1
+                scannedPages += 1
                 pagesSincePublication += 1
 
-                let shouldPublish = pagesSincePublication
+                // Make current-page hits usable immediately. Once the first
+                // result is known, any queued navigation also receives new
+                // matches without waiting for a six-page UI batch.
+                let shouldPublish = scannedPages == 1
+                    || (self.searchNavigatorResults.isEmpty && !pendingResults.isEmpty)
+                    || (self.pendingSearchResultIndex != nil && !pendingResults.isEmpty)
+                    || pagesSincePublication
                         >= engine.configuration.publicationPageBatch
                     || pendingResults.count >= engine.configuration.publicationResultBatch
                     || scannedPages == document.pageCount
@@ -3310,23 +4393,43 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func showNextSearchResult(backwards: Bool = false) {
-        guard !searchNavigatorResults.isEmpty else {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, query == searchQueryForResults else {
             performSearch()
+            if backwards, isSearching { pendingSearchResultIndex = -1 }
             return
         }
-        if backwards {
-            searchResultIndex = (
-                searchResultIndex - 1 + searchNavigatorResults.count
-            ) % searchNavigatorResults.count
-        } else {
-            searchResultIndex = (searchResultIndex + 1) % searchNavigatorResults.count
+        guard isSearching || !searchNavigatorResults.isEmpty else {
+            if searchProgress.phase == .cancelled {
+                performSearch()
+                if backwards, isSearching { pendingSearchResultIndex = -1 }
+            } else {
+                statusMessage = L10n.string("status.search_no_results")
+            }
+            return
         }
-        activateSearchResult(at: searchResultIndex)
-        statusMessage = L10n.format(
-            "status.search_position",
-            searchResultIndex + 1,
-            searchNavigatorResults.count
-        )
+        let base = pendingSearchResultIndex ?? searchResultIndex
+        let (requested, overflow) = base.addingReportingOverflow(backwards ? -1 : 1)
+        guard !overflow else { return }
+        if isSearching, !searchNavigatorResults.indices.contains(requested) {
+            // At the current end, wait for the true next occurrence rather
+            // than repeatedly jumping back to the first partial result.
+            pendingSearchResultIndex = requested
+            return
+        }
+        pendingSearchResultIndex = requested
+        resolvePendingSearchNavigation()
+    }
+
+    private func resolvePendingSearchNavigation() {
+        guard let requested = pendingSearchResultIndex, !searchNavigatorResults.isEmpty else { return }
+        if isSearching, !searchNavigatorResults.indices.contains(requested) { return }
+        let count = searchNavigatorResults.count
+        let index = ((requested % count) + count) % count
+        pendingSearchResultIndex = nil
+        searchResultIndex = index
+        activateSearchResult(at: index)
+        statusMessage = L10n.format("status.search_position", index + 1, count)
     }
 
     func selectSearchResult(id: PDFSearchResult.ID) {
@@ -3338,6 +4441,8 @@ final class PDFWorkspaceState: ObservableObject {
 
     func selectSearchResult(at index: Int) {
         guard searchNavigatorResults.indices.contains(index) else { return }
+        // Clicking a concrete result cancels any queued next/previous request.
+        pendingSearchResultIndex = nil
         searchResultIndex = index
         activateSearchResult(at: index)
         statusMessage = L10n.format(
@@ -3347,17 +4452,67 @@ final class PDFWorkspaceState: ObservableObject {
         )
     }
 
+    /// Activate a lightweight gallery hit without repeating a whole-document
+    /// search. Revalidate against the live PDF: a cached range can be stale
+    /// after file replacement, OCR, or a page edit while the gallery is open.
+    @discardableResult
+    func activateGallerySearchResult(_ result: PDFSearchResult) -> Bool {
+        guard
+            allows(.documentSearch),
+            let document, !document.isLocked,
+            result.pageIndex >= 0, result.pageIndex < document.pageCount,
+            let page = document.page(at: result.pageIndex),
+            let sourceText = page.string,
+            result.sourceRange.location >= 0,
+            result.sourceRange.length > 0,
+            result.sourceRange.location <= (sourceText as NSString).length,
+            result.sourceRange.length
+                <= (sourceText as NSString).length - result.sourceRange.location,
+            result.sourceRange.location <= page.numberOfCharacters,
+            result.sourceRange.length
+                <= page.numberOfCharacters - result.sourceRange.location,
+            !result.matchedText.isEmpty,
+            (sourceText as NSString).substring(with: result.sourceRange) == result.matchedText,
+            let selection = page.selection(for: result.sourceRange)
+        else {
+            statusMessage = L10n.string(
+                "gallery.search.stale_result",
+                defaultValue: "문서가 변경되어 검색 위치를 확인할 수 없습니다. 갤러리에서 다시 검색해 주세요."
+            )
+            return false
+        }
+
+        // Only a validated hit may replace an existing query/selection. There
+        // is no full-search navigator count to invent for this single result.
+        clearSearch()
+        // When the reader is remounted, its delayed viewport restoration must
+        // not pull this exact hit back to a formerly saved position on the
+        // same page. Retain zoom but let the new selection own the scroll.
+        pdfViewportState.invalidateScrollPosition()
+        setCurrentPage(result.pageIndex)
+        activeSearchSelection = selection
+        currentSelection = selection
+        searchResults = [selection]
+        statusMessage = L10n.string(
+            "gallery.search.opened_result",
+            defaultValue: "검색된 부분으로 이동했습니다."
+        )
+        return true
+    }
+
     /// Stops page scanning without converting a read-only operation into a
     /// document edit. Partial results remain available until the query changes
     /// or the user explicitly clears them.
     func cancelSearch() {
-        guard isSearching || searchTask != nil else { return }
+        guard isSearchPending || isSearching || searchTask != nil || searchDebounceTask != nil else { return }
+        cancelPendingSearch()
         searchGeneration = UUID()
         searchTask?.cancel()
         searchTask = nil
         isSearching = false
         activeSearchQuery = nil
         searchProgress.phase = .cancelled
+        pendingSearchResultIndex = nil
         searchProgress.resultCount = searchNavigatorResults.count
         // A cancelled partial scan cannot establish that the whole document
         // lacks a searchable text layer.
@@ -3374,10 +4529,39 @@ final class PDFWorkspaceState: ObservableObject {
 
     private func searchQueryDidChange() {
         cancelSearchAndInvalidate(clearResults: true)
-        resetSearchPresentation()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, let document else { return }
+        let generation = searchGeneration, startingRevision = revision
+        let delay = searchDebounceDelay
+        isSearchPending = true
+        // Do not retain the workspace or PDF while the user is still typing.
+        // Query preparation/page extraction stays in the existing scan and
+        // starts only after this cancellable pause.
+        searchDebounceTask = Task { @MainActor [weak self, weak document] in
+            guard !Task.isCancelled else { return }
+            do { try await delay() }
+            catch {
+                guard let self, self.searchGeneration == generation else { return }
+                self.searchDebounceTask = nil; self.isSearchPending = false
+                return
+            }
+            guard !Task.isCancelled, let self, self.searchGeneration == generation else { return }
+            self.searchDebounceTask = nil
+            self.isSearchPending = false
+            guard let document, self.searchIsCurrent(generation: generation,
+                document: document, startingRevision: startingRevision, query: query) else { return }
+            self.performSearch()
+        }
+    }
+
+    private func cancelPendingSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = nil
+        isSearchPending = false
     }
 
     private func cancelSearchAndInvalidate(clearResults: Bool) {
+        cancelPendingSearch()
         searchGeneration = UUID()
         searchTask?.cancel()
         searchTask = nil
@@ -3400,6 +4584,9 @@ final class PDFWorkspaceState: ObservableObject {
         searchResultsWereTruncated = false
         activeSearchQuery = nil
         searchCompletedQuery = nil
+        searchAnchorPageIndex = nil
+        searchQueryForResults = nil
+        pendingSearchResultIndex = nil
     }
 
     private func searchIsCurrent(
@@ -3445,6 +4632,7 @@ final class PDFWorkspaceState: ObservableObject {
             searchResultIndex = 0
             activateSearchResult(at: 0)
         }
+        resolvePendingSearchNavigation()
     }
 
     private func finishSearch(
@@ -3481,6 +4669,8 @@ final class PDFWorkspaceState: ObservableObject {
         statusMessage = searchNavigatorResults.isEmpty
             ? L10n.string("status.search_no_results")
             : L10n.format("status.search_results", searchNavigatorResults.count)
+        resolvePendingSearchNavigation()
+        pendingSearchResultIndex = nil
     }
 
     private func activateSearchResult(at index: Int) {
@@ -3503,6 +4693,9 @@ final class PDFWorkspaceState: ObservableObject {
         // Keep only the active PDFSelection. The navigator can retain tens of
         // thousands of lightweight ranges/snippets without pinning an equally
         // large PDFKit selection graph in memory.
+        // An exact hit also supersedes a saved position on this same page
+        // when switching back to a reader that has not mounted its view yet.
+        pdfViewportState.invalidateScrollPosition()
         activeSearchSelection = selection
         currentSelection = selection
         searchResults = [selection]
@@ -3800,6 +4993,12 @@ final class PDFWorkspaceState: ObservableObject {
         }
         do {
             try validateOCRApplicationSource(sourceURL, expectedVersion: sourceVersion)
+            try Task.checkCancellation()
+            let replacedIndexes = PDFOCRApplication.replacementPageIndexes(checkpoint: checkpoint)
+            guard !replacedIndexes.isEmpty else {
+                statusMessage = L10n.string("status.ocr_no_changes")
+                return true
+            }
             try PDFOCRSnapshotWriter.write(document, to: snapshotURL)
             let outputData = try await PDFOCRApplication.render(
                 snapshotURL: snapshotURL,
@@ -3825,11 +5024,6 @@ final class PDFWorkspaceState: ObservableObject {
             guard beforePages.count == document.pageCount else {
                 throw WorkspaceError.operationFailed(L10n.string("error.validate_ocr_copy"))
             }
-            let replacedIndexes = PDFOCRApplication.replacementPageIndexes(checkpoint: checkpoint)
-            guard !replacedIndexes.isEmpty else {
-                statusMessage = L10n.string("status.ocr_no_changes")
-                return true
-            }
             let afterPages = (0..<rendered.pageCount).compactMap { index in
                 replacedIndexes.contains(index) ? rendered.page(at: index) : beforePages[index]
             }
@@ -3848,6 +5042,7 @@ final class PDFWorkspaceState: ObservableObject {
             resetWidgetSnapshotsAfterPageStructureMutation()
             recordEdit(
                 actionName: L10n.string("history.ocr_apply"),
+                actionLocalization: .init(key: "history.ocr_apply"),
                 beforeNavigation: beforeNavigation,
                 invalidatingDocumentSelections: true,
                 retainedPageCost: replacedIndexes.count,
@@ -3887,15 +5082,25 @@ final class PDFWorkspaceState: ObservableObject {
     }
 
     func refreshLocalization() {
-        // Localization refresh rotates `revision`; stop the captured search
-        // generation first so it cannot exit as stale while leaving its
-        // progress presentation stuck in the running state.
-        cancelSearchAndInvalidate(clearResults: true)
-        if hasOpenDocument {
-            refresh(L10n.format("status.opened_pages", pageCount))
+        // Localization rotates the UI revision, not the PDF text. Keep only a
+        // completed result set for the exact current query; pending, cancelled
+        // or stale generations still lose their locations before that rotation.
+        let preservesCompletedSearch = document != nil && searchHasCompletedCurrentQuery
+        cancelSearchAndInvalidate(clearResults: !preservesCompletedSearch)
+        synchronizeHistoryPresentation()
+        revision = UUID()
+        if isSaving {
+            statusMessage = L10n.string("action.saving")
+        } else if preservesCompletedSearch {
+            statusMessage = searchNavigatorResults.isEmpty
+                ? L10n.string("status.search_no_results")
+                : L10n.format("status.search_results", searchNavigatorResults.count)
+        } else if hasOpenDocument {
+            statusMessage = L10n.format("status.opened_pages", pageCount)
         } else {
-            refresh(L10n.string("status.ready"))
+            statusMessage = L10n.string("status.ready")
         }
+        if let document { appendSignedAssemblyNotice(for: document) }
     }
 
     private func normalizedRotation(_ value: Int) -> Int {
@@ -4043,40 +5248,50 @@ final class PDFWorkspaceState: ObservableObject {
 
     private func recordEdit(
         actionName: String,
+        actionLocalization: PDFEditActionLocalization? = nil,
         beforeNavigation: PDFEditNavigationSnapshot,
         invalidatingDocumentSelections: Bool = false,
         retainedPageCost: Int = 0,
+        preservesUntouchedLinkState: Bool = false,
+        affectedPageIndexes: Set<Int>? = nil,
         undo: @escaping () throws -> Void,
         redo: @escaping () throws -> Void
     ) {
-        // Toolbar/sidebar actions do not pass through PDFView.mouseDown. If a
-        // person types in the floating editor and immediately rotates a page,
-        // this common history boundary records the text first and the toolbar
-        // action second. Consequently the first Undo reverses the action they
-        // performed most recently (the rotation), rather than unexpectedly
-        // removing their earlier text.
-        //
-        // `commitPendingInlineText` clears the pending value before it calls
-        // back into `recordEdit`, so this cannot recurse.
-        commitPendingInlineTextDraftIfNeeded()
+        // Body drafts must settle at the request boundary, before callers
+        // capture pages. This API records an already-performed mutation; a
+        // page swap here would detach the page captured by its undo closures.
+        // Legacy FreeText drafts do not replace pages and retain their existing
+        // automatic ordering behavior.
+        if pendingInlineTextEdit?.purpose != .bodyText {
+            commitPendingInlineTextDraftIfNeeded()
+        }
+        // Commands conservatively retain explicit annotation intent. Only
+        // the proved body-page replacement below preserves untouched links.
+        if !preservesUntouchedLinkState, let document {
+            PDFCatalogStructurePreserver.recordExplicitAnnotationEdit(in: document)
+        }
         guard editHistory.register(
             actionName: actionName,
+            actionLocalization: actionLocalization,
             beforeNavigation: beforeNavigation,
             afterNavigation: navigationSnapshot,
             invalidatesDocumentSelections: invalidatingDocumentSelections,
+            affectedPageIndexes: affectedPageIndexes,
             retainedPageCost: retainedPageCost,
             undo: undo,
             redo: redo
         ) else { return }
         finishDocumentMutation(
             actionName,
-            invalidatingDocumentSelections: invalidatingDocumentSelections
+            invalidatingDocumentSelections: invalidatingDocumentSelections,
+            affectedPageIndexes: affectedPageIndexes
         )
     }
 
     private func registerAnnotationAdditions(
         _ additions: [(page: PDFPage, annotation: PDFAnnotation)],
         message: String,
+        actionLocalization: PDFEditActionLocalization? = nil,
         beforeNavigation: PDFEditNavigationSnapshot
     ) {
         guard
@@ -4092,7 +5307,9 @@ final class PDFWorkspaceState: ObservableObject {
         additions.forEach { trustRuntimeAnnotation($0.annotation) }
         recordEdit(
             actionName: message,
+            actionLocalization: actionLocalization,
             beforeNavigation: beforeNavigation,
+            affectedPageIndexes: Set(additions.map { document.index(for: $0.page) }),
             undo: {
                 guard additions.allSatisfy({ addition in
                     document.index(for: addition.page) != NSNotFound
@@ -4145,7 +5362,8 @@ final class PDFWorkspaceState: ObservableObject {
                 isUndo ? "status.undo_completed" : "status.redo_completed",
                 command.actionName
             ),
-            invalidatingDocumentSelections: false
+            invalidatingDocumentSelections: false,
+            affectedPageIndexes: command.affectedPageIndexes
         )
     }
 
@@ -4161,7 +5379,8 @@ final class PDFWorkspaceState: ObservableObject {
 
     private func finishDocumentMutation(
         _ message: String,
-        invalidatingDocumentSelections: Bool = false
+        invalidatingDocumentSelections: Bool = false,
+        affectedPageIndexes: Set<Int>? = nil
     ) {
         if ocrTask != nil {
             cancelOCR()
@@ -4177,6 +5396,7 @@ final class PDFWorkspaceState: ObservableObject {
         ocrCheckpoint = nil
         completedOCRRevision = nil
         if !ocrState.isActivelyProcessing { ocrState = .idle }
+        studyNotesIndex.invalidate(pageIndexes: affectedPageIndexes)
         synchronizeHistoryPresentation()
         refresh(message)
         scheduleRecoverySnapshot()
@@ -4198,7 +5418,14 @@ final class PDFWorkspaceState: ObservableObject {
         cancelSearchAndInvalidate(clearResults: true)
     }
 
+    private func appendSignedAssemblyNotice(for document: PDFDocument) {
+        guard PDFCatalogStructurePreserver.needsMaterialization(document),
+              PDFCatalogStructurePreserver.containsSignedOriginal(document) else { return }
+        statusMessage += " · " + L10n.string("page_structure.signed_original_notice")
+    }
+
     private func refresh(_ message: String) {
+        comparisonRevision = UUID()
         revision = UUID()
         statusMessage = message
     }

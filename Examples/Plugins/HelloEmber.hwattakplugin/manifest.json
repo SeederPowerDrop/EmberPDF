@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 6,
+  "identifier": "org.emberpdf.examples.hello-ember",
+  "displayName": "Hello Ember",
+  "version": "1.0.0",
+  "author": "EmberPDF SDK Examples",
+  "description": "A first independent extension with its own command, panel and per-window counter. Works without an open PDF.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": ["backgroundExecution"],
+  "actions": [],
+  "runtime": {
+    "apiVersion": 1,
+    "entry": "main.js",
+    "sha256": "4c2e55462065cbd4d5a71c1e869bd9ab5fbdfe51b1cd5361381dec50b386afc3",
+    "activation": "window",
+    "capabilities": ["backgroundExecution"]
+  }
+}

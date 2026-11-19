@@ -28,7 +28,16 @@ extension PDFWorkspaceState {
         // authority again at the mutation boundary so a stale menu/gesture
         // cannot reorder an imported image after the mode changed.
         guard allows(.imageInsertion) else { return false }
+        // Standalone-page integrations are supported by the history API. A
+        // loaded workspace additionally requires membership in its document.
+        let owningDocument = document
+        guard owningDocument.map({ $0.index(for: page) != NSNotFound }) ?? true,
+              page.annotations.contains(where: { $0 === annotation }) else { return false }
         prepareForDeactivation()
+        guard pendingInlineTextEdit == nil,
+              document === owningDocument,
+              let page = annotation.page,
+              owningDocument.map({ $0.index(for: page) != NSNotFound }) ?? true else { return false }
         // Keep object identity (`===`) rather than comparing annotation values.
         // Two stamps may have equal bounds and contents but still be distinct layers.
         let originalOrder = page.annotations
@@ -60,7 +69,8 @@ extension PDFWorkspaceState {
             on: page,
             from: originalOrder,
             to: finalOrder,
-            message: layerOrderMessage(for: command)
+            message: layerOrderLocalization(for: command).resolve(),
+            actionLocalization: layerOrderLocalization(for: command)
         )
         return true
     }
@@ -68,7 +78,14 @@ extension PDFWorkspaceState {
     @discardableResult
     func deleteImageAnnotation(_ annotation: PDFAnnotation, on page: PDFPage) -> Bool {
         guard allows(.imageInsertion) else { return false }
+        let owningDocument = document
+        guard owningDocument.map({ $0.index(for: page) != NSNotFound }) ?? true,
+              page.annotations.contains(where: { $0 === annotation }) else { return false }
         prepareForDeactivation()
+        guard pendingInlineTextEdit == nil,
+              document === owningDocument,
+              let page = annotation.page,
+              owningDocument.map({ $0.index(for: page) != NSNotFound }) ?? true else { return false }
         guard
             allows(.imageInsertion),
             EditableAnnotationIdentity.kind(of: annotation) == .image,
@@ -84,21 +101,22 @@ extension PDFWorkspaceState {
             on: page,
             from: originalOrder,
             to: page.annotations,
-            message: L10n.string("status.image_deleted")
+            message: L10n.string("status.image_deleted"),
+            actionLocalization: .init(key: "status.image_deleted")
         )
         return true
     }
 
-    private func layerOrderMessage(for command: ImageLayerOrderCommand) -> String {
+    private func layerOrderLocalization(for command: ImageLayerOrderCommand) -> PDFEditActionLocalization {
         switch command {
         case .bringToFront:
-            L10n.string("status.image_front")
+            .init(key: "status.image_front")
         case .bringForward:
-            L10n.string("status.image_forward")
+            .init(key: "status.image_forward")
         case .sendBackward:
-            L10n.string("status.image_backward")
+            .init(key: "status.image_backward")
         case .sendToBack:
-            L10n.string("status.image_back")
+            .init(key: "status.image_back")
         }
     }
 }

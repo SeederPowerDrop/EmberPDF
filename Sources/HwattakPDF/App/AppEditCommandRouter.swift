@@ -55,7 +55,8 @@ final class AppEditCommandRouter: ObservableObject {
             NSWindow.didBecomeKeyNotification,
             NSWindow.didResignKeyNotification,
             NSWindow.willBeginSheetNotification,
-            NSWindow.didEndSheetNotification
+            NSWindow.didEndSheetNotification,
+            .appLanguageDidChange
         ]
 
         observationTokens = names.map { name in
@@ -226,21 +227,19 @@ final class AppEditCommandRouter: ObservableObject {
     }
 
     func undoMenuTitle(documentTitle: String) -> String {
-        guard
-            destination == .textEditing,
-            let title = editableTextView?.undoManager?.undoMenuItemTitle,
-            !title.isEmpty
-        else { return documentTitle }
-        return title
+        guard destination == .textEditing, editableTextView?.undoManager != nil else { return documentTitle }
+        return Self.nativeTextHistoryTitle(backwards: true)
     }
 
     func redoMenuTitle(documentTitle: String) -> String {
-        guard
-            destination == .textEditing,
-            let title = editableTextView?.undoManager?.redoMenuItemTitle,
-            !title.isEmpty
-        else { return documentTitle }
-        return title
+        guard destination == .textEditing, editableTextView?.undoManager != nil else { return documentTitle }
+        return Self.nativeTextHistoryTitle(backwards: false)
+    }
+
+    static func nativeTextHistoryTitle(backwards: Bool) -> String {
+        // NSUndoManager's menu title follows the OS launch language. Keep its
+        // native undo behavior but present the app's selected language.
+        L10n.string(backwards ? "menu.undo" : "menu.redo")
     }
 
     func performUndo(documentAction: () -> Void) {

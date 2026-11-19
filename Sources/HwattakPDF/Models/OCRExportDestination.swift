@@ -10,7 +10,7 @@ struct OCRExportDestination {
 
     init(sourceURL: URL?) {
         directoryURL = sourceURL?.deletingLastPathComponent()
-        let base = sourceURL?.deletingPathExtension().lastPathComponent ?? "HwattakPDF"
+        let base = sourceURL?.deletingPathExtension().lastPathComponent ?? "EmberPDF"
         // Leave room for the suffix on filesystems with a 255-byte name limit,
         // without splitting a Unicode grapheme in a long original filename.
         var stem = ""
@@ -18,6 +18,6 @@ struct OCRExportDestination {
             guard stem.utf8.count + String(character).utf8.count <= 247 else { break }
             stem.append(character)
         }
-        fileName = "\(stem.isEmpty ? "HwattakPDF" : stem)-ocr.pdf"
+        fileName = "\(stem.isEmpty ? "EmberPDF" : stem)-ocr.pdf"
     }
 }

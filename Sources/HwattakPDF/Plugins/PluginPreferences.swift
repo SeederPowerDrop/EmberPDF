@@ -89,7 +89,7 @@ struct PluginPreferences: Codable, Equatable {
     static let followAppLanguageCode = "app"
     static let supportedTranslationLanguageCodes: Set<String> = [
         followAppLanguageCode,
-        "ko", "en", "ja", "zh-CN", "fr", "de", "es", "pt", "vi", "ar"
+        "ko", "en", "ja", "zh-CN", "fr", "de", "es", "pt", "ru", "vi", "ar"
     ]
     static let `default` = PluginPreferences()
 

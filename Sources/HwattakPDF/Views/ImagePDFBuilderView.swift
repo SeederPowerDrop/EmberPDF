@@ -19,7 +19,7 @@ struct ImagePDFBuilderView: View {
     @State private var stabilityEstimate: PDFConversionEstimate?
     @State private var speedEstimate: PDFConversionEstimate?
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(spacing: 0) {

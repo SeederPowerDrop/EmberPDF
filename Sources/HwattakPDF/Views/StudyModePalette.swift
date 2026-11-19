@@ -6,8 +6,8 @@ import SwiftUI
 /// 학습에 자주 쓰는 AI 질문과 필기 도구를 한 줄에 모은 보조 팔레트다.
 ///
 /// 중요한 개인정보 보호 규칙: 이 뷰는 `AIService`를 직접 호출하지 않는다.
-/// `beginRequest`는 전송할 PDF 문맥을 준비해 기존 미리보기/동의 sheet를 띄울
-/// 뿐이며, 사용자가 그 sheet에서 확인해야만 외부 공급자 요청이 시작된다.
+/// `beginRequest`는 전송할 PDF 문맥과 사용자가 선택한 확인창 설정을 함께
+/// 고정하고, 해당 설정에 따라 미리보기를 표시하거나 요청을 시작한다.
 struct StudyModePalette: View {
     @ObservedObject var workspace: PDFWorkspaceState
     @ObservedObject var providerSettings: AIProviderSettingsStore
@@ -15,65 +15,27 @@ struct StudyModePalette: View {
     let documentCollection: MultiDocumentWorkspaceState
     let onOpenAssistant: () -> Void
     let showOCR: () -> Void
+    let showStudyNotes: () -> Void
     let shareNote: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var showingMarkupSettings = false
-    @State private var showingPenSettings = false
+    @AppStorage(AIAssistantPreferences.requiresTransmissionConfirmationKey)
+    private var requiresTransmissionConfirmation = true
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 8) {
-                aiStudyMenu
+                WritingToolStrip(workspace: workspace)
 
-                Button(action: onOpenAssistant) {
-                    Label(
-                        L10n.string("ai.toolbar", defaultValue: "PDF AI"),
-                        systemImage: "sparkles"
-                    )
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .frame(height: 28)
-                    .background(theme.card, in: RoundedRectangle(cornerRadius: 7))
+                Button(action: showStudyNotes) {
+                    Label(L10n.string("study.notes.open", defaultValue: "학습 메모"), systemImage: "note.text")
+                        .font(.caption.weight(.semibold))
                 }
-                .buttonStyle(.plain)
-                .disabled(!workspace.hasOpenDocument)
-                .help(L10n.string("ai.open", defaultValue: "AI 패널 열기"))
-
-                paletteDivider
-
-                Picker(L10n.string("도구"), selection: $workspace.activeTool) {
-                    ForEach(workspace.mode.availableTools) { tool in
-                        Label(
-                            workspace.mode.title(for: tool),
-                            systemImage: tool.systemImage
-                        )
-                        .tag(tool)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 250)
                 .disabled(!canUsePageTools)
-
-                Button {
-                    showingPenSettings.toggle()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!canUsePageTools)
-                .help(L10n.string("펜 설정"))
-                .accessibilityLabel(L10n.string("펜 설정"))
-                .popover(isPresented: $showingPenSettings, arrowEdge: .bottom) {
-                    PenSettingsPopover(settings: $workspace.inkSettings)
-                }
 
                 paletteDivider
 
@@ -144,6 +106,14 @@ struct StudyModePalette: View {
 
                 paletteDivider
 
+                aiStudyMenu
+                Button(action: onOpenAssistant) {
+                    Label(L10n.string("ai.toolbar", defaultValue: "PDF AI"), systemImage: "sparkles")
+                        .font(.caption.weight(.semibold))
+                }
+                .disabled(!workspace.hasOpenDocument)
+                .help(L10n.string("ai.open", defaultValue: "AI 패널 열기"))
+
                 Button(action: showOCR) {
                     Label(L10n.string("OCR"), systemImage: "text.viewfinder")
                         .font(.caption.weight(.semibold))
@@ -201,6 +171,20 @@ struct StudyModePalette: View {
         canUsePageTools && workspace.currentSelection != nil
     }
 
+    private var penStyleSummary: String {
+        String(format: "%.1f pt · %d%%", workspace.inkSettings.width,
+               Int((workspace.inkSettings.opacity * 100).rounded()))
+    }
+
+    private var eraserModeTitle: String {
+        switch workspace.eraserMode {
+        case .stroke:
+            L10n.string("study.eraser.stroke", defaultValue: "획 지우기")
+        case .partial:
+            L10n.string("study.eraser.partial", defaultValue: "부분 지우기")
+        }
+    }
+
     private var markupKindBinding: Binding<StudyMarkupKind> {
         Binding(
             get: { workspace.studyMarkupStyle.kind },
@@ -235,7 +219,11 @@ struct StudyModePalette: View {
             !workspace.hasOpenDocument || workspace.aiAssistantSession.phase != .idle
         )
         .help(
-            workspace.currentSelection == nil
+            !requiresTransmissionConfirmation
+                ? (workspace.currentSelection == nil
+                    ? L10n.string("study.ai.current_page_help.direct", defaultValue: "현재 페이지를 선택한 AI 공급자로 바로 보냅니다.")
+                    : L10n.string("study.ai.selection_help.direct", defaultValue: "선택한 텍스트를 AI 공급자로 바로 보냅니다."))
+                : workspace.currentSelection == nil
                 ? L10n.string(
                     "study.ai.current_page_help",
                     defaultValue: "현재 페이지를 미리보기로 준비합니다. 확인 전에는 외부 AI로 보내지 않습니다."
@@ -248,6 +236,7 @@ struct StudyModePalette: View {
     }
 
     private func beginAIAction(_ action: StudyAIQuickAction) {
+        workspace.enableAIConversationHistoryPersistence()
         // 선택이 있으면 작은 범위만 보내고, 없으면 학습 흐름이 끊기지 않도록
         // 현재 페이지만 사용한다. 문서 전체로 조용히 넓히지 않는 것이 중요하다.
         workspace.aiAssistantSession.scope = workspace.currentSelection == nil
@@ -260,7 +249,8 @@ struct StudyModePalette: View {
             workspace: workspace,
             documentCollection: documentCollection,
             configuration: configuration,
-            hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind)
+            hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind),
+            requiresTransmissionConfirmation: requiresTransmissionConfirmation
         )
     }
 }
@@ -270,7 +260,7 @@ private struct StudyMarkupSettingsPopover: View {
     @ObservedObject var workspace: PDFWorkspaceState
     @Environment(\.colorScheme) private var colorScheme
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

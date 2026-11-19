@@ -5,6 +5,16 @@ import Foundation
 struct ProcessResourceCounters: Equatable {
     let residentMemoryBytes: UInt64
     let cumulativeCPUTime: TimeInterval
+    /// Darwin's process footprint includes charged compressed memory that RSS omits.
+    /// Separate helpers are not included in either counter.
+    let physicalFootprintBytes: UInt64?
+
+    init(residentMemoryBytes: UInt64, cumulativeCPUTime: TimeInterval,
+         physicalFootprintBytes: UInt64? = nil) {
+        self.residentMemoryBytes = residentMemoryBytes
+        self.cumulativeCPUTime = cumulativeCPUTime
+        self.physicalFootprintBytes = physicalFootprintBytes
+    }
 }
 
 struct ProcessResourceSnapshot: Equatable {
@@ -12,6 +22,15 @@ struct ProcessResourceSnapshot: Equatable {
     /// Activity Monitor-style process usage. 100% means one logical CPU core.
     let cpuPercent: Double?
     let sampledAt: Date
+    let physicalFootprintBytes: UInt64?
+
+    init(residentMemoryBytes: UInt64, cpuPercent: Double?, sampledAt: Date,
+         physicalFootprintBytes: UInt64? = nil) {
+        self.residentMemoryBytes = residentMemoryBytes
+        self.cpuPercent = cpuPercent
+        self.sampledAt = sampledAt
+        self.physicalFootprintBytes = physicalFootprintBytes
+    }
 }
 
 struct ProcessResourceTimeSource {

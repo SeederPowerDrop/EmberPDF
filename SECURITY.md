@@ -1,6 +1,8 @@
-# HwattakPDF 보안 정책
+# EmberPDF 보안 정책
 
-PDF·이미지·로컬 HTML과 플러그인 패키지는 복잡한 외부 입력이고, HwattakPDF는 파일 쓰기·WebKit·Keychain·security-scoped bookmark·외부 AI API를 다룹니다. 보안 문제는 일반 버그와 분리해 제보해 주세요.
+PDF·이미지·로컬 HTML과 플러그인 패키지는 복잡한 외부 입력이고, EmberPDF는 파일 쓰기·WebKit·Keychain·security-scoped bookmark·외부 AI API를 다룹니다. 보안 문제는 일반 버그와 분리해 제보해 주세요.
+
+제품 이름은 HwattakPDF에서 EmberPDF로 바뀌었지만, 기존 사용자 데이터와의 호환성을 위해 번들 ID `com.vibepdf.mac`, 내부 Application Support 경로, 플러그인 확장자·식별자는 유지합니다. 아래 경로의 `HwattakPDF`는 현재 앱에서도 사용하는 저장 위치입니다.
 
 ## 지원 범위
 
@@ -23,7 +25,7 @@ Private vulnerability reporting이 일시적으로 보이지 않으면 취약점
 
 ## 제보에 포함할 내용
 
-- 영향을 받는 HwattakPDF 버전과 빌드 번호
+- 영향을 받는 EmberPDF 또는 이전 HwattakPDF 버전과 빌드 번호
 - macOS 버전과 Mac 아키텍처
 - 공격에 필요한 조건과 예상 영향
 - 가능한 한 작은 재현 단계
@@ -118,7 +120,7 @@ HTML 안의 JavaScript는 실행되며 허용 폴더 안의 로컬 자원을 읽
 
 ## 사용자가 지켜야 할 기본 수칙
 
-- 신뢰할 수 없는 PDF는 최신 macOS와 최신 HwattakPDF에서 엽니다.
+- 신뢰할 수 없는 PDF는 최신 macOS와 최신 EmberPDF에서 엽니다.
 - API 키는 최소 권한·사용량 제한을 적용하고 정기적으로 교체합니다.
 - 민감한 PDF를 AI에 보낼 때 전송 미리보기와 공급자 정책을 확인합니다.
 - OCR 내보내기와 편집 저장 전 원본을 별도로 보관합니다.

@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import CoreText
 import Foundation
 import PDFKit
 
 /// Why the inline editor is being opened.
 ///
-/// A beginner may reasonably expect "replace selected PDF text" to rewrite
-/// the page's content stream. PDFKit does not expose a safe content-stream text
-/// editor, so HwattakPDF deliberately models that operation as a visible
-/// FreeText overlay. The original glyphs remain underneath and therefore also
-/// remain available to search, copy, accessibility extraction, and recovery.
+/// Body edits rewrite native PDF text objects. Legacy visual replacements
+/// remain explicitly identified so reopening their annotations never silently
+/// changes their meaning.
 enum InlineTextEditPurpose: String, Equatable {
+    /// Real page content, including insertion and deletion.
+    case bodyText
     /// A normal, app-owned FreeText annotation.
     case freeText
     /// An opaque FreeText annotation placed over existing page text.
@@ -234,11 +235,18 @@ struct InlineTextStyle: Equatable {
     static let minimumFontSize: CGFloat = 6
     static let maximumFontSize: CGFloat = 144
 
-    var fontName: String
+    var fontName: String {
+        didSet { if oldValue != fontName { sourceFont = nil } }
+    }
+    /// Ephemeral document-owned font identity; never serialized by name.
+    var sourceFont: PDFBodyTextDocumentFonts.Lease?
     var fontSize: CGFloat
     var textColor: PDFTextColor
     var backgroundColor: PDFTextColor
     var alignment: NSTextAlignment
+    /// Native PDF text can be slightly condensed without changing its height.
+    /// Keep that width independent of the chosen face and point size.
+    var horizontalScale: CGFloat
 
     static func standard(for purpose: InlineTextEditPurpose) -> InlineTextStyle {
         let font = NSFont.systemFont(ofSize: 15)
@@ -258,13 +266,17 @@ struct InlineTextStyle: Equatable {
         fontSize: CGFloat,
         textColor: PDFTextColor,
         backgroundColor: PDFTextColor,
-        alignment: NSTextAlignment
+        alignment: NSTextAlignment,
+        horizontalScale: CGFloat = 1,
+        sourceFont: PDFBodyTextDocumentFonts.Lease? = nil
     ) {
         self.fontName = fontName
+        self.sourceFont = sourceFont?.postScriptName == fontName ? sourceFont : nil
         self.fontSize = Self.clampedFontSize(fontSize)
         self.textColor = textColor
         self.backgroundColor = backgroundColor
         self.alignment = Self.supportedAlignment(alignment)
+        self.horizontalScale = Self.clampedHorizontalScale(horizontalScale)
     }
 
     init(annotation: PDFAnnotation, purpose: InlineTextEditPurpose) {
@@ -278,13 +290,55 @@ struct InlineTextStyle: Equatable {
         )
     }
 
-    var font: NSFont {
-        NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+    @MainActor var font: NSFont {
+        if let sourceFont, sourceFont.postScriptName == fontName,
+           let font = sourceFont.font(ofSize: fontSize) { return font }
+        return NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
     }
 
-    mutating func normalize() {
+    /// Apply the PDF width only after resolving the unscaled font, including
+    /// any fallback for missing glyphs. Preview and PDF output use this same
+    /// transform. An explicit size is useful for the editor's zoomed preview.
+    @MainActor func renderingFont(_ font: NSFont, size: CGFloat? = nil) -> NSFont {
+        let requestedSize = size ?? font.pointSize
+        let pointSize = requestedSize.isFinite && requestedSize > 0 ? requestedSize : font.pointSize
+        let widthScale = Self.clampedHorizontalScale(horizontalScale)
+        if let sourceFont, sourceFont.postScriptName == fontName {
+            // Descriptor/name matching can select another face with this name.
+            // Copy the actual in-memory font through resize and preview zoom.
+            var matrix = CGAffineTransform(scaleX: widthScale, y: 1)
+            let copy = CTFontCreateCopyWithAttributes(font as CTFont, pointSize, &matrix, nil) as NSFont
+            return PDFBodyTextDocumentFonts.retainingBacking(from: font, on: copy)
+        }
+        if widthScale == 1 {
+            // A CoreText copy changes AppKit's extra line metrics even with
+            // an identity matrix. Keep ordinary NSFont layout unchanged for
+            // unscaled text, including when the preview changes zoom.
+            if pointSize == font.pointSize, CTFontGetMatrix(font as CTFont).isIdentity {
+                return font
+            }
+            var attributes = font.fontDescriptor.fontAttributes
+            attributes.removeValue(forKey: .matrix)
+            if let unscaled = NSFont(descriptor: NSFontDescriptor(fontAttributes: attributes), size: pointSize) {
+                return unscaled
+            }
+        }
+        // CoreText keeps point size separate from its dimensionless matrix.
+        // NSFontDescriptor.withMatrix handles UI fonts differently from named
+        // fonts and can apply the point size twice (15pt becomes 225pt).
+        // Supplying a replacement matrix also makes repeated preview updates
+        // idempotent instead of compounding horizontal compression.
+        var matrix = CGAffineTransform(scaleX: widthScale, y: 1)
+        return CTFontCreateCopyWithAttributes(font as CTFont, pointSize, &matrix, nil) as NSFont
+    }
+
+    @MainActor mutating func normalize() {
         fontSize = Self.clampedFontSize(fontSize)
+        horizontalScale = Self.clampedHorizontalScale(horizontalScale)
         alignment = Self.supportedAlignment(alignment)
+        if let sourceFont, sourceFont.postScriptName == fontName,
+           sourceFont.font(ofSize: fontSize) != nil { return }
+        sourceFont = nil
         if NSFont(name: fontName, size: fontSize) == nil {
             fontName = NSFont.systemFont(ofSize: fontSize).fontName
         }
@@ -293,6 +347,11 @@ struct InlineTextStyle: Equatable {
     private static func clampedFontSize(_ size: CGFloat) -> CGFloat {
         guard size.isFinite else { return 15 }
         return min(maximumFontSize, max(minimumFontSize, size))
+    }
+
+    private static func clampedHorizontalScale(_ scale: CGFloat) -> CGFloat {
+        guard scale.isFinite, scale > 0 else { return 1 }
+        return min(10, max(0.1, scale))
     }
 
     private static func supportedAlignment(_ value: NSTextAlignment) -> NSTextAlignment {
@@ -310,6 +369,24 @@ struct InlineTextStyle: Equatable {
     }
 }
 
+/// Appearance and baseline of one UTF-16 range in the original native text.
+struct InlineTextSourceRun: Equatable {
+    let range: NSRange
+    let style: InlineTextStyle
+    let baselineOffset: CGFloat
+    let horizontalAdvance: CGFloat?
+    let usesSourceUnkernedAdvances: Bool
+
+    init(range: NSRange, style: InlineTextStyle, baselineOffset: CGFloat = 0,
+         horizontalAdvance: CGFloat? = nil, usesSourceUnkernedAdvances: Bool = false) {
+        self.range = range
+        self.style = style
+        self.baselineOffset = baselineOffset
+        self.horizontalAdvance = horizontalAdvance
+        self.usesSourceUnkernedAdvances = usesSourceUnkernedAdvances
+    }
+}
+
 /// A transactional draft displayed directly over the PDF canvas.
 ///
 /// The draft is a value rather than an `NSTextView` reference. That keeps the
@@ -323,6 +400,20 @@ struct PendingInlineTextEdit: Identifiable, Equatable {
     let purpose: InlineTextEditPurpose
     var text: String
     var style: InlineTextStyle
+    /// UTF-16 selection transferred from the PDF gesture. Apply only when
+    /// this draft first enters TextKit, never on later view synchronization.
+    let initialSelectedRange: NSRange?
+    /// Native PDF coordinates retained across font changes. TextKit's first
+    /// baseline is not the same as NSFont.ascender below the canvas top.
+    let bodyTextBaseline: CGPoint?
+    let bodyTextLineHeight: CGFloat?
+    let bodyTextFirstLineIndent: CGFloat
+    let bodyTextSourceText: String?
+    let bodyTextSourceStyle: InlineTextStyle?
+    let bodyTextSourceRuns: [InlineTextSourceRun]
+    /// Scanned paper is a display hint only; it must not become a rectangle
+    /// painted into the committed text donor.
+    let bodyTextPreviewPaperColor: PDFTextColor?
 
     init(
         id: UUID = UUID(),
@@ -331,7 +422,15 @@ struct PendingInlineTextEdit: Identifiable, Equatable {
         isEditingExistingAnnotation: Bool,
         purpose: InlineTextEditPurpose,
         text: String,
-        style: InlineTextStyle
+        style: InlineTextStyle,
+        initialSelectedRange: NSRange? = nil,
+        bodyTextBaseline: CGPoint? = nil,
+        bodyTextLineHeight: CGFloat? = nil,
+        bodyTextFirstLineIndent: CGFloat = 0,
+        bodyTextSourceText: String? = nil,
+        bodyTextSourceStyle: InlineTextStyle? = nil,
+        bodyTextSourceRuns: [InlineTextSourceRun] = [],
+        bodyTextPreviewPaperColor: PDFTextColor? = nil
     ) {
         self.id = id
         self.pageIndex = pageIndex
@@ -340,6 +439,14 @@ struct PendingInlineTextEdit: Identifiable, Equatable {
         self.purpose = purpose
         self.text = text
         self.style = style
+        self.initialSelectedRange = initialSelectedRange
+        self.bodyTextBaseline = bodyTextBaseline
+        self.bodyTextLineHeight = bodyTextLineHeight
+        self.bodyTextFirstLineIndent = bodyTextFirstLineIndent
+        self.bodyTextSourceText = bodyTextSourceText
+        self.bodyTextSourceStyle = bodyTextSourceStyle
+        self.bodyTextSourceRuns = bodyTextSourceRuns
+        self.bodyTextPreviewPaperColor = bodyTextPreviewPaperColor
     }
 }
 
@@ -422,7 +529,7 @@ enum InlineTextGeometry {
         // Use the actual available width, even during a narrow split-view
         // animation, rather than drawing controls outside the viewport.
         let width = min(620, availableWidth)
-        let height: CGFloat = purpose == .visualReplacement ? 246 : 216
+        let height: CGFloat = purpose == .freeText ? 216 : 246
         var x = targetRect.minX
         var y = targetRect.maxY + 8
         x = min(max(viewportBounds.minX + margin, x), viewportBounds.maxX - width - margin)

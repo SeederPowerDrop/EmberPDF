@@ -184,6 +184,126 @@ final class OCRPageScopeWorkspaceTests: XCTestCase {
         XCTAssertFalse(fixture.workspace.canUseCompletedOCRResult)
     }
 
+    func testEmptyRecognitionStillRejectsChangedSourceBeforeReturningNoChange() async throws {
+        let fixture = try makeFixture(recognizer: { url, fingerprint, configuration, _ in
+            var result = try Self.checkpoint(url: url, fingerprint: fingerprint, configuration: configuration)
+            for index in result.pages.keys {
+                result.pages[index] = OCRPageResult(pageIndex: index, text: "", observations: [],
+                    completedAt: Date(), skippedBecauseTextExists: false)
+            }
+            return result
+        })
+        var configuration = OCRConfiguration()
+        configuration.pageIndexes = [1]
+        fixture.workspace.startOCR(configuration: configuration)
+        try await waitUntil { fixture.workspace.canUseCompletedOCRResult }
+        let page = fixture.workspace.document?.page(at: 1)
+        var changed = try Data(contentsOf: fixture.source)
+        changed.append(Data("\n% external source change\n".utf8))
+        try changed.write(to: fixture.source)
+
+        let applied = await fixture.workspace.applySearchableOCRToCurrentDocument()
+        XCTAssertFalse(applied)
+        XCTAssertNotNil(fixture.workspace.presentedError)
+        XCTAssertNotEqual(fixture.workspace.statusMessage, L10n.string("status.ocr_no_changes"))
+        XCTAssertFalse(fixture.workspace.isDirty)
+        XCTAssertFalse(fixture.workspace.canUndo)
+        XCTAssertTrue(fixture.workspace.document?.page(at: 1) === page)
+        XCTAssertEqual(try Data(contentsOf: fixture.source), changed)
+    }
+
+    func testUnlistedPopupSourceCannotBeSilentlyExportedAsValidPartialOCR() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HwattakPDF-OCRInvalidPopup-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("invalid-source.pdf")
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 260] /Resources << >> /Annots [4 0 R 5 0 R] >>",
+            "<< /Type /Annot /Subtype /Text /Rect [20 20 45 45] /Contents (Kept note) /Popup 6 0 R >>",
+            "<< /Type /Annot /Subtype /Popup /Rect [20 20 45 45] /Parent 7 0 R >>",
+            "<< /Type /Annot /Subtype /Popup /Rect [20 20 45 45] /Parent 4 0 R >>",
+            "<< /Type /Annot /Subtype /Text /Rect [20 20 45 45] /Contents (Kept note) /Popup 5 0 R >>"
+        ]
+        var data = Data("%PDF-1.7\n".utf8), offsets = [0]
+        for (index, object) in objects.enumerated() {
+            offsets.append(data.count)
+            data.append(Data("\(index + 1) 0 obj\n\(object)\nendobj\n".utf8))
+        }
+        let xref = data.count
+        data.append(Data("xref\n0 \(objects.count + 1)\n0000000000 65535 f \n".utf8))
+        for offset in offsets.dropFirst() {
+            data.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
+        }
+        data.append(Data("trailer\n<< /Root 1 0 R /Size \(objects.count + 1) >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
+        try data.write(to: source)
+        XCTAssertFalse(try listedReciprocalNotes(at: source, expectedPages: 1))
+        var recognizerCalls = 0
+        let workspace = PDFWorkspaceState(ocrRecognizer: { url, fingerprint, configuration, _ in
+            recognizerCalls += 1
+            return try Self.checkpoint(url: url, fingerprint: fingerprint, configuration: configuration)
+        })
+        XCTAssertTrue(workspace.open(url: source))
+        workspace.setMode(.editing)
+        let document = try XCTUnwrap(workspace.document)
+        var configuration = OCRConfiguration()
+        configuration.pageIndexes = [0]
+        workspace.startOCR(configuration: configuration)
+        // The verified snapshot writer rejects this invalid relationship before
+        // starting OCR. A completed checkpoint must never be awaited here.
+        XCTAssertNotNil(workspace.presentedError)
+        XCTAssertEqual(workspace.ocrState, .idle)
+        XCTAssertNil(workspace.ocrCheckpoint)
+        XCTAssertFalse(workspace.canUseCompletedOCRResult)
+        XCTAssertEqual(recognizerCalls, 0)
+        let output = directory.appendingPathComponent("must-not-exist.pdf")
+
+        let saved = await workspace.exportSearchableOCRCopy(to: output)
+        XCTAssertFalse(saved)
+        let applied = await workspace.applySearchableOCRToCurrentDocument()
+        XCTAssertFalse(applied)
+        XCTAssertEqual(recognizerCalls, 0)
+        XCTAssertTrue(workspace.document === document)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertEqual(try Data(contentsOf: source), data)
+        XCTAssertFalse(workspace.isDirty)
+        XCTAssertFalse(workspace.canUndo)
+    }
+
+    /// Inspect the immutable file without warming the workspace's PDFPage or
+    /// annotation wrappers before its normal guarded open.
+    private func listedReciprocalNotes(at url: URL, expectedPages: Int = 4) throws -> Bool {
+        let document = try XCTUnwrap(CGPDFDocument(url as CFURL))
+        guard document.numberOfPages == expectedPages, expectedPages > 0 else { return false }
+        for index in 1...expectedPages {
+            let page = try XCTUnwrap(document.page(at: index)?.dictionary)
+            var array: CGPDFArrayRef?
+            guard CGPDFDictionaryGetArray(page, "Annots", &array), let array,
+                  CGPDFArrayGetCount(array) <= 8 else { return false }
+            var annotations: [CGPDFDictionaryRef] = []
+            for offset in 0..<CGPDFArrayGetCount(array) {
+                var annotation: CGPDFDictionaryRef?
+                guard CGPDFArrayGetDictionary(array, offset, &annotation), let annotation else { return false }
+                annotations.append(annotation)
+            }
+            func subtype(_ dictionary: CGPDFDictionaryRef) -> String? {
+                var name: UnsafePointer<CChar>?
+                return CGPDFDictionaryGetName(dictionary, "Subtype", &name) ? name.map { String(cString: $0) } : nil
+            }
+            let notes = annotations.filter { subtype($0) == "Text" }
+            let popups = annotations.filter { subtype($0) == "Popup" }
+            guard notes.count == 1, popups.count == 1 else { return false }
+            var popup: CGPDFDictionaryRef?, parent: CGPDFDictionaryRef?
+            guard CGPDFDictionaryGetDictionary(notes[0], "Popup", &popup), let popup,
+                  CGPDFDictionaryGetDictionary(popups[0], "Parent", &parent), let parent,
+                  pdfReferenceIdentity(popup) == pdfReferenceIdentity(popups[0]),
+                  pdfReferenceIdentity(parent) == pdfReferenceIdentity(notes[0]) else { return false }
+        }
+        return true
+    }
+
     private func makeFixture(recognizer: WorkspaceOCRRecognizer? = nil) throws
         -> (directory: URL, source: URL, workspace: PDFWorkspaceState) {
         let directory = FileManager.default.temporaryDirectory
@@ -223,7 +343,8 @@ final class OCRPageScopeWorkspaceTests: XCTestCase {
         link.action = PDFActionGoTo(destination: PDFDestination(page: document.page(at: 1)!, at: CGPoint(x: 21, y: 185)))
         document.page(at: 0)?.addAnnotation(link)
         let source = directory.appendingPathComponent("source.pdf")
-        XCTAssertTrue(document.write(to: source))
+        try AtomicPDFWriter.write(document, to: source)
+        XCTAssertTrue(try listedReciprocalNotes(at: source))
         let workspace = PDFWorkspaceState(ocrRecognizer: recognizer ?? { url, fingerprint, configuration, _ in
             try Self.checkpoint(url: url, fingerprint: fingerprint, configuration: configuration)
         })

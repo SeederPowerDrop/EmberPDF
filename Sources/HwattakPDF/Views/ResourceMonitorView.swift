@@ -52,9 +52,7 @@ struct ResourceMonitorView: View {
         self.estimator = estimator
     }
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     private var reportInputs: [PDFTabResourceInput] {
         // Convert reference-type sessions into small value snapshots. The
@@ -135,6 +133,12 @@ struct ResourceMonitorView: View {
 
             HStack(spacing: 12) {
                 metricCard(
+                    title: "resource.memory_footprint",
+                    value: monitor.snapshot.flatMap(\.physicalFootprintBytes).map(formatBytes)
+                        ?? "—",
+                    systemImage: "memorychip"
+                )
+                metricCard(
                     title: "상주 메모리 (RSS)",
                     value: monitor.snapshot.map { formatBytes($0.residentMemoryBytes) }
                         ?? L10n.string("resource.measuring"),
@@ -147,7 +151,7 @@ struct ResourceMonitorView: View {
                 )
             }
 
-            Text("위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다.")
+            Text(L10n.string("resource.memory_note"))
                 .font(.caption)
                 .foregroundStyle(theme.secondaryText)
 

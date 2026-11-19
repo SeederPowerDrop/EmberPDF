@@ -17,10 +17,10 @@ struct PluginManifestValidator {
         "description",
         "minimumHostVersion",
         "capabilities",
-        "actions"
+        "actions", "runtime"
     ]
     private static let actionKeys: Set<String> = [
-        "id", "title", "description", "output", "template", "command"
+        "id", "title", "description", "output", "template", "command", "scriptSHA256", "scriptCapabilities"
     ]
     private static let allowedTokens = [
         "{{selection}}",
@@ -63,6 +63,12 @@ struct PluginManifestValidator {
             throw PluginSystemError.invalidManifest("the manifest root must be an object")
         }
         try rejectUnknownKeys(in: root, allowed: Self.rootKeys, context: "manifest")
+        if let value = root["runtime"] {
+            guard let runtime = value as? [String: Any] else {
+                throw PluginSystemError.invalidManifest("runtime must be an object")
+            }
+            try rejectUnknownKeys(in: runtime, allowed: ["apiVersion", "entry", "sha256", "activation", "capabilities"], context: "runtime")
+        }
         guard let rawActions = root["actions"] as? [Any] else {
             throw PluginSystemError.invalidManifest("actions must be an array")
         }
@@ -139,11 +145,11 @@ struct PluginManifestValidator {
         }
 
         guard
-            !manifest.actions.isEmpty,
+            !manifest.actions.isEmpty || manifest.runtime != nil,
             manifest.actions.count <= HwattakPluginLimits.maximumActionsPerPlugin
         else {
             throw PluginSystemError.invalidManifest(
-                "actions must contain 1...\(HwattakPluginLimits.maximumActionsPerPlugin) items"
+                "actions must contain 1...\(HwattakPluginLimits.maximumActionsPerPlugin) items, or a runtime must be declared"
             )
         }
         guard Set(manifest.capabilities).count == manifest.capabilities.count else {
@@ -161,6 +167,18 @@ struct PluginManifestValidator {
 
         var actionIDs: Set<String> = []
         var requiredCapabilities: Set<PluginCapability> = []
+        if let runtime = manifest.runtime {
+            guard manifest.schemaVersion == 6, runtime.apiVersion == 1,
+                  runtime.entry == "main.js", runtime.activation == "window",
+                  Self.isSHA256(runtime.sha256),
+                  Set(runtime.capabilities).count == runtime.capabilities.count,
+                  runtime.capabilities.contains(.backgroundExecution),
+                  Set(runtime.capabilities).isSubset(of: PluginRuntimeManifest.supportedCapabilities),
+                  !manifest.actions.contains(where: { $0.output == .scriptPanel }) else {
+                throw PluginSystemError.invalidManifest("runtime requires schema 6, API 1, main.js, a SHA-256, window activation, backgroundExecution and supported explicit capabilities; scriptPanel cannot share its package")
+            }
+            requiredCapabilities.formUnion(runtime.capabilities)
+        }
         for action in manifest.actions {
             try validateAction(action, schemaVersion: manifest.schemaVersion)
             guard actionIDs.insert(action.id).inserted else {
@@ -201,6 +219,26 @@ struct PluginManifestValidator {
                 maximumBytes: 1_024,
                 allowsLineBreaks: true
             )
+        }
+        if action.output == .scriptPanel {
+            let supported = PluginRuntimeManifest.supportedCapabilities.subtracting([.backgroundExecution])
+            guard schemaVersion >= 5, action.template.isEmpty, action.command == nil,
+                  let hash = action.scriptSHA256, Self.isSHA256(hash),
+                  let capabilities = action.scriptCapabilities,
+                  Set(capabilities).count == capabilities.count,
+                  Set(capabilities).isSubset(of: supported) else {
+                throw PluginSystemError.invalidManifest("scriptPanel requires schema 5, a SHA-256, supported explicit scriptCapabilities, empty template and no command")
+            }
+            return
+        }
+        guard action.scriptSHA256 == nil, action.scriptCapabilities == nil else {
+            throw PluginSystemError.invalidManifest("script fields are valid only for scriptPanel")
+        }
+        if action.output.isCommunityPanel {
+            guard schemaVersion >= 4, action.template.isEmpty, action.command == nil else {
+                throw PluginSystemError.invalidManifest("host panels require schema 4, an empty template and no command")
+            }
+            return
         }
         if action.output == .documentCommand {
             guard schemaVersion >= 3, action.template.isEmpty, let command = action.command else {
@@ -265,7 +303,7 @@ struct PluginManifestValidator {
         }
 
         switch action.output {
-        case .documentCommand:
+        case .documentCommand, .scriptPanel, .appearancePanel, .notesPanel, .pageClipPanel, .relatedDocumentsPanel, .hoverTranslationPanel:
             break
         case .showText, .copyText, .openURL:
             guard
@@ -336,6 +374,12 @@ struct PluginManifestValidator {
             (!requiresDot || value.contains("."))
         else {
             throw PluginSystemError.invalidManifest("\(field) is not a safe lowercase identifier")
+        }
+    }
+
+    private static func isSHA256(_ value: String) -> Bool {
+        value.count == 64 && value.unicodeScalars.allSatisfy {
+            CharacterSet(charactersIn: "0123456789abcdef").contains($0)
         }
     }
 

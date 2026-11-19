@@ -7,18 +7,19 @@ extension InteractivePDFView {
     /// Canvas keys only: field editors and annotation handles own their arrows.
     @discardableResult
     func handlePageNavigationKey(_ event: NSEvent) -> Bool {
+        let allowsOption = pageNavigationMode == .allDirectionsPaging
         guard event.type == .keyDown,
               viewportContext == .normal,
-              PDFArrowKeyRepeater.accepts(modifiers: event.modifierFlags),
+              PDFArrowKeyRepeater.accepts(modifiers: event.modifierFlags, allowsOption: allowsOption),
               !hasPageEditingFocus,
               !isDrawingInkStroke,
               (123...126).contains(event.keyCode),
               let workspace = workspaceState,
               let document, document === workspace.document else { return false }
-        // Option arrows always reach PDFKit unchanged. Shift arrows still
-        // belong to native text selection when a selection is active.
+        // The all-direction option also owns Option+arrows on the canvas.
+        // Active text selections keep native word/selection navigation.
         if currentSelection != nil,
-           event.modifierFlags.contains(.shift) { return false }
+           !event.modifierFlags.intersection([.shift, .option]).isEmpty { return false }
         resetPageTurnGesture()
         let revision = workspace.revision
         let mode = workspace.mode
@@ -28,7 +29,8 @@ extension InteractivePDFView {
             keyCode: event.keyCode,
             modifiers: event.modifierFlags,
             isRepeat: event.isARepeat,
-            window: window
+            window: window,
+            allowsOption: allowsOption
         ) { [weak self, weak workspace, weak document] in
             guard let self, let workspace, let document,
                   self.document === document, workspace.document === document,
@@ -37,11 +39,11 @@ extension InteractivePDFView {
                   self.viewportContext == .normal, !self.isDrawingInkStroke,
                   !self.hasPageEditingFocus, self.ownsArrowKeyFocus else { return false }
             if self.currentSelection != nil,
-               self.arrowKeyRepeater.currentModifiers.contains(.shift) {
+               !self.arrowKeyRepeater.currentModifiers.intersection([.shift, .option]).isEmpty {
                 return false
             }
-            if navigation == .horizontalPaging, event.keyCode == 123 || event.keyCode == 124 {
-                return self.turnPage(by: event.keyCode == 124 ? 1 : -1)
+            if let step = navigation.pageTurnStep(forArrowKeyCode: event.keyCode) {
+                return self.turnPage(by: step)
             }
             return self.scrollDocumentForArrow(keyCode: event.keyCode)
         }
@@ -58,6 +60,7 @@ extension InteractivePDFView {
     /// with magnification. The shared repeater controls tempo in every layout.
     @discardableResult
     func scrollDocumentForArrow(keyCode: UInt16) -> Bool {
+        if let compactSpread { return compactSpread.scrollForArrow(keyCode: keyCode) }
         guard (123...126).contains(keyCode), let scrollView = firstDocumentScrollView(),
               let documentView = scrollView.contentView.documentView else { return false }
         let clip = scrollView.contentView
@@ -97,7 +100,8 @@ extension InteractivePDFView {
         workspace.currentSelection = nil
         workspace.selectedPages = [target]
         workspace.setCurrentPage(target)
-        go(to: page)
+        if let compactSpread { compactSpread.navigate(to: target) }
+        else { go(to: page) }
         return true
     }
 

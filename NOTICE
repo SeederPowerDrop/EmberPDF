@@ -1,7 +1,7 @@
-HwattakPDF
+EmberPDF (formerly HwattakPDF)
 Copyright 2026 SeederPowerDrop
 
-HwattakPDF source code, documentation, and project-owned visual assets are
+EmberPDF source code, documentation, and project-owned visual assets are
 made available under the Mozilla Public License, version 2.0 (MPL-2.0).
 A copy of the license is provided in the repository's LICENSE file. The
 official source repository is:
@@ -23,7 +23,7 @@ it available under MPL-2.0. Its file-specific provenance and checksum are
 recorded in Resources/AboutAuthor-UserProvided-NOTICE.txt.
 
 MPL-2.0 does not by itself grant rights to use project trademarks or imply
-that a modified or redistributed build is an official HwattakPDF release.
+that a modified or redistributed build is an official EmberPDF release.
 See TRADEMARKS.md for the project's non-endorsement and attribution guidance.
 
 Names of third-party products and services are used to describe
@@ -31,3 +31,31 @@ interoperability, user-selected services, comparative research, source
 records, or non-copying design constraints. Those names and marks belong to
 their respective owners; their mention does not imply sponsorship,
 endorsement, or affiliation.
+
+Third-party native PDF text engine
+
+This distribution includes PDFium 157.0.8086.0, packaged as CPDFium.framework
+for macOS arm64 and x86_64. PDFium is Copyright 2014 The PDFium Authors and
+is provided under the BSD-style terms in Vendor/PDFium/licenses/pdfium.txt.
+The prebuilt binary packaging is Copyright 2014-2025 Benoit Blanchon and
+is provided under the MIT terms in Vendor/PDFium/LICENSE. Additional bundled
+libraries retain their respective notices in Vendor/PDFium/licenses/.
+These third-party components are not relicensed under the project's MPL-2.0.
+
+The application and release archives include the complete upstream LICENSE
+and licenses directory at Contents/Resources/Legal/PDFium/. Binary provenance,
+pinned version, and archive checksums are documented in Vendor/PDFium/README.md.
+
+The offline AI response renderer includes KaTeX 0.19.0 (MIT), Marked 18.1.0
+(MIT), and DOMPurify 3.4.16 (Apache-2.0 option of its dual license). Original
+notices, licenses, pinned source locations, and integrity values are preserved
+under Resources/AIRichText and shipped at Contents/Resources/AIRichText.
+KaTeX's bundled WOFF2 fonts are covered by its accompanying MIT license.
+
+The native raw-stream reader links against qpdf 12.4.1 (Apache-2.0) and
+libjpeg-turbo 3.2.0. The libjpeg API used here carries the Independent JPEG
+Group notice. This software is based in part on the work of the Independent
+JPEG Group. The complete upstream licenses and notices are included in
+Vendor/QPDF/licenses/ and in the app at Contents/Resources/Legal/QPDF/.
+Pinned sources, the local qpdf patch, and rebuild instructions are listed
+in Vendor/QPDF/README.md.

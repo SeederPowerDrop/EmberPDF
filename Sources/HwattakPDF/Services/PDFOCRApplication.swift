@@ -63,6 +63,7 @@ enum PDFOCRApplication {
             guard let rendered = PDFDocument(data: data) else {
                 throw WorkspaceError.operationFailed(L10n.string("error.validate_ocr_copy"))
             }
+            PDFRawStreamProvenance.bindCreated(rendered, data: data)
             let validate = {
                 try Task.checkCancellation()
                 guard !protectedSourceURLs.contains(where: {

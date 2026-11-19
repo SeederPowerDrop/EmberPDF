@@ -18,21 +18,77 @@ struct ExtractedPDFPage {
 /// 그래서 다른 문서에 페이지를 넣을 때는 반드시 `detachedCopy`를 만들어 원본과
 /// 결과 문서가 같은 mutable 객체를 우연히 함께 수정하지 않게 한다.
 enum PDFPageOperations {
-    /// 빠른 `NSCopying` 경로를 먼저 시도하고, 실패하면 한 페이지 PDF로
-    /// 직렬화/재개방해 소유 관계가 끊긴 복사본을 만든다.
-    static func detachedCopy(of page: PDFPage) -> PDFPage? {
-        if let copied = page.copy() as? PDFPage {
-            return copied
-        }
-
-        guard
-            let data = page.dataRepresentation,
-            let onePageDocument = PDFDocument(data: data),
-            let copied = onePageDocument.page(at: 0)?.copy() as? PDFPage
-        else {
+    /// PDFKit insertion can retain/decode an entire book's shared image table.
+    /// Give assembly an owned, bounded one-page backing when unused images can
+    /// be proved absent from its painting. Unsupported pages keep NSCopying.
+    static func compactAssemblyCopy(of page: PDFPage, remainingBytes: Int) throws -> (page: PDFPage, bytes: Int)? {
+        try PDFSaveCancellation.checkCurrent()
+        guard remainingBytes > 0, page.annotations.isEmpty,
+              let reference = page.pageRef, let native = reference.document,
+              !native.isEncrypted, let dictionary = reference.dictionary else { return nil }
+        let document = page.document
+        let boxes: [PDFDisplayBox] = [.mediaBox, .cropBox, .bleedBox, .trimBox, .artBox]
+        let geometry = boxes.map { page.bounds(for: $0) }, rotation = page.rotation
+        do {
+            guard let data = try PDFBodyTextPageSnapshot.compactAssemblyPageData(for: page, maximumBytes: remainingBytes),
+                  data.count <= remainingBytes else { return nil }
+            try PDFSaveCancellation.checkCurrent()
+            guard page.document === document, page.pageRef?.dictionary == dictionary,
+                  page.pageRef?.document === native, page.annotations.isEmpty,
+                  page.rotation == rotation, boxes.map({ page.bounds(for: $0) }) == geometry,
+                  let factory = PDFRawStreamProvenance.bodyResultFactory(data: data),
+                  let copied = factory.copyPage(), copied !== page,
+                  copied.annotations.isEmpty, copied.rotation == rotation,
+                  boxes.map({ copied.bounds(for: $0) }) == geometry else { return nil }
+            try PDFSaveCancellation.checkCurrent()
+            return (copied, data.count)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Optional optimization only. Existing assembly remains available
+            // for unproved resources or a bounded snapshot that cannot fit.
             return nil
         }
-        return copied
+    }
+
+    /// Keep the ordinary independent NSCopying result. The fallback copies
+    /// only annotation-free native painting, never a PDFKit redraw/subset.
+    static func detachedCopy(of page: PDFPage) -> PDFPage? {
+        if let copied = page.copy() as? PDFPage, copied !== page {
+            return copied
+        }
+        guard page.annotations.isEmpty,
+              let reference = page.pageRef, let native = reference.document,
+              !native.isEncrypted, let dictionary = reference.dictionary else { return nil }
+        var rawAnnotations: CGPDFObjectRef?
+        if CGPDFDictionaryGetObject(dictionary, "Annots", &rawAnnotations) {
+            guard let rawAnnotations else { return nil }
+            if CGPDFObjectGetType(rawAnnotations) != .null {
+                var annotations: CGPDFArrayRef?
+                guard CGPDFObjectGetValue(rawAnnotations, .array, &annotations), let annotations,
+                      CGPDFArrayGetCount(annotations) == 0 else { return nil }
+            }
+        }
+        let boxes: [PDFDisplayBox] = [.mediaBox, .cropBox, .bleedBox, .trimBox, .artBox]
+        let geometry = boxes.map { page.bounds(for: $0) }
+        let rotation = page.rotation
+        do {
+            // This writer copies the actual Contents/effective Resources and
+            // emits the existing preservation marker. It omits annotations,
+            // which are explicitly outside this narrow fallback above.
+            let data = try PDFBodyTextPageSnapshot.originalPageData(for: page)
+            guard page.pageRef?.dictionary == dictionary, page.annotations.isEmpty,
+                  page.rotation == rotation, boxes.map({ page.bounds(for: $0) }) == geometry,
+                  let factory = PDFRawStreamProvenance.bodyResultFactory(data: data),
+                  let copied = factory.copyPage(), copied !== page,
+                  copied.annotations.isEmpty, copied.rotation == rotation,
+                  boxes.map({ copied.bounds(for: $0) }) == geometry else { return nil }
+            // The bounded fresh factory owns only this new one-page result;
+            // it keeps no live source book and grants no font/tag authority.
+            return copied
+        } catch {
+            return nil
+        }
     }
 
     /// 선택 인덱스를 문서 순서로 정렬해 새 PDF에 복사한다.
@@ -42,11 +98,16 @@ enum PDFPageOperations {
         // a restricted user-password session into an unrestricted page copy.
         try PDFDocumentSecurityPolicy.validateCanExtractPages(document)
         let indexes = try normalizedSelection(indexes, pageCount: document.pageCount)
+        let imported = try PDFPageStructurePreserver.prepareImport(from: document, indexes: indexes)
         let output = PDFDocument()
-        for index in indexes {
-            let page = try detachedPage(from: document, at: index)
-            output.insert(page, at: output.pageCount)
-        }
+        for page in imported.pages { output.insert(page, at: output.pageCount) }
+        try imported.restoreFormFields()
+        output.documentAttributes = imported.attributes
+        output.outlineRoot = imported.outline
+        PDFCatalogStructurePreserver.inheritDocumentMetadata(from: document, to: output)
+        PDFCatalogStructurePreserver.refreshMarker(output)
+        if imported.containsFormFields { PDFCanonicalFormMaterializer.mark(output) }
+        PDFCatalogStructurePreserver.setAssemblyImagePruning(true, for: output)
         return output
     }
 
@@ -61,9 +122,7 @@ enum PDFPageOperations {
         try PDFDocumentSecurityPolicy.validateCanExtractPages(document)
         let indexes = try normalizedSelection(indexes, pageCount: document.pageCount)
         return try indexes.map { index in
-            let output = PDFDocument()
-            output.insert(try detachedPage(from: document, at: index), at: 0)
-            return ExtractedPDFPage(sourcePageIndex: index, document: output)
+            ExtractedPDFPage(sourcePageIndex: index, document: try extract(from: document, indexes: [index]))
         }
     }
 
@@ -72,18 +131,11 @@ enum PDFPageOperations {
     /// 원본 `source`는 변경하지 않는다.
     static func append(contentsOf source: PDFDocument, to destination: PDFDocument) throws -> Int {
         try PDFDocumentSecurityPolicy.validateCanExtractPages(source)
-        var inserted = 0
-        for index in 0..<source.pageCount {
-            guard
-                let sourcePage = source.page(at: index),
-                let page = detachedCopy(of: sourcePage)
-            else {
-                throw WorkspaceError.operationFailed(L10n.format("error.copy_merged_page", index + 1))
-            }
-            destination.insert(page, at: destination.pageCount)
-            inserted += 1
-        }
-        return inserted
+        guard source.pageCount > 0 else { return 0 }
+        let imported = try PDFPageStructurePreserver.prepareImport(from: source, indexes: Array(0..<source.pageCount))
+        let merge = try PDFPageStructurePreserver.prepareMerge(imports: [imported], into: destination, at: destination.pageCount)
+        try merge.apply()
+        return merge.pages.count
     }
 
     /// Selected-page exports are set-based even when an integration passes an
@@ -103,16 +155,4 @@ enum PDFPageOperations {
         return normalized
     }
 
-    private static func detachedPage(
-        from document: PDFDocument,
-        at index: Int
-    ) throws -> PDFPage {
-        guard
-            let sourcePage = document.page(at: index),
-            let page = detachedCopy(of: sourcePage)
-        else {
-            throw WorkspaceError.operationFailed(L10n.format("error.copy_page", index + 1))
-        }
-        return page
-    }
 }

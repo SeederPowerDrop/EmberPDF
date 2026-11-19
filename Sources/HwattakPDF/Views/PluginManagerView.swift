@@ -6,7 +6,7 @@ import SwiftUI
 enum PluginManagerContent {
     static let sceneID = "plugin-manager"
     static var windowTitle: String {
-        L10n.string("plugins.manager.title", defaultValue: "HwattakPDF 플러그인")
+        L10n.string("plugins.manager.title", defaultValue: "EmberPDF 플러그인")
     }
 }
 
@@ -20,7 +20,7 @@ struct PluginManagerView: View {
     @State private var presentedAlert: PluginManagerAlert?
     @State private var searchQuery = ""
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +28,13 @@ struct PluginManagerView: View {
             Divider().overlay(theme.border)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    Toggle(isOn: Binding(get: { manager.isSafeModeEnabled }, set: { manager.setSafeModeEnabled($0) })) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(L10n.string("plugins.safe_mode.title", defaultValue: "모든 플러그인 일시 중지"), systemImage: "shield.lefthalf.filled")
+                            Text(L10n.string("plugins.safe_mode.detail", defaultValue: "설치와 설정을 유지하면서 모든 플러그인 실행을 멈춥니다."))
+                                .font(.caption).foregroundStyle(theme.secondaryText)
+                        }
+                    }.toggleStyle(.switch).accessibilityIdentifier("plugins-safe-mode")
                     safetyBanner
                     if !manager.availableBundledPlugins.isEmpty {
                         bundledPluginsSection
@@ -150,7 +157,7 @@ struct PluginManagerView: View {
                 Text(
                     L10n.string(
                         "plugins.safety.title",
-                        defaultValue: "안전한 선언형 플러그인"
+                        defaultValue: "권한을 확인하는 확장 플랫폼"
                     )
                 )
                 .font(.callout.weight(.semibold))
@@ -158,12 +165,11 @@ struct PluginManagerView: View {
                 Text(
                     L10n.string(
                         "plugins.safety.detail",
-                        defaultValue: "v1 템플릿 액션은 임의 코드, 셸, Keychain, 원본 PDF 바이트, 직접 네트워크와 GPU에 접근할 수 없습니다. v2 웹 패널은 앱이 검토한 외부 사이트를 임시 세션으로 표시하지만 원격 스크립트·쿠키·추적 기술이 동작할 수 있습니다. 주소창과 상위 페이지 이동 제한은 추적 방지기나 방화벽이 아닙니다."
+                        defaultValue: "기능별 권한과 패키지·코드 해시를 확인하며, 실행형 플러그인 코드는 별도 실행기에서 동작합니다. 게시자 서명·신원은 인증하지 않습니다. 검토된 웹 패널에서도 외부 사이트의 원격 스크립트·쿠키·추적은 세션 중 동작할 수 있습니다."
                     )
                 )
                 .font(.caption)
                 .foregroundStyle(theme.secondaryText)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -306,7 +312,7 @@ struct PluginManagerView: View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Label(
-                    L10n.string("plugins.bundled.title", defaultValue: "HwattakPDF 기본 플러그인"),
+                    L10n.string("plugins.bundled.title", defaultValue: "EmberPDF 기본 플러그인"),
                     systemImage: "shippingbox.fill"
                 )
                 .font(.headline)
@@ -492,11 +498,17 @@ struct PluginManagerView: View {
             )
             .font(.headline)
             Text(
-                L10n.format(
-                    "plugins.resources.detail",
-                    HwattakPluginLimits.maximumInstalledPluginCount,
-                    HwattakPluginLimits.maximumActionsPerPlugin,
-                    HwattakPluginLimits.maximumPackageBytes / 1_024 / 1_024
+                String(
+                    format: L10n.string(
+                        "plugins.resources.detail",
+                        defaultValue: "플러그인은 최대 %d개, 플러그인당 액션 %d개, 패키지당 %dMB로 제한됩니다. 승인한 창 확장은 창이 열려 있는 동안 백그라운드에서 동작할 수 있으며, 앱 전체에서 최대 8개의 독립 실행기를 사용합니다."
+                    ),
+                    locale: L10n.currentLanguage.locale,
+                    arguments: [
+                        HwattakPluginLimits.maximumInstalledPluginCount,
+                        HwattakPluginLimits.maximumActionsPerPlugin,
+                        HwattakPluginLimits.maximumPackageBytes / 1_024 / 1_024
+                    ]
                 )
             )
             .font(.caption)
@@ -600,7 +612,7 @@ private struct PluginInstallReviewSheet: View {
     let onInstall: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         ScrollView {
@@ -656,6 +668,21 @@ private struct PluginInstallReviewSheet: View {
                         defaultValue: "작업과 외부 연결"
                     ))
                         .font(.headline)
+                    if inspection.manifest.runtime != nil {
+                        Label {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(L10n.string("plugins.runtime.title", defaultValue: "앱과 함께 동작하는 확장 기능"))
+                                    .font(.callout.weight(.semibold))
+                                Text(L10n.string("plugins.runtime.disclosure", defaultValue: "설치하고 활성화하면 앱 창이 열려 있는 동안 자동으로 시작합니다. 패널을 닫아도 승인한 명령·이벤트 기능이 계속 동작하며, 플러그인을 끄거나 ‘앱을 사용하는 동안 동작’ 권한을 해제하면 중지됩니다."))
+                                    .font(.caption)
+                                    .foregroundStyle(theme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        } icon: {
+                            Image(systemName: "puzzlepiece.extension")
+                                .foregroundStyle(theme.accent)
+                        }
+                    }
                     ForEach(inspection.manifest.actions) { action in
                         HStack(alignment: .top, spacing: 9) {
                             Image(systemName: actionIcon(action.output))
@@ -688,7 +715,7 @@ private struct PluginInstallReviewSheet: View {
                 Label(
                     L10n.string(
                         "plugins.review.unsigned_notice",
-                        defaultValue: "게시자 서명은 확인하지 않습니다. v1 패키지는 실행 코드를 담을 수 없고 위의 제한된 호스트 액션만 사용합니다. v2 웹 패널은 앱에 포함된 검토본과 정확히 일치할 때만 설치되지만, 열린 사이트의 원격 스크립트·쿠키·추적 기술은 세션 중 동작할 수 있습니다."
+                        defaultValue: "설치 전 기능별 권한을 검토하세요. 패키지·코드 해시는 확인하지만 게시자 서명·신원은 인증하지 않습니다. 실행형 플러그인 코드는 별도 실행기에서 동작합니다. 웹 패널은 앱에 포함된 검토본과 정확히 일치해야 설치되지만, 외부 사이트의 원격 스크립트·쿠키·추적은 세션 중 동작할 수 있습니다."
                     ),
                     systemImage: "exclamationmark.triangle"
                 )
@@ -746,6 +773,12 @@ private struct PluginInstallReviewSheet: View {
 
     private func actionIcon(_ output: PluginActionOutput) -> String {
         switch output {
+        case .scriptPanel: "puzzlepiece.extension"
+        case .appearancePanel: "paintpalette"
+        case .notesPanel: "note.text"
+        case .pageClipPanel: "crop"
+        case .relatedDocumentsPanel: "doc.text.magnifyingglass"
+        case .hoverTranslationPanel: "character.cursor.ibeam"
         case .showText: "text.bubble"
         case .copyText: "clipboard"
         case .openURL: "arrow.up.forward.app"
@@ -758,6 +791,12 @@ private struct PluginInstallReviewSheet: View {
 
     private func actionDisclosure(_ action: PluginActionManifest) -> String {
         switch action.output {
+        case .scriptPanel: return L10n.string("plugins.review.action.script", defaultValue: "별도 실행 공간에서 개발자의 코드를 실행합니다. 승인한 API만 사용하며 파일·네트워크·셸에 직접 접근하지 않습니다.")
+        case .appearancePanel: return L10n.string("plugins.review.action.appearance", defaultValue: "호스트의 읽기 색상 설정을 엽니다. 원본 PDF는 바꾸지 않습니다.")
+        case .notesPanel: return L10n.string("plugins.review.action.notes", defaultValue: "PDF 옆에서 로컬 Markdown 노트를 작성합니다. 직접 선택한 파일만 열고 저장합니다.")
+        case .pageClipPanel: return L10n.string("plugins.review.action.clip", defaultValue: "현재 페이지에서 선택한 영역을 PNG로 복사·저장·드래그합니다. PDF 복사 권한을 준수합니다.")
+        case .relatedDocumentsPanel: return L10n.string("plugins.review.action.related", defaultValue: "열린 PDF의 일부 페이지에서 공통 단어를 검색합니다. 외부 전송이나 폴더 전체 접근은 없습니다.")
+        case .hoverTranslationPanel: return L10n.string("plugins.review.action.hover", defaultValue: "켜 둔 동안 PDF 커서 아래 단어를 macOS 기기 내 번역으로 표시합니다. 언어팩 다운로드가 필요할 수 있습니다.")
         case .documentCommand: return L10n.string("plugins.command.review")
         case .showText:
             return L10n.string(

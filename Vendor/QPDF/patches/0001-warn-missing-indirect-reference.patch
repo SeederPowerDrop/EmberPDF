@@ -1,0 +1,13 @@
+--- a/libqpdf/QPDF_objects.cc
++++ b/libqpdf/QPDF_objects.cc
+@@ -1928,6 +1928,10 @@
+             .first->second.object;
+     }
+     if (parse_pdf) {
++        // EmberPDF must not skip a malformed native ParentTree slot merely
++        // because qpdf normalizes a missing reference to a direct null.
++        qpdf.warn(qpdf_e_damaged_pdf, "", 0,
++                  "EmberPDF: missing indirect reference " + og.unparse(' '));
+         return QPDFObject::create<QPDF_Null>();
+     }
+     return m->obj_cache.insert({og, QPDFObject::create<QPDF_Null>(&qpdf, og)}).first->second.object;

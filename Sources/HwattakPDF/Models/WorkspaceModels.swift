@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import Combine
 import Foundation
 
 /// 현재 포인터 입력을 어떤 문서 편집 동작으로 해석할지 정한다.
@@ -33,18 +34,71 @@ enum WorkspaceTool: String, CaseIterable, Identifiable {
     }
 }
 
+/// Pen appearance is carried by the saved annotation, including after erasing.
+enum PDFInkStyle: String, Codable, CaseIterable, Identifiable {
+    case ink, pencil, fountain, highlighter
+
+    var id: String { rawValue }
+    var title: String { L10n.string("pen.style.\(rawValue)") }
+    var help: String { L10n.string("pen.style.\(rawValue).help") }
+    var symbol: String {
+        switch self {
+        case .ink: "pencil.tip"
+        case .pencil: "pencil"
+        case .fountain: "pencil.tip.crop.circle"
+        case .highlighter: "highlighter"
+        }
+    }
+    var defaultWidth: CGFloat {
+        switch self {
+        case .ink: 2.4
+        case .pencil: 2
+        case .fountain: 5
+        case .highlighter: 14
+        }
+    }
+    var defaultOpacity: CGFloat {
+        switch self {
+        case .ink, .fountain: 1
+        case .pencil: 0.85
+        case .highlighter: 0.3
+        }
+    }
+}
+
 /// PDF ink annotation을 그릴 때 적용하는 시각 속성이다.
 struct InkSettings: Equatable {
+    static let widthRange: ClosedRange<CGFloat> = 0.5...32
+    static let opacityRange: ClosedRange<CGFloat> = 0.05...1
+
+    var style: PDFInkStyle = .ink
+    var drawingOptions = PDFInkDrawingOptions()
     var pressureEnabled = true
     var color = NSColor.systemRed
     var width: CGFloat = 2.4
+    var opacity: CGFloat = 1 {
+        didSet { opacity = Self.clampedOpacity(opacity) }
+    }
 
-    /// Native PDFKit Ink drops color alpha while serializing. Until the app
-    /// authors a dedicated appearance stream for handwriting, preview and saved
-    /// output must both use an opaque color instead of advertising a value that
-    /// cannot survive save/reopen.
+    /// Selecting a different tool starts with its useful default size and
+    /// opacity. Color is retained, and both sliders remain freely editable.
+    mutating func selectStyle(_ style: PDFInkStyle) {
+        guard self.style != style else { return }
+        self.style = style
+        width = style.defaultWidth
+        opacity = style.defaultOpacity
+    }
+
+    /// Translucent strokes use an appearance stream so this alpha survives
+    /// saving and reopening. The separate opacity preference is authoritative;
+    /// a color picked from another control cannot silently change the slider.
     var pdfInkColor: NSColor {
-        color.withAlphaComponent(1)
+        color.withAlphaComponent(Self.clampedOpacity(opacity))
+    }
+
+    private static func clampedOpacity(_ value: CGFloat) -> CGFloat {
+        guard value.isFinite else { return 1 }
+        return min(opacityRange.upperBound, max(opacityRange.lowerBound, value))
     }
 }
 
@@ -75,6 +129,9 @@ enum PDFViewerViewportContext: Hashable {
 /// normal/comparison context가 각각 별도 값을 사용해 좁은 비교 panel의 확대가
 /// 일반 읽기 화면을 덮어쓰지 않는다.
 struct PDFViewerViewportState: Equatable {
+    /// Global scroll percentages from compact spread geometry must never be
+    /// restored into PDFKit's document-wide columns, or vice versa.
+    var usesCompactSpreads = false
     /// Scroll progress belongs to either a continuous document or one paged
     /// spread; retaining the mode prevents restoration into different geometry.
     var navigationMode: PDFPageNavigationMode = .verticalScroll
@@ -130,12 +187,20 @@ struct SignatureStroke: Codable, Equatable, Identifiable {
 /// SwiftUI view가 재생성돼도 초안이 사라지지 않는다. 이 값은 저장이나 탭 전환
 /// 때 자동으로 PDF에 들어가지 않으며, 사용자가 Apply를 눌러야만 하나의 undoable
 /// edit가 된다. Cancel은 초안만 버리고, close/open은 미결 초안이 있으면 거부한다.
-struct PendingTextEdit: Identifiable {
+@MainActor
+final class PendingTextEdit: ObservableObject, Identifiable {
     let id = UUID()
     let pageIndex: Int
     let point: CGPoint
     let isEditingExistingAnnotation: Bool
-    var initialText: String
+    @Published var initialText: String
+
+    init(pageIndex: Int, point: CGPoint, isEditingExistingAnnotation: Bool, initialText: String) {
+        self.pageIndex = pageIndex
+        self.point = point
+        self.isEditingExistingAnnotation = isEditingExistingAnnotation
+        self.initialText = initialText
+    }
 }
 
 /// OCR 비동기 작업의 유한 상태 머신이다. 화면은 Task 자체를 관찰하지 않고

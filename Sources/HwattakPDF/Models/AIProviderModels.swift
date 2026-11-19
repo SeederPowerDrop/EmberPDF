@@ -413,6 +413,7 @@ struct AIMCPApprovalDecision: Codable, Equatable {
 
 struct AICompletionResponse: Equatable {
     let text: String
+    let images: [AIResponseImage]
     let citations: [AISourceCitation]
     let provider: AIProviderKind
     let model: String?
@@ -429,9 +430,11 @@ struct AICompletionResponse: Equatable {
         finishReason: String? = nil,
         usage: AIUsage? = nil,
         responseID: String? = nil,
-        pendingMCPApprovals: [AIMCPApprovalRequest] = []
+        pendingMCPApprovals: [AIMCPApprovalRequest] = [],
+        images: [AIResponseImage] = []
     ) {
         self.text = text
+        self.images = AIResponseImage.bounded(images)
         self.citations = citations
         self.provider = provider
         self.model = model

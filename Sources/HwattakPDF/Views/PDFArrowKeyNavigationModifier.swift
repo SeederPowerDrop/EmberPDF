@@ -8,6 +8,7 @@ import SwiftUI
 struct PDFArrowKeyNavigationModifier: ViewModifier {
     var isFocused: FocusState<Bool>.Binding
     let contextID: String
+    var allowsOption = false
     let onArrow: (KeyEquivalent) -> KeyPress.Result
     @StateObject private var repeater = PDFArrowKeyRepeater()
 
@@ -31,7 +32,8 @@ struct PDFArrowKeyNavigationModifier: ViewModifier {
                     keyCode: code,
                     modifiers: Self.nativeModifiers(press.modifiers),
                     isRepeat: press.phase == .repeat,
-                    window: NSApp.keyWindow
+                    window: NSApp.keyWindow,
+                    allowsOption: allowsOption
                 ) {
                     guard focus.wrappedValue else { return false }
                     return navigate(key) == .handled
@@ -42,6 +44,7 @@ struct PDFArrowKeyNavigationModifier: ViewModifier {
                 if !focused { repeater.stop() }
             }
             .onChange(of: contextID) { _, _ in repeater.stop() }
+            .onChange(of: allowsOption) { _, _ in repeater.stop() }
             .onDisappear { repeater.stop() }
     }
 

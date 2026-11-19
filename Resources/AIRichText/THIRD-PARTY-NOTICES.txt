@@ -1,0 +1,17 @@
+EmberPDF offline AI response renderer
+
+KaTeX 0.19.0 — https://github.com/KaTeX/KaTeX
+Copyright Khan Academy and contributors. MIT license: katex/LICENSE.
+
+Marked 18.1.0 — https://github.com/markedjs/marked
+Copyright Christopher Jeffrey and contributors. MIT license: marked/LICENSE.
+
+DOMPurify 3.4.16 — https://github.com/cure53/DOMPurify
+Copyright Cure53 and contributors. Distributed under the Apache License 2.0
+option of its dual Apache-2.0 OR MPL-2.0 license: dompurify/LICENSE.
+
+The pinned registry tarballs were verified against their published SHA-512
+integrity values before extraction. vendor-manifest.json records each source,
+version, integrity value and bundled upstream file. Upstream JavaScript, CSS,
+fonts and license text are unmodified. All resources ship with the app;
+Markdown and math rendering never downloads scripts, stylesheets or fonts.

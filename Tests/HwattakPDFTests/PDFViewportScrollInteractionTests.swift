@@ -57,7 +57,8 @@ final class PDFViewportScrollInteractionTests: XCTestCase {
                 twoPageDisplayMode: .paged,
                 viewportContext: .comparison
             ),
-            .twoUpContinuous
+            .singlePageContinuous,
+            "Each comparison pane keeps one continuous column independently of its source tab."
         )
     }
 

@@ -199,8 +199,63 @@ final class WorkspaceSessionStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testHorizontalViewportRoundTripRestoresZoomedPositionAndLegacyArchivesStayVertical() throws {
-        let fixture = try makePDFFixture(namesAndPageCounts: [("horizontal.pdf", 5)])
+    func testPagingViewportRoundTripRestoresZoomedPositionAndLegacyArchivesStayVertical() throws {
+        for navigation in [PDFPageNavigationMode.horizontalPaging, .allDirectionsPaging] {
+            let fixture = try makePDFFixture(namesAndPageCounts: [("horizontal.pdf", 5)])
+            addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+            let persistence = MemoryWorkspaceSessionPersistence()
+            let coder = FakeWorkspaceSessionBookmarkCoder()
+            let state = MultiDocumentWorkspaceState(
+                sessionStore: WorkspaceSessionStore(persistence: persistence, bookmarkCoder: coder)
+            )
+            let tabID = try XCTUnwrap(state.openPDFsInTabs(urls: fixture.urls).first)
+            let workspace = try XCTUnwrap(state.activeWorkspace)
+            workspace.currentPageIndex = 3
+            workspace.pageColumns = 2
+            workspace.preparePDFViewportForNavigationMode(navigation)
+            let position = PDFScrollProgress(horizontal: 0.65, vertical: 0.8)
+            workspace.recordPDFViewport(autoScales: false, scaleFactor: 2.4, scrollProgress: position)
+            XCTAssertTrue(state.flushSessionPersistence())
+
+            let archive = try JSONDecoder().decode(WorkspaceSessionArchive.self, from: try XCTUnwrap(persistence.data))
+            let workspaceIndex = try XCTUnwrap(archive.workspaces.firstIndex { $0.tabs.contains { $0.id == tabID } })
+            let tabIndex = try XCTUnwrap(archive.workspaces[workspaceIndex].tabs.firstIndex { $0.id == tabID })
+            XCTAssertEqual(archive.workspaces[workspaceIndex].tabs[tabIndex].pdfPageNavigationMode, navigation.rawValue)
+
+            let restored = MultiDocumentWorkspaceState(
+                sessionStore: WorkspaceSessionStore(persistence: persistence, bookmarkCoder: coder)
+            )
+            let restoredWorkspace = try XCTUnwrap(restored.activeWorkspace)
+            restoredWorkspace.preparePDFViewportForNavigationMode(navigation)
+            XCTAssertEqual(restoredWorkspace.currentPageIndex, 3)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.navigationMode, navigation)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.scaleFactor, 2.4)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+
+            for rawMode in [String?.none, "future-mode"] {
+                var olderArchive = archive
+                olderArchive.workspaces[workspaceIndex].tabs[tabIndex].pdfPageNavigationMode = rawMode
+                let olderPersistence = MemoryWorkspaceSessionPersistence(data: try JSONEncoder().encode(olderArchive))
+                let olderRestored = MultiDocumentWorkspaceState(
+                    sessionStore: WorkspaceSessionStore(persistence: olderPersistence, bookmarkCoder: coder)
+                )
+                let olderWorkspace = try XCTUnwrap(olderRestored.activeWorkspace)
+                XCTAssertEqual(olderWorkspace.pdfViewportState.navigationMode, .verticalScroll)
+                XCTAssertEqual(olderWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+                olderWorkspace.preparePDFViewportForNavigationMode(navigation)
+                if navigation == .horizontalPaging {
+                    XCTAssertNil(olderWorkspace.pdfViewportState.scrollProgress)
+                } else {
+                    XCTAssertEqual(olderWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+                }
+                XCTAssertEqual(olderWorkspace.pdfViewportState.scaleFactor, 2.4)
+            }
+        }
+    }
+
+    @MainActor
+    func testCompactSpreadViewportRoundTripsAndLegacyRecordsRemainNative() throws {
+        let fixture = try makePDFFixture(namesAndPageCounts: [("compact-spreads.pdf", 5)])
         addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
         let persistence = MemoryWorkspaceSessionPersistence()
         let coder = FakeWorkspaceSessionBookmarkCoder()
@@ -210,40 +265,47 @@ final class WorkspaceSessionStoreTests: XCTestCase {
         let tabID = try XCTUnwrap(state.openPDFsInTabs(urls: fixture.urls).first)
         let workspace = try XCTUnwrap(state.activeWorkspace)
         workspace.currentPageIndex = 3
-        workspace.pageColumns = 2
-        workspace.preparePDFViewportForNavigationMode(.horizontalPaging)
-        let position = PDFScrollProgress(horizontal: 0.65, vertical: 0.8)
-        workspace.recordPDFViewport(autoScales: false, scaleFactor: 2.4, scrollProgress: position)
+        workspace.selectTwoPageDisplayMode(.continuous)
+        let position = PDFScrollProgress(horizontal: 0.15, vertical: 0.73)
+        workspace.recordPDFViewport(
+            autoScales: false,
+            scaleFactor: 1.8,
+            scrollProgress: position,
+            usesCompactSpreads: true
+        )
         XCTAssertTrue(state.flushSessionPersistence())
 
-        let archive = try JSONDecoder().decode(WorkspaceSessionArchive.self, from: try XCTUnwrap(persistence.data))
-        let workspaceIndex = try XCTUnwrap(archive.workspaces.firstIndex { $0.tabs.contains { $0.id == tabID } })
-        let tabIndex = try XCTUnwrap(archive.workspaces[workspaceIndex].tabs.firstIndex { $0.id == tabID })
-        XCTAssertEqual(archive.workspaces[workspaceIndex].tabs[tabIndex].pdfPageNavigationMode, "horizontal")
-
-        let restored = MultiDocumentWorkspaceState(
-            sessionStore: WorkspaceSessionStore(persistence: persistence, bookmarkCoder: coder)
+        let archive = try JSONDecoder().decode(
+            WorkspaceSessionArchive.self,
+            from: try XCTUnwrap(persistence.data)
         )
-        let restoredWorkspace = try XCTUnwrap(restored.activeWorkspace)
-        restoredWorkspace.preparePDFViewportForNavigationMode(.horizontalPaging)
-        XCTAssertEqual(restoredWorkspace.currentPageIndex, 3)
-        XCTAssertEqual(restoredWorkspace.pdfViewportState.navigationMode, .horizontalPaging)
-        XCTAssertEqual(restoredWorkspace.pdfViewportState.scaleFactor, 2.4)
-        XCTAssertEqual(restoredWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+        let workspaceIndex = try XCTUnwrap(archive.workspaces.firstIndex {
+            $0.tabs.contains { $0.id == tabID }
+        })
+        let tabIndex = try XCTUnwrap(archive.workspaces[workspaceIndex].tabs.firstIndex {
+            $0.id == tabID
+        })
+        XCTAssertEqual(archive.workspaces[workspaceIndex].tabs[tabIndex].pdfUsesCompactSpreads, true)
 
-        for rawMode in [String?.none, "future-mode"] {
-            var olderArchive = archive
-            olderArchive.workspaces[workspaceIndex].tabs[tabIndex].pdfPageNavigationMode = rawMode
-            let olderPersistence = MemoryWorkspaceSessionPersistence(data: try JSONEncoder().encode(olderArchive))
-            let olderRestored = MultiDocumentWorkspaceState(
-                sessionStore: WorkspaceSessionStore(persistence: olderPersistence, bookmarkCoder: coder)
+        // The same saved position must retain its geometry, while archives
+        // that predate compact spreads continue to identify native columns.
+        for compactFlag in [Bool?.some(true), .some(false), .none] {
+            var candidate = archive
+            candidate.workspaces[workspaceIndex].tabs[tabIndex].pdfUsesCompactSpreads = compactFlag
+            let candidatePersistence = MemoryWorkspaceSessionPersistence(
+                data: try JSONEncoder().encode(candidate)
             )
-            let olderWorkspace = try XCTUnwrap(olderRestored.activeWorkspace)
-            XCTAssertEqual(olderWorkspace.pdfViewportState.navigationMode, .verticalScroll)
-            XCTAssertEqual(olderWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
-            olderWorkspace.preparePDFViewportForNavigationMode(.horizontalPaging)
-            XCTAssertNil(olderWorkspace.pdfViewportState.scrollProgress)
-            XCTAssertEqual(olderWorkspace.pdfViewportState.scaleFactor, 2.4)
+            let restored = MultiDocumentWorkspaceState(
+                sessionStore: WorkspaceSessionStore(persistence: candidatePersistence, bookmarkCoder: coder)
+            )
+            let restoredWorkspace = try XCTUnwrap(restored.activeWorkspace)
+            XCTAssertEqual(restoredWorkspace.currentPageIndex, 3)
+            XCTAssertEqual(restoredWorkspace.pageColumns, 2)
+            XCTAssertEqual(restoredWorkspace.twoPageDisplayMode, .continuous)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.usesCompactSpreads, compactFlag ?? false)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.scaleFactor, 1.8)
+            XCTAssertEqual(restoredWorkspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+            XCTAssertFalse(restoredWorkspace.pdfViewportState(for: .comparison).usesCompactSpreads)
         }
     }
 
@@ -824,6 +886,7 @@ final class WorkspaceSessionStoreTests: XCTestCase {
         XCTAssertNil(legacyTab.comparisonPDFCapturedPageIndex)
         XCTAssertNil(legacyTab.twoPageDisplayMode)
         XCTAssertNil(legacyTab.pdfPageNavigationMode)
+        XCTAssertNil(legacyTab.pdfUsesCompactSpreads)
         XCTAssertNil(legacyTab.pdfPageFitMode)
     }
 
@@ -998,6 +1061,110 @@ final class WorkspaceSessionStoreTests: XCTestCase {
         XCTAssertEqual(archive.workspaces.map(\.id), [mainWorkspaceID])
         XCTAssertFalse(archive.workspaces.contains { $0.id == detachedWorkspaceID })
         withExtendedLifetime(coordinator) {}
+    }
+
+    @MainActor
+    func testComparisonAcrossWorkspacesSurvivesSaveAndRestoreWithinItsWindow() throws {
+        let fixture = try makePDFFixture(namesAndPageCounts: [("first.pdf", 2), ("second.pdf", 3), ("detached.pdf", 1)])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let persistence = MemoryWorkspaceSessionPersistence()
+        let store = WorkspaceSessionStore(persistence: persistence, bookmarkCoder: FakeWorkspaceSessionBookmarkCoder())
+        let main = MultiDocumentWorkspaceState(sessionStore: store)
+        let firstWorkspaceID = main.activeWorkspaceID
+        let firstID = try XCTUnwrap(main.openPDFsInTabs(urls: [fixture.urls[0]]).first)
+        let secondWorkspaceID = main.createWorkspace(title: "Research")
+        let secondID = try XCTUnwrap(main.openPDFsInTabs(urls: [fixture.urls[1]]).first)
+        let detachedID = try XCTUnwrap(main.openPDFsInTabs(urls: [fixture.urls[2]]).first)
+        let tearOutStore = PDFTabTearOutStore()
+        let coordinator = AppWideWorkspaceSessionCoordinator(mainWorkspace: main, sessionStore: store, tearOutStore: tearOutStore)
+        let detachedRequest = try XCTUnwrap(tearOutStore.stageNewWindow(tabID: detachedID, from: main))
+        let detachedWorkspace = try XCTUnwrap(tearOutStore.workspace(for: detachedRequest))
+        XCTAssertFalse(main.allTabs.contains { $0.id == detachedID })
+        XCTAssertTrue(main.selectWorkspace(firstWorkspaceID))
+        var configuration = PDFComparisonConfiguration(selectedDocumentIDs: [firstID, secondID, detachedID], lockedDocumentIDs: [secondID])
+        configuration.applyGridPreset()
+        coordinator.updateComparisonPresentationState(windowID: nil, workspaceID: firstWorkspaceID,
+            state: WorkspaceComparisonPresentationState(isComparing: true, configuration: configuration))
+        XCTAssertTrue(coordinator.flushNow())
+        let archive = try JSONDecoder().decode(WorkspaceSessionArchive.self, from: XCTUnwrap(persistence.data))
+        XCTAssertEqual(archive.workspaces.flatMap(\.tabs).filter { $0.id == detachedID }.count, 1,
+                       "A detached-only flush must remove the stale main copy before its debounce runs.")
+        XCTAssertFalse(try XCTUnwrap(archive.workspaces.first { $0.id == secondWorkspaceID }).tabs.contains { $0.id == detachedID })
+        XCTAssertTrue(try XCTUnwrap(archive.workspaces.first { $0.id == detachedWorkspace.activeWorkspaceID }).tabs.contains { $0.id == detachedID })
+        let saved = try XCTUnwrap(archive.comparisonRecords?.first)
+        XCTAssertEqual(saved.selectedDocumentIDs, [firstID, secondID], "Keep same-window workspaces, excluding detached tabs.")
+        XCTAssertEqual(saved.lockedDocumentIDs, [secondID])
+        XCTAssertTrue(saved.isComparing)
+        XCTAssertEqual(saved.splitTree?.documentIDs, [firstID, secondID])
+
+        let restoredStore = WorkspaceSessionStore(persistence: persistence, bookmarkCoder: FakeWorkspaceSessionBookmarkCoder())
+        let restored = try XCTUnwrap(restoredStore.restore())
+        XCTAssertTrue(restored.workspaces.contains { $0.id == secondWorkspaceID })
+        XCTAssertTrue(try XCTUnwrap(restored.workspaces.first { $0.id == detachedWorkspace.activeWorkspaceID }).tabs.contains { $0.id == detachedID },
+                      "Restore must retain the moved tab in its detached window, without a duplicate main copy.")
+        let comparison = try XCTUnwrap(restored.comparisonRecords?.first)
+        XCTAssertEqual(comparison.selectedDocumentIDs, [firstID, secondID])
+        XCTAssertEqual(comparison.lockedDocumentIDs, [secondID])
+        XCTAssertTrue(comparison.isComparing)
+        XCTAssertEqual(comparison.splitTree?.documentIDs, [firstID, secondID])
+    }
+
+    @MainActor
+    func testComparisonWithOneRemainingPaneSurvivesSaveAndCoordinatorRestore() throws {
+        let fixture = try makePDFFixture(namesAndPageCounts: [("first.pdf", 2), ("second.pdf", 3)])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let persistence = MemoryWorkspaceSessionPersistence()
+        let store = WorkspaceSessionStore(persistence: persistence, bookmarkCoder: FakeWorkspaceSessionBookmarkCoder())
+        let main = MultiDocumentWorkspaceState(sessionStore: store)
+        let workspaceID = main.activeWorkspaceID
+        let ids = main.openPDFsInTabs(urls: fixture.urls)
+        XCTAssertEqual(ids.count, 2)
+        let survivor = try XCTUnwrap(ids.last)
+        let removed = try XCTUnwrap(ids.first)
+        var configuration = PDFComparisonConfiguration(
+            selectedDocumentIDs: ids, layout: .stacked, syncEnabled: false,
+            lockedDocumentIDs: [survivor]
+        )
+        XCTAssertTrue(configuration.removeDocument(removed))
+        XCTAssertTrue(configuration.canContinueComparison)
+        XCTAssertFalse(configuration.canBeginComparison)
+        let coordinator = AppWideWorkspaceSessionCoordinator(
+            mainWorkspace: main, sessionStore: store, tearOutStore: PDFTabTearOutStore()
+        )
+        coordinator.updateComparisonPresentationState(
+            windowID: nil, workspaceID: workspaceID,
+            state: WorkspaceComparisonPresentationState(isComparing: true, configuration: configuration)
+        )
+        XCTAssertTrue(coordinator.flushNow())
+
+        let archive = try JSONDecoder().decode(WorkspaceSessionArchive.self, from: XCTUnwrap(persistence.data))
+        let saved = try XCTUnwrap(archive.comparisonRecords?.first)
+        XCTAssertTrue(saved.isComparing, "Saving must retain an already-open comparison with one remaining pane.")
+        XCTAssertEqual(saved.selectedDocumentIDs, [survivor])
+        XCTAssertEqual(saved.splitTree, .document(survivor))
+        XCTAssertEqual(Set(archive.workspaces.flatMap(\.tabs).map(\.id)), Set(ids))
+
+        let restoredStore = WorkspaceSessionStore(
+            persistence: persistence, bookmarkCoder: FakeWorkspaceSessionBookmarkCoder()
+        )
+        let restoredMain = MultiDocumentWorkspaceState(sessionStore: restoredStore)
+        let restoredCoordinator = AppWideWorkspaceSessionCoordinator(
+            mainWorkspace: restoredMain, sessionStore: restoredStore, tearOutStore: PDFTabTearOutStore()
+        )
+        let restored = try XCTUnwrap(restoredCoordinator.comparisonPresentationState(
+            windowID: nil, workspaceID: workspaceID
+        ))
+        XCTAssertTrue(restored.isComparing)
+        XCTAssertTrue(restored.configuration.canContinueComparison)
+        XCTAssertFalse(restored.configuration.canBeginComparison)
+        XCTAssertEqual(restored.configuration.selectedDocumentIDs, [survivor])
+        XCTAssertEqual(restored.configuration.effectiveSplitTree, .document(survivor))
+        XCTAssertEqual(restored.configuration.lockedDocumentIDs, [survivor])
+        XCTAssertEqual(restored.configuration.layout, .stacked)
+        XCTAssertFalse(restored.configuration.syncEnabled)
+        XCTAssertEqual(Set(restoredMain.allTabs.map(\.id)), Set(ids), "The removed pane's tab remains available after relaunch.")
+        withExtendedLifetime(coordinator) {}
+        withExtendedLifetime(restoredCoordinator) {}
     }
 
     @MainActor

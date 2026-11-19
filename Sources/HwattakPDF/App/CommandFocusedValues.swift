@@ -26,6 +26,7 @@ extension FocusedValues {
 /// instead of accidentally changing a hidden main window.
 struct WorkspacePresentationCommandContext {
     let isFocusMode: Bool
+    let canToggleFocusMode: Bool
     let setFocusMode: (Bool) -> Void
 }
 
@@ -41,5 +42,24 @@ extension FocusedValues {
     var workspacePresentationCommands: WorkspacePresentationCommandContext? {
         get { self[WorkspacePresentationCommandsFocusedValueKey.self] }
         set { self[WorkspacePresentationCommandsFocusedValueKey.self] = newValue }
+    }
+}
+
+/// The gallery belongs to its document window, including while its reader is
+/// covered. Keep this separate from focus mode and document editing commands.
+struct DocumentGalleryCommandContext {
+    let isPresented: Bool
+    let canOpen: Bool
+    let toggle: () -> Void
+}
+
+private struct DocumentGalleryCommandsFocusedValueKey: FocusedValueKey {
+    typealias Value = DocumentGalleryCommandContext
+}
+
+extension FocusedValues {
+    var documentGalleryCommands: DocumentGalleryCommandContext? {
+        get { self[DocumentGalleryCommandsFocusedValueKey.self] }
+        set { self[DocumentGalleryCommandsFocusedValueKey.self] = newValue }
     }
 }

@@ -151,6 +151,8 @@ struct PluginActionRenderer {
             scope = .publicWeb
         case .translation:
             return url
+        case .script, .appearance, .notes, .pageClip, .relatedDocuments, .hoverTranslation:
+            throw PluginSystemError.externalURLRejected
         }
         guard PluginWebURLPolicy.allows(url, scope: scope) else {
             throw PluginSystemError.externalURLRejected
@@ -459,8 +461,9 @@ enum PluginDocumentTextAccess {
         for action: PluginActionManifest,
         workspace: PDFWorkspaceState
     ) throws {
+        if action.output == .notesPanel || action.output == .scriptPanel { return } // Optional insertion is checked at the panel boundary.
         let readsSelection = action.requiredCapabilities.contains(.selectedText)
-        guard readsSelection || action.needsCurrentPageText else { return }
+        guard readsSelection || action.needsCurrentPageText || action.output == .pageClipPanel || action.output == .hoverTranslationPanel else { return }
         guard workspace.allows(.copyAndPaste) else {
             throw PluginSystemError.actionUnavailable(
                 L10n.string(
@@ -510,8 +513,10 @@ struct PluginActionRunner {
     func run(
         plugin: InstalledPlugin,
         action: PluginActionManifest,
-        workspace: PDFWorkspaceState?
+        workspace: PDFWorkspaceState?,
+        revalidate: () throws -> Void = {}
     ) throws -> PluginActionEffect {
+        try revalidate()
         guard plugin.isEnabled else {
             throw PluginSystemError.actionUnavailable(
                 L10n.string(
@@ -537,6 +542,31 @@ struct PluginActionRunner {
             }
         }
 
+        if action.output.isCommunityPanel || action.output == .scriptPanel {
+            guard plugin.manifest.schemaVersion >= 4, let workspace, workspace.document != nil else {
+                throw PluginSystemError.actionUnavailable("an open PDF and schema 4 are required")
+            }
+            try PluginDocumentTextAccess.validate(for: action, workspace: workspace)
+            let kind: PluginPanelKind
+            switch action.output {
+            case .scriptPanel: kind = .script
+            case .appearancePanel: kind = .appearance
+            case .notesPanel: kind = .notes
+            case .pageClipPanel: kind = .pageClip
+            case .relatedDocumentsPanel: kind = .relatedDocuments
+            case .hoverTranslationPanel: kind = .hoverTranslation
+            default: throw PluginSystemError.actionUnavailable("unsupported host panel")
+            }
+            try revalidate()
+            let request = PluginPanelRequest(
+                pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest,
+                documentRevision: workspace.revision,
+                pluginName: BundledPluginPresentation.displayName(for: plugin.manifest),
+                actionID: action.id, title: BundledPluginPresentation.actionTitle(action, in: plugin.manifest), kind: kind
+            )
+            workspace.pluginPanelRequest = request
+            return .openedPanel(request)
+        }
         if action.output == .documentCommand {
             guard plugin.manifest.schemaVersion >= 3, let command = action.command, let workspace else {
                 throw PluginSystemError.actionUnavailable("document command requires schema 3 and an open PDF")
@@ -555,8 +585,8 @@ struct PluginActionRunner {
         )
         let effect: PluginActionEffect
         switch action.output {
-        case .documentCommand:
-            throw PluginSystemError.actionUnavailable("missing document command")
+        case .documentCommand, .scriptPanel, .appearancePanel, .notesPanel, .pageClipPanel, .relatedDocumentsPanel, .hoverTranslationPanel:
+            throw PluginSystemError.actionUnavailable("missing host command")
         case .showText:
             environment.showText(localizedActionTitle, rendered)
             effect = .showedText
@@ -578,6 +608,7 @@ struct PluginActionRunner {
             ) else {
                 throw PluginSystemError.externalURLCancelled
             }
+            try revalidate()
             guard environment.openExternalURL(url) else {
                 throw PluginSystemError.actionFailed("macOS could not open the URL")
             }
@@ -591,6 +622,21 @@ struct PluginActionRunner {
                     )
                 )
             }
+            let pageLayout: PageTranslationLayout?
+            if plugin.manifest.identifier == "dev.hwattakpdf.plugins.page-translator",
+               action.id == "translate-current-page", action.template == "{{page.text}}" {
+                // snapshotContext already checked PDF text-copy permission and
+                // bounded the complete page text. Capture only this page, then
+                // leave the live PDF behind while a translation is in flight.
+                // Other companions retain their existing text/web experience.
+                let pageIndex = min(max(0, workspace.currentPageIndex), workspace.pageCount - 1)
+                guard let page = workspace.document?.page(at: pageIndex) else {
+                    throw PageTranslationError.emptySource
+                }
+                pageLayout = try PageTranslationLayout.capture(page: page, pageNumber: pageIndex + 1)
+            } else {
+                pageLayout = nil
+            }
             let request = PluginPanelRequest(
                 pluginIdentifier: plugin.manifest.identifier,
                 manifestDigest: plugin.manifestDigest,
@@ -599,8 +645,9 @@ struct PluginActionRunner {
                 actionID: action.id,
                 title: localizedActionTitle,
                 kind: .translation,
-                sourceText: rendered,
+                sourceText: pageLayout?.sourceText ?? rendered,
                 sourceDocumentURL: workspace.documentURL,
+                pageLayout: pageLayout,
                 includesSelectedText: action.needsSelection,
                 includesCurrentPageText: action.needsCurrentPageText
             )
@@ -624,6 +671,7 @@ struct PluginActionRunner {
             ) else {
                 throw PluginSystemError.externalURLCancelled
             }
+            try revalidate()
             let request = PluginPanelRequest(
                 pluginIdentifier: plugin.manifest.identifier,
                 manifestDigest: plugin.manifestDigest,

@@ -42,7 +42,7 @@ enum EditableAnnotationKind: String, Equatable {
     case freeText
 
     var canResize: Bool {
-        self == .image || self == .signature
+        self == .image || self == .signature || self == .freeText
     }
 
     var hasImageEditingMenu: Bool {
@@ -132,6 +132,7 @@ final class ImageStampAnnotation: PDFAnnotation {
     }
 
     private let sourceImage: NSImage
+    private let originalJPEG: PDFOriginalJPEG?
     private(set) var normalizedCropRect: CGRect
     private var sanitizedRasterCache: SanitizedRasterCache?
 
@@ -139,8 +140,10 @@ final class ImageStampAnnotation: PDFAnnotation {
         sourceImage.size.width / max(1, sourceImage.size.height)
     }
 
-    init(image: NSImage, bounds: CGRect, normalizedCropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) {
+    init(image: NSImage, bounds: CGRect, normalizedCropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
+         originalJPEG: PDFOriginalJPEG? = nil) {
         sourceImage = image
+        self.originalJPEG = originalJPEG
         self.normalizedCropRect = ImageAnnotationGeometry.unitRect(normalizedCropRect)
         super.init(bounds: bounds, forType: .stamp, withProperties: nil)
         PDFAnnotationPrivacy.clearImplicitAuthor(on: self)
@@ -157,6 +160,27 @@ final class ImageStampAnnotation: PDFAnnotation {
         return nil
     }
 
+    /// Make snapshot/extraction copies independent of source crop edits and
+    /// initialize all Swift fields before PDFKit asks the copy to draw.
+    override func copy(with zone: NSZone? = nil) -> Any {
+        ImageStampAnnotation(copying: self)
+    }
+
+    private init(copying source: ImageStampAnnotation) {
+        sourceImage = (source.sourceImage.copy() as? NSImage) ?? source.sourceImage
+        originalJPEG = source.originalJPEG
+        normalizedCropRect = source.normalizedCropRect
+        // CGImage is immutable; sharing an already sanitized raster is safe.
+        // Each annotation still owns and invalidates its own cache slot.
+        sanitizedRasterCache = source.sanitizedRasterCache
+        var properties = source.annotationKeyValues
+        properties.removeValue(forKey: PDFAnnotationKey.page.rawValue)
+        properties.removeValue(forKey: PDFAnnotationKey.parent.rawValue)
+        super.init(bounds: source.bounds, forType: .stamp, withProperties: properties)
+        userName = source.userName
+        page = nil
+    }
+
     override func draw(with box: PDFDisplayBox, in context: CGContext) {
         // PDFKit's default Stamp renderer paints a placeholder box and an X.
         // Opaque inserted images happened to cover it, but it showed through
@@ -167,12 +191,22 @@ final class ImageStampAnnotation: PDFAnnotation {
         // bounds, then clip" implementation here. PDF clipping hides pixels
         // visually but does not remove them from the saved image XObject. The
         // helper below allocates a new pixel buffer containing only the crop.
-        guard let croppedImage = privacySafeCroppedRaster() else { return }
         context.saveGState()
+        defer { context.restoreGState() }
+        // Annotation bounds are in unrotated page coordinates. PDFKit calls
+        // custom drawing in display-box coordinates, including for appearance
+        // serialization; match the page origin/rotation before clipping.
+        if let page { context.concatenate(page.transform(for: box)) }
         context.interpolationQuality = .high
         context.clip(to: bounds)
+        // Reuse compressed pixels only when *every* source pixel is visible.
+        // Never use a tolerance or clipping as a substitute for removing a crop.
+        if normalizedCropRect == CGRect(x: 0, y: 0, width: 1, height: 1), let originalJPEG {
+            originalJPEG.draw(in: context, bounds: bounds)
+            return
+        }
+        guard let croppedImage = privacySafeCroppedRaster() else { return }
         context.draw(croppedImage, in: bounds)
-        context.restoreGState()
     }
 
     func updateCropRect(_ cropRect: CGRect) {

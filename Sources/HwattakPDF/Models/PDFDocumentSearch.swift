@@ -7,7 +7,7 @@ import PDFKit
 ///
 /// Ranges use UTF-16 offsets because that is the coordinate space shared by
 /// `NSString`, `PDFPage.selection(for:)`, and SwiftUI's `Range(_:in:)` bridge.
-struct PDFSearchResult: Identifiable {
+struct PDFSearchResult: Identifiable, Sendable {
     let id: UUID
     let pageIndex: Int
     let pageLabel: String
@@ -63,6 +63,30 @@ struct PDFSearchProgress: Equatable {
     }
 }
 
+/// A stable scan order captured when a query starts: the viewed page first,
+/// then the rest of the document, wrapping to the beginning exactly once.
+/// No page objects or page-count-sized array are retained.
+struct PDFSearchPageOrder: Sequence, Sendable {
+    let pageCount: Int
+    let anchorPageIndex: Int
+
+    init(pageCount: Int, startingAt pageIndex: Int) {
+        let count = Swift.max(0, pageCount)
+        self.pageCount = count
+        self.anchorPageIndex = Swift.min(Swift.max(0, pageIndex), Swift.max(0, count - 1))
+    }
+
+    func makeIterator() -> AnyIterator<Int> {
+        var offset = 0
+        let tailCount = pageCount - anchorPageIndex
+        return AnyIterator {
+            guard offset < pageCount else { return nil }
+            defer { offset += 1 }
+            return offset < tailCount ? anchorPageIndex + offset : offset - tailCount
+        }
+    }
+}
+
 /// A bounded, page-at-a-time PDF text matcher.
 ///
 /// PDFKit's whole-document `findString` call is synchronous and its public
@@ -87,7 +111,7 @@ struct PDFSearchEngine: Sendable {
         var isEmpty: Bool { normalized.isEmpty }
     }
 
-    struct PageOutcome {
+    struct PageOutcome: Sendable {
         let pageIndex: Int
         let results: [PDFSearchResult]
         let hasExtractableText: Bool
@@ -143,12 +167,35 @@ struct PDFSearchEngine: Sendable {
         }
 
         let pageText = page.string ?? ""
+        let pageLabel = page.label ?? String(pageIndex + 1)
+        let worker = Task.detached(priority: .userInitiated) {
+            try searchText(pageText, pageIndex: pageIndex, pageLabel: pageLabel,
+                           query: query, remainingResultCapacity: remainingResultCapacity)
+        }
+        let outcome = try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+        try Task.checkCancellation()
+        return outcome
+    }
+
+    /// Pure value boundary shared by the single-document navigator and the
+    /// gallery's background-owned PDFs. PDFKit objects never cross actors.
+    func searchText(
+        _ pageText: String,
+        pageIndex: Int,
+        pageLabel: String,
+        query: PreparedQuery,
+        remainingResultCapacity: Int
+    ) throws -> PageOutcome {
         let hasExtractableText = !pageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard hasExtractableText else {
+        guard hasExtractableText, !query.isEmpty, remainingResultCapacity > 0 else {
             return PageOutcome(
                 pageIndex: pageIndex,
                 results: [],
-                hasExtractableText: false,
+                hasExtractableText: hasExtractableText,
                 reachedPageLimit: false
             )
         }
@@ -158,22 +205,12 @@ struct PDFSearchEngine: Sendable {
             max(1, configuration.maximumResultsPerPage)
         )
         let contextCharacters = configuration.snippetContextCharacters
-        let worker = Task.detached(priority: .userInitiated) {
-            try Self.matchPageText(
-                pageText,
-                normalizedQuery: query.normalized,
-                resultLimit: resultLimit,
-                contextCharacters: contextCharacters
-            )
-        }
-        let rawOutcome = try await withTaskCancellationHandler {
-            try await worker.value
-        } onCancel: {
-            worker.cancel()
-        }
+        let rawOutcome = try Self.matchPageText(
+            pageText, normalizedQuery: query.normalized,
+            resultLimit: resultLimit, contextCharacters: contextCharacters
+        )
 
         try Task.checkCancellation()
-        let pageLabel = page.label ?? String(pageIndex + 1)
         // Keep every source-valid lightweight result in the navigator. Some
         // malformed PDFs disagree about `page.string` UTF-16 length and
         // `numberOfCharacters`; activation validates that Objective-C boundary

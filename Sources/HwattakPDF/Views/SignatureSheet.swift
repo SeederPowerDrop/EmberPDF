@@ -34,9 +34,7 @@ struct SignatureSheet: View {
     @State private var isAwaitingLegacyCleanup = false
     @State private var didApplyToPDF = false
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     init(
         settings: Binding<SignatureSettings>,

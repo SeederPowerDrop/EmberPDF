@@ -7,16 +7,30 @@ PROJECT_DIRECTORY="${SCRIPT_DIRECTORY:h}"
 INFO_PLIST="${PROJECT_DIRECTORY}/Resources/Info.plist"
 ENTITLEMENTS="${PROJECT_DIRECTORY}/Resources/HwattakPDF.entitlements"
 LOCALIZATION_DIRECTORY="${PROJECT_DIRECTORY}/Resources/Localization"
-EXPECTED_LOCALIZATIONS=(ko en fr de es ja zh-Hans ar pt vi)
+EXPECTED_LOCALIZATIONS=(ko en ja zh-Hans vi es fr de ru ar)
 REQUIRED_RESOURCES=(
+    AppIcon-Ember.png
     AboutAuthor-SeederPowerDrop-UserProvided.jpg
     AppIcon-FoldWorkspace.png
     AppIcon-PrecisionMarkup.png
     AppIcon-StackAndSelect.png
     HwattakPDFDocument.icns
+    AIRichText/index.html
+    AIRichText/renderer.js
+    AIRichText/renderer.css
+    AIRichText/vendor-manifest.json
+    AIRichText/katex/katex.min.js
+    AIRichText/katex/katex.min.css
+    AIRichText/katex/fonts/KaTeX_Main-Regular.woff2
+    AIRichText/katex/LICENSE
+    AIRichText/marked/marked.umd.js
+    AIRichText/marked/LICENSE
+    AIRichText/dompurify/purify.min.js
+    AIRichText/dompurify/LICENSE
 )
 EXAMPLE_PLUGIN_NAMES=(
     TranslationCompanion.hwattakplugin
+    PageTranslator.hwattakplugin
     YouTubeStudy.hwattakplugin
     WebBrowser.hwattakplugin
     StudyMarkup.hwattakplugin
@@ -24,6 +38,12 @@ EXAMPLE_PLUGIN_NAMES=(
     ReadingNavigation.hwattakplugin
     CommunityStarter.hwattakplugin
     OfflineChecklist.hwattakplugin
+    ReadingColors.hwattakplugin
+    MarkdownNotebook.hwattakplugin
+    PageClipper.hwattakplugin
+    RelatedDocuments.hwattakplugin
+    HoverTranslator.hwattakplugin
+    ReadingLab.hwattakplugin
 )
 CURRENT_VERSION_DOCUMENTS=(
     README.md
@@ -56,6 +76,8 @@ require_command uniq
 require_command cmp
 require_command find
 require_command head
+require_command shasum
+require_command lipo
 
 require_file "${PROJECT_DIRECTORY}/Package.swift"
 require_file "${PROJECT_DIRECTORY}/Sources/HwattakPDF/App/HwattakPDFApp.swift"
@@ -93,6 +115,9 @@ SHORT_VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "${INFO_PLI
 BUILD_VERSION="$(plutil -extract CFBundleVersion raw -o - "${INFO_PLIST}")"
 MINIMUM_SYSTEM="$(plutil -extract LSMinimumSystemVersion raw -o - "${INFO_PLIST}")"
 BUNDLE_EXECUTABLE="$(plutil -extract CFBundleExecutable raw -o - "${INFO_PLIST}")"
+BUNDLE_NAME="$(plutil -extract CFBundleName raw -o - "${INFO_PLIST}")"
+BUNDLE_DISPLAY_NAME="$(plutil -extract CFBundleDisplayName raw -o - "${INFO_PLIST}")"
+BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "${INFO_PLIST}")"
 BUNDLE_COPYRIGHT="$(plutil -extract NSHumanReadableCopyright raw -o - "${INFO_PLIST}")"
 
 [[ "${SHORT_VERSION}" == <->.<->.<-> ]] \
@@ -103,13 +128,29 @@ BUNDLE_COPYRIGHT="$(plutil -extract NSHumanReadableCopyright raw -o - "${INFO_PL
 require_file "${PROJECT_DIRECTORY}/Documentation/RELEASE-NOTES-${SHORT_VERSION}.md"
 require_file "${PROJECT_DIRECTORY}/Documentation/RELEASE-VALIDATION-${SHORT_VERSION}.md"
 require_file "${PROJECT_DIRECTORY}/Documentation/INSTALL-macOS.txt"
+# Only the current document headers declare this package's version; older
+# build numbers remain valid historical evidence later in the release notes.
+INSTALL_VERSION_HEADER="$(head -n 8 "${PROJECT_DIRECTORY}/Documentation/INSTALL-macOS.txt" | sed -n '/^대상: /{p;q;}')"
+[[ "${INSTALL_VERSION_HEADER}" == "대상: ${SHORT_VERSION} "*"(build ${BUILD_VERSION})" ]] \
+    || fail "installation guide current version/build is missing or stale"
+RELEASE_NOTES_PATH="${PROJECT_DIRECTORY}/Documentation/RELEASE-NOTES-${SHORT_VERSION}.md"
+RELEASE_NOTES_TITLE="$(head -n 1 "${RELEASE_NOTES_PATH}")"
+[[ "${RELEASE_NOTES_TITLE}" == "# EmberPDF ${SHORT_VERSION}" || "${RELEASE_NOTES_TITLE}" == "# EmberPDF ${SHORT_VERSION} "* ]] \
+    || fail "release notes current title version is missing or stale"
+RELEASE_VERSION_HEADER="$(head -n 8 "${RELEASE_NOTES_PATH}" | sed -n '/^\*\*버전 /{p;q;}')"
+[[ "${RELEASE_VERSION_HEADER}" == "**버전 ${SHORT_VERSION} · build ${BUILD_VERSION} · "*"**" ]] \
+    || fail "release notes current version/build is missing or stale"
 PDF_DOCUMENT_ICON="$(plutil -extract CFBundleDocumentTypes.0.CFBundleTypeIconFile raw -o - "${INFO_PLIST}")"
 [[ "${PDF_DOCUMENT_ICON}" == "HwattakPDFDocument.icns" ]] \
     || fail "PDF document icon registration is missing or stale"
 [[ "${MINIMUM_SYSTEM}" == "14.0" ]] \
     || fail "Info.plist minimum macOS must remain 14.0"
-[[ "${BUNDLE_EXECUTABLE}" == "HwattakPDF" ]] \
+[[ "${BUNDLE_EXECUTABLE}" == "EmberPDF" ]] \
     || fail "unexpected bundle executable: ${BUNDLE_EXECUTABLE}"
+[[ "${BUNDLE_NAME}" == "EmberPDF" && "${BUNDLE_DISPLAY_NAME}" == "EmberPDF" ]] \
+    || fail "bundle names must use EmberPDF"
+[[ "${BUNDLE_IDENTIFIER}" == "com.vibepdf.mac" ]] \
+    || fail "bundle identifier must preserve the existing upgrade identity"
 [[ "${BUNDLE_COPYRIGHT}" == "Copyright © 2026 SeederPowerDrop" ]] \
     || fail "unexpected bundle copyright: ${BUNDLE_COPYRIGHT}"
 grep -q '\.macOS(\.v14)' "${PROJECT_DIRECTORY}/Package.swift" \
@@ -194,12 +235,55 @@ env \
         --disable-sandbox \
         dump-package > "${VALIDATION_TEMPORARY}/package.json"
 jq -e '
-    .name == "HwattakPDF"
-    and any(.products[]; .name == "HwattakPDF" and .targets == ["HwattakPDF"])
-    and ([.targets[].name] | sort == ["HwattakPDF", "HwattakPDFTests"])
+    .name == "EmberPDF"
+    and any(.products[]; .name == "EmberPDF" and .targets == ["HwattakPDF"])
+    and any(.products[]; .name == "EmberPluginWorker" and .targets == ["EmberPluginWorker"])
+    and ([.targets[].name] | sort == ["CEmberPDFRawStreams", "CPDFium", "EmberPluginWorker", "HwattakPDF", "HwattakPDFTests"])
+    and any(.targets[]; .name == "HwattakPDF"
+        and any(.dependencies[]; .byName[0] == "CEmberPDFRawStreams"))
 ' "${VALIDATION_TEMPORARY}/package.json" >/dev/null \
-    || fail "Swift package, executable and test targets must use HwattakPDF names"
+    || fail "Swift package must provide EmberPDF and EmberPluginWorker while keeping existing HwattakPDF targets"
+
+# The raw-stream bridge is linked into the app, so its pinned static inputs and
+# their upstream notices are release inputs just like the PDFium framework.
+QPDF_DIRECTORY="${PROJECT_DIRECTORY}/Vendor/QPDF"
+require_file "${PROJECT_DIRECTORY}/Sources/CEmberPDFRawStreams/RawStreams.cpp"
+require_file "${PROJECT_DIRECTORY}/Sources/CEmberPDFRawStreams/include/CEmberPDFRawStreams.h"
+require_file "${QPDF_DIRECTORY}/build-manifest.json"
+for qpdf_input in \
+    README.md include/qpdf/QPDF.hh include/qpdf/QPDFObjectHandle.hh \
+    lib/macos-arm64/libqpdf.a lib/macos-arm64/libjpeg.a \
+    patches/0001-warn-missing-indirect-reference.patch \
+    licenses/qpdf-LICENSE.txt licenses/qpdf-NOTICE.md \
+    licenses/libjpeg-turbo-LICENSE.md licenses/libjpeg-turbo-README.ijg; do
+    require_file "${QPDF_DIRECTORY}/${qpdf_input}"
+    [[ -s "${QPDF_DIRECTORY}/${qpdf_input}" ]] || fail "empty qpdf input: ${qpdf_input}"
+    jq -e --arg path "${qpdf_input}" '.files[$path] | type == "string" and test("^[0-9a-f]{64}$")' \
+        "${QPDF_DIRECTORY}/build-manifest.json" >/dev/null \
+        || fail "qpdf input is missing from the build manifest: ${qpdf_input}"
+done
+jq -e '.architecture == "arm64" and .minimumMacOS == "14.0" and .crypto == "native only"' \
+    "${QPDF_DIRECTORY}/build-manifest.json" >/dev/null \
+    || fail "qpdf build manifest does not match the supported deployment target"
+for archive_name in libqpdf.a libjpeg.a; do
+    [[ "$(lipo -archs "${QPDF_DIRECTORY}/lib/macos-arm64/${archive_name}")" == "arm64" ]] \
+        || fail "qpdf archive must contain only arm64: ${archive_name}"
+done
+while IFS=$'\t' read -r relative_path expected_digest; do
+    [[ -n "${relative_path}" && "${relative_path}" != /* && "/${relative_path}/" != */../* ]] \
+        || fail "unsafe qpdf build manifest path"
+    [[ ${#expected_digest} == 64 && "${expected_digest}" != *[^0-9a-f]* ]] \
+        || fail "invalid qpdf build manifest digest: ${relative_path}"
+    require_file "${QPDF_DIRECTORY}/${relative_path}"
+    actual_digest="$(shasum -a 256 "${QPDF_DIRECTORY}/${relative_path}")"
+    [[ "${actual_digest%% *}" == "${expected_digest}" ]] \
+        || fail "qpdf build input checksum mismatch: ${relative_path}"
+done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' "${QPDF_DIRECTORY}/build-manifest.json")
 zsh -n "${PROJECT_DIRECTORY}/scripts/build_app.sh"
+zsh -n "${PROJECT_DIRECTORY}/scripts/prepare_pdfium.sh"
+require_file "${PROJECT_DIRECTORY}/Vendor/PDFium/CPDFium.xcframework/Info.plist"
+require_file "${PROJECT_DIRECTORY}/Vendor/PDFium/LICENSE"
+require_file "${PROJECT_DIRECTORY}/Vendor/PDFium/licenses/pdfium.txt"
 zsh -n "${PROJECT_DIRECTORY}/scripts/run_test_batches.sh"
 zsh -n "${PROJECT_DIRECTORY}/scripts/validate_plugin.sh"
 

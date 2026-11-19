@@ -47,7 +47,7 @@ struct HwattakPDFApp: App {
     var body: some Scene {
         // A WindowGroup participates in Finder's external-file routing. A
         // stable value keeps programmatic reopening attached to this workspace.
-        WindowGroup("HwattakPDF", id: "main", for: MainWorkspaceWindowID.self) { _ in
+        WindowGroup("EmberPDF", id: "main", for: MainWorkspaceWindowID.self) { _ in
             TabbedWorkspaceView(
                 workspace: workspace,
                 windowID: nil,
@@ -62,6 +62,7 @@ struct HwattakPDFApp: App {
                 .environmentObject(iconManager)
                 .environmentObject(aiSettings)
                 .environmentObject(pluginManager)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
                 .handlesExternalEvents(preferring: ["file:"], allowing: ["file:"])
@@ -88,7 +89,7 @@ struct HwattakPDFApp: App {
 
         // [학습 03] 분리한 탭은 독립 창의 루트 뷰(root view)에 들어갑니다. 주 창의 workspace를
         // 재사용하지 않는 이유는 두 창의 활성 탭과 닫기 처리를 독립적으로 유지하기 위해서입니다.
-        WindowGroup("HwattakPDF", for: UUID.self) { $requestID in
+        WindowGroup("EmberPDF", for: UUID.self) { $requestID in
             PDFTabTearOutWindowRoot(
                 requestID: requestID,
                 sessionCoordinator: sessionCoordinator
@@ -98,6 +99,7 @@ struct HwattakPDFApp: App {
                 .environmentObject(iconManager)
                 .environmentObject(aiSettings)
                 .environmentObject(pluginManager)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
                 .handlesExternalEvents(preferring: [], allowing: [])
@@ -109,6 +111,7 @@ struct HwattakPDFApp: App {
 
         Window(HelpTutorialContent.windowTitle, id: HelpTutorialContent.sceneID) {
             HelpTutorialView()
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
         }
@@ -119,6 +122,7 @@ struct HwattakPDFApp: App {
             PluginManagerView(manager: pluginManager)
                 .environmentObject(preferences)
                 .environmentObject(pluginManager)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
         }
@@ -131,6 +135,7 @@ struct HwattakPDFApp: App {
         ) {
             ImagePDFBuilderView()
                 .environmentObject(preferences)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
         }
@@ -139,16 +144,18 @@ struct HwattakPDFApp: App {
 
         Window(L10n.string("recovery.title"), id: "recovery-browser") {
             RecoveryBrowserView(workspace: workspace)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
         }
         .defaultSize(width: 660, height: 460)
 
-        Window(L10n.string("about.title", defaultValue: "HwattakPDF 정보"), id: AboutContent.sceneID) {
+        Window(L10n.string("about.title", defaultValue: "EmberPDF 정보"), id: AboutContent.sceneID) {
             AboutView()
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
         }
-        .defaultSize(width: 840, height: 690)
+        .defaultSize(width: AboutContent.windowSize.width, height: AboutContent.windowSize.height)
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
 
@@ -162,6 +169,7 @@ struct HwattakPDFApp: App {
                 .environmentObject(iconManager)
                 .environmentObject(aiSettings)
                 .environmentObject(pluginManager)
+                .emberTint()
                 .environment(\.locale, preferences.language.locale)
                 .environment(\.layoutDirection, preferences.language.layoutDirection)
         }
@@ -176,6 +184,7 @@ private struct HwattakPDFCommands: Commands {
     @FocusedValue(\.documentSearchAvailable) private var documentSearchAvailable
     @FocusedValue(\.comparisonReadOnlyActive) private var comparisonReadOnlyActive
     @FocusedValue(\.workspacePresentationCommands) private var presentationCommands
+    @FocusedValue(\.documentGalleryCommands) private var galleryCommands
     @AppStorage(WorkspaceChromePreferences.modeToolsVisibleKey)
     private var modeToolsVisible = false
     @AppStorage("pageOverviewPlacement")
@@ -214,14 +223,16 @@ private struct HwattakPDFCommands: Commands {
     /// belong to the focused document window. Settings/About/Help must never
     /// export a PDF that happens to be hidden in the fallback main window.
     private var exportCommandWorkspace: PDFWorkspaceState? {
-        focusedWorkspace?.activeWorkspace
+        guard galleryCommands?.isPresented != true else { return nil }
+        return focusedWorkspace?.activeWorkspace
     }
 
     /// Search belongs to the toolbar of the active tab. Requiring a focused
     /// document scene prevents Command-F in Settings/About/Help from waking a
     /// hidden main-window search field.
     private var searchCommandWorkspace: PDFWorkspaceState? {
-        focusedWorkspace?.activeWorkspace
+        guard galleryCommands?.isPresented != true else { return nil }
+        return focusedWorkspace?.activeWorkspace
     }
 
     /// Mode changes must target only the focused PDF window. Falling back to
@@ -269,7 +280,7 @@ private struct HwattakPDFCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button(L10n.string("about.menu", defaultValue: "HwattakPDF 정보")) {
+            Button(L10n.string("about.menu", defaultValue: "EmberPDF 정보")) {
                 openWindow(id: AboutContent.sceneID)
             }
         }
@@ -348,7 +359,7 @@ private struct HwattakPDFCommands: Commands {
             .disabled(!canCloseActiveTarget)
         }
 
-        CommandGroup(replacing: .saveItem) {
+        CommandGroup(after: .newItem) {
             Button(L10n.string("menu.save")) {
                 guard
                     let activeWorkspace = exportCommandWorkspace,
@@ -359,7 +370,7 @@ private struct HwattakPDFCommands: Commands {
                 WorkspaceSaveCoordinator.requestSave(workspace: activeWorkspace)
             }
             .keyboardShortcut("s", modifiers: .command)
-            .disabled(exportCommandWorkspace?.canSaveNormally != true)
+            .disabled(exportCommandWorkspace?.canSaveNormally != true || exportCommandWorkspace?.isSaving == true)
 
             Button(L10n.string("action.save_copy")) {
                 guard
@@ -371,7 +382,7 @@ private struct HwattakPDFCommands: Commands {
                 WorkspaceSaveCoordinator.requestSaveCopy(workspace: activeWorkspace)
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
-            .disabled(exportCommandWorkspace?.canSaveNormally != true)
+            .disabled(exportCommandWorkspace?.canSaveNormally != true || exportCommandWorkspace?.isSaving == true)
 
             Divider()
 
@@ -397,16 +408,49 @@ private struct HwattakPDFCommands: Commands {
                 comparisonReadOnlyActive == true
                     || exportCommandWorkspace?.canRequestProtectedPDFExport != true
             )
+
+            Button(L10n.string("compression.menu", defaultValue: "PDF 용량 줄이기…")) {
+                guard comparisonReadOnlyActive != true else { return }
+                exportCommandWorkspace?.requestPDFCompression()
+            }
+            .disabled(comparisonReadOnlyActive == true
+                || exportCommandWorkspace?.canRequestPDFCompression != true)
         }
 
         // Extend the native macOS View menu instead of creating a second
         // custom "View" menu. Common layouts remain direct toolbar icons;
         // this menu owns detailed and less frequent presentation choices.
         CommandGroup(after: .sidebar) {
+            Button(
+                checkedMenuTitle(
+                    L10n.string("gallery.open"),
+                    isSelected: galleryCommands?.isPresented == true
+                )
+            ) {
+                galleryCommands?.toggle()
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(
+                fileCommandWorkspace == nil
+                    || (galleryCommands?.isPresented != true && galleryCommands?.canOpen != true)
+                    || editCommandRouter.destination == .blockedBySheet
+            )
+
+            Divider()
+
             Menu(L10n.string("appearance.title")) {
                 Picker(L10n.string("appearance.title"), selection: $preferences.appearance) {
                     ForEach(AppAppearance.allCases) { appearance in
                         Text(appearance.title).tag(appearance)
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+
+            Menu(L10n.string("reading.title")) {
+                Picker(L10n.string("reading.title"), selection: $preferences.readingTheme) {
+                    ForEach(PDFReadingTheme.allCases) { readingTheme in
+                        Text(readingTheme.title).tag(readingTheme)
                     }
                 }
                 .pickerStyle(.inline)
@@ -452,7 +496,8 @@ private struct HwattakPDFCommands: Commands {
                 presentationCommands.setFocusMode(!presentationCommands.isFocusMode)
             }
             .disabled(
-                viewCommandWorkspace?.document == nil
+                fileCommandWorkspace == nil
+                    || presentationCommands?.canToggleFocusMode != true
                     || editCommandRouter.destination == .blockedBySheet
             )
 
@@ -635,7 +680,7 @@ private struct HwattakPDFCommands: Commands {
                         ),
                         title: L10n.string("panel.title.save_selected_pages_combined")
                     ) {
-                        activeWorkspace.exportSelectedPagesAsCombinedPDF(to: url)
+                        Task { await activeWorkspace.exportSelectedPagesAsCombinedPDFAsynchronously(to: url) }
                     }
                 }
 
@@ -652,7 +697,7 @@ private struct HwattakPDFCommands: Commands {
                             activeWorkspace.selectedPages.count
                         )
                     ) {
-                        activeWorkspace.exportSelectedPagesAsIndividualPDFs(to: directory)
+                        Task { await activeWorkspace.exportSelectedPagesAsIndividualPDFsAsynchronously(to: directory) }
                     }
                 }
             }
@@ -730,7 +775,10 @@ private struct HwattakPDFCommands: Commands {
             Button(L10n.string("menu.close_others")) {
                 closeOtherTabs()
             }
-            .disabled((fileCommandWorkspace?.tabs.count ?? 0) < 2)
+            .disabled(
+                galleryCommands?.isPresented == true
+                    || (fileCommandWorkspace?.tabs.count ?? 0) < 2
+            )
         }
 
         CommandMenu(L10n.string("menu.language")) {
@@ -769,7 +817,11 @@ private struct HwattakPDFCommands: Commands {
     private func closeActiveTarget() {
         switch AppFileCommandRouter.closeTarget(for: NSApp.keyWindow) {
         case let .activeTab(workspace):
-            closeActiveTab(in: workspace)
+            if let galleryCommands, galleryCommands.isPresented {
+                galleryCommands.toggle()
+            } else {
+                closeActiveTab(in: workspace)
+            }
         case let .window(window):
             // Keep AppKit in charge of auxiliary-window and sheet dismissal so
             // SwiftUI presentation bindings and native close validation update.
@@ -781,17 +833,34 @@ private struct HwattakPDFCommands: Commands {
 
     private func closeActiveTab(in workspace: MultiDocumentWorkspaceState) {
         guard let session = workspace.activeSession else { return }
-        guard UnsavedChangesGuard.confirmAndClose(workspace: session.workspace) else { return }
-        _ = workspace.closeTab(session.id)
+        Task { @MainActor in
+            guard await UnsavedChangesGuard.confirmAndCloseAsync(
+                workspaces: [session.workspace],
+                validateBeforeClosing: {
+                    workspace.tabs.contains { $0.id == session.id && $0.workspace === session.workspace }
+                }
+            ) else { return }
+            _ = workspace.closeTab(session.id)
+        }
     }
 
     private func closeOtherTabs() {
+        guard galleryCommands?.isPresented != true else { return }
         guard let workspace = fileCommandWorkspace else { return }
         guard let activeSession = workspace.activeSession else { return }
         let others = workspace.tabs.filter { $0.id != activeSession.id }
-        guard UnsavedChangesGuard.confirmAndClose(workspaces: others.map(\.workspace)) else { return }
-        others.forEach { _ = workspace.closeTab($0.id) }
-        workspace.selectTab(activeSession.id)
+        Task { @MainActor in
+            guard await UnsavedChangesGuard.confirmAndCloseAsync(
+                workspaces: others.map(\.workspace),
+                validateBeforeClosing: {
+                    others.allSatisfy { target in
+                        workspace.tabs.contains { $0.id == target.id && $0.workspace === target.workspace }
+                    }
+                }
+            ) else { return }
+            others.forEach { _ = workspace.closeTab($0.id) }
+            workspace.selectTab(activeSession.id)
+        }
     }
 
     private func editHistoryMenuTitle(

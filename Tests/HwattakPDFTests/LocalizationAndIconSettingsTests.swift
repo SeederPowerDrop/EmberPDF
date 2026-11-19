@@ -6,7 +6,7 @@ import XCTest
 
 final class LocalizationAndIconSettingsTests: XCTestCase {
     private static let expectedLanguages = [
-        "ko", "en", "fr", "de", "es", "ja", "zh-Hans", "ar", "pt", "vi"
+        "ko", "en", "ja", "zh-Hans", "vi", "es", "fr", "de", "ru", "ar"
     ]
 
     private static let requiredSemanticKeys: Set<String> = [
@@ -32,6 +32,8 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
         "settings.default_pdf.revealed",
         "settings.language.title",
         "settings.icon.title",
+        "settings.icon.ember.title",
+        "settings.icon.ember.subtitle",
         "settings.icon.runtime_notice",
         "menu.language",
         "menu.export_selected_pages",
@@ -64,6 +66,13 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
         "security.page_extraction_not_allowed",
         "security.content_copying_not_allowed",
         "security.user_session_read_only",
+        "brand.tagline",
+        "brand.detail",
+        "brand.origin.title",
+        "brand.origin.message",
+        "brand.origin.close",
+        "brand.origin.accessibility",
+        "brand.origin.hint",
         "about.introduction.1",
         "about.introduction.2",
         "about.introduction.3",
@@ -338,6 +347,7 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
         "ai.toolbar",
         "ai.role.assistant",
         "about.github",
+        "about.bitcoin", // The receiving currency name and BTC code are language-neutral.
         "settings.pdf_input.zoom_modifier.option",
         "settings.pdf_input.zoom_modifier.command",
         "help.key.command",
@@ -354,9 +364,20 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
     /// identical translations to the locale, key and value so other copy still
     /// receives the full fallback check.
     private static let intentionallyMatchingEnglishValuesByLanguage: [String: [String: String]] = [
-        "de": ["settings.pdf_input.keyboard_speed.normal": "Normal"],
-        "es": ["settings.pdf_input.keyboard_speed.normal": "Normal"],
-        "pt": ["settings.pdf_input.keyboard_speed.normal": "Normal"]
+        "fr": [
+            "translation.page.original": "Original", "translation.page.number": "Page %d",
+            // These labels have the same spelling in French and English.
+            "gallery.search.page": "Page %d", "plugins.clip.page": "Page %d",
+            "plugins.notes.page": "Page %d", "plugins.extensions.title": "Extensions",
+            "study.notes.title": "Notes", "study.links.page": "Page",
+            "ai.history.message_count": "%d messages", "ai.history.open": "Conversations",
+            "page_gallery.subtitle": "%d pages",
+            "comparison.difference.page": "Page %d", "comparison.difference.whole_page": "Page",
+            "pen.shape.ellipse": "Ellipse", "pen.shape.rectangle": "Rectangle",
+        ],
+        "de": ["settings.pdf_input.keyboard_speed.normal": "Normal", "translation.page.original": "Original",
+               "pen.shape.ellipse": "Ellipse"],
+        "es": ["settings.pdf_input.keyboard_speed.normal": "Normal", "translation.page.original": "Original"]
     ]
 
     func testAllRequestedLanguagesAreAvailable() {
@@ -379,6 +400,25 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
             info["NSHumanReadableCopyright"] as? String,
             "Copyright © 2026 SeederPowerDrop"
         )
+    }
+
+    @MainActor
+    func testRetiredPortuguesePreferenceMigratesToEnglishAndRussianPersists() throws {
+        let suiteName = "EmberPDF-language-migration-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("pt", forKey: AppPreferences.languageDefaultsKey)
+        XCTAssertEqual(AppLanguage.savedPreference("pt"), .english)
+        let preferences = AppPreferences(defaults: defaults, appearanceDidChange: { _ in })
+        XCTAssertEqual(preferences.language, .english)
+        XCTAssertEqual(defaults.string(forKey: AppPreferences.languageDefaultsKey), "en")
+
+        preferences.language = .russian
+        let restored = AppPreferences(defaults: defaults, appearanceDidChange: { _ in })
+        XCTAssertEqual(restored.language, .russian)
+        XCTAssertEqual(restored.language.nativeName, "Русский")
+        XCTAssertEqual(restored.language.localeIdentifier, "ru-RU")
+        XCTAssertEqual(AppLanguage.savedPreference(nil), .korean)
     }
 
     func testEveryLocalizationHasTheSameKeysAndFormatPlaceholders() throws {
@@ -463,9 +503,18 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
 
             for key in english.keys.sorted() {
                 let value = try XCTUnwrap(localized[key])
+                // The app's fixed 가T toolbar pictogram is quoted in these
+                // translated instructions; all surrounding prose must still
+                // pass the Korean-copy check.
+                let quotesBodyToolIcon: Set<String> = [
+                    "PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다.",
+                    "help.item.inline_text.detail", "help.item.mode_editing.detail", "tool.select.edit_help"
+                ]
+                let prose = quotesBodyToolIcon.contains(key)
+                    ? value.replacingOccurrences(of: "가T", with: "") : value
 
                 XCTAssertFalse(
-                    Self.containsHangul(value),
+                    Self.containsHangul(prose),
                     "\(language) still contains Korean copy for \(key): \(value)"
                 )
 
@@ -505,7 +554,7 @@ final class LocalizationAndIconSettingsTests: XCTestCase {
     func testAllSelectableIconsAreValidSquareImages() throws {
         let resources = Self.projectRoot.appendingPathComponent("Resources", isDirectory: true)
 
-        XCTAssertEqual(AppIconPreference.defaultValue, .foldWorkspace)
+        XCTAssertEqual(AppIconPreference.defaultValue, .ember)
         for preference in AppIconPreference.allCases {
             let url = resources
                 .appendingPathComponent(preference.resourceName)

@@ -28,6 +28,10 @@ struct SettingsView: View {
     private var efficientRenderingEnabled = AppPerformanceSettings.defaultEfficientRenderingEnabled
     /// TextField 편집 중인 secret은 영속 model에 실시간 반영하지 않는다.
     @AppStorage(PDFRecoveryStore.enabledKey) private var automaticRecovery = true
+    @AppStorage(AIAssistantPreferences.showsTransmissionNoticeKey)
+    private var showsAITransmissionNotice = true
+    @AppStorage(AIAssistantPreferences.requiresTransmissionConfirmationKey)
+    private var requiresAITransmissionConfirmation = true
     @State private var cacheMessage: String?
     @State private var confirmsCacheCleanup = false
     @State private var apiKeyDraft = ""
@@ -36,15 +40,14 @@ struct SettingsView: View {
     @State private var mcpURLDraft = ""
     @State private var aiSettingsMessage: String?
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 appearanceSection
+                readingThemeSection
                 languageSection
                 defaultPDFApplicationSection
                 pdfInputSection
@@ -133,6 +136,19 @@ struct SettingsView: View {
                         cacheMessage = L10n.string("ocr.cache.cleared")
                     } catch { cacheMessage = error.localizedDescription }
                 }
+            }
+        }
+    }
+
+    private var readingThemeSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader(
+                    title: L10n.string("reading.title"),
+                    description: L10n.string("reading.description"),
+                    systemImage: "sun.haze"
+                )
+                ReadingThemeControls(preferences: preferences)
             }
         }
     }
@@ -288,6 +304,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 360, alignment: .leading)
+                .accessibilityIdentifier("pdf-page-navigation-mode")
 
                 Text(L10n.string("pdf.navigation.help"))
                     .font(.caption)
@@ -436,7 +453,7 @@ struct SettingsView: View {
                         Text(
                             L10n.string(
                                 "settings.plugins.safety_note",
-                                defaultValue: "실행 코드와 상주 작업 없이, 사용자가 실행한 제한된 템플릿 액션만 동작합니다."
+                                defaultValue: "승인한 확장 코드는 별도 실행기에서 권한 검사와 실행·크기 제한을 적용해 동작합니다. 검토된 웹 패널에서도 외부 사이트의 스크립트·쿠키·추적은 세션 중 동작할 수 있습니다."
                             )
                         )
                         .font(.caption)
@@ -489,6 +506,21 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
+
+                Toggle(
+                    L10n.string("ai.external_notice.show", defaultValue: "전송 안내 문구 표시"),
+                    isOn: $showsAITransmissionNotice
+                )
+                .accessibilityIdentifier("ai-transmission-notice-setting")
+
+                Toggle(
+                    L10n.string("ai.confirmation.show", defaultValue: "전송 전 확인창 표시"),
+                    isOn: $requiresAITransmissionConfirmation
+                )
+                .accessibilityIdentifier("ai-transmission-confirmation-setting")
+                Text(L10n.string("ai.confirmation.setting_help", defaultValue: "끄면 선택한 공급자와 전송 범위로 바로 보냅니다."))
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
 
                 Divider()
 
@@ -594,7 +626,7 @@ struct SettingsView: View {
                 Label(
                     L10n.string(
                         "ai.settings.billing_note",
-                        defaultValue: "ChatGPT·Claude·Gemini 구독과 개발자 API 사용량·과금은 별도일 수 있습니다. 문서 전송은 AI 패널에서 매번 확인합니다."
+                        defaultValue: "ChatGPT·Claude·Gemini 구독과 개발자 API 사용량·과금은 별도일 수 있습니다."
                     ),
                     systemImage: "lock.shield"
                 )

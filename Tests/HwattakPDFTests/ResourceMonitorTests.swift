@@ -225,6 +225,23 @@ final class ResourceMonitorTests: XCTestCase {
         let counters = try SystemProcessResourceCountersReader().readCounters()
         XCTAssertGreaterThan(counters.residentMemoryBytes, 0)
         XCTAssertGreaterThanOrEqual(counters.cumulativeCPUTime, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(counters.physicalFootprintBytes), 0)
+    }
+
+    @MainActor
+    func testFootprintIsIndependentOfRSSAndNeverInventedWhenUnavailable() {
+        let reader = StubProcessResourceReader(counters: ProcessResourceCounters(
+            residentMemoryBytes: 40, cumulativeCPUTime: 1, physicalFootprintBytes: 800))
+        let monitor = ProcessResourceMonitor(reader: reader, scheduler: StubResourceMonitorScheduler())
+        monitor.sampleNow()
+        XCTAssertEqual(monitor.snapshot?.residentMemoryBytes, 40)
+        XCTAssertEqual(monitor.snapshot?.physicalFootprintBytes, 800)
+
+        reader.counters = ProcessResourceCounters(residentMemoryBytes: 50, cumulativeCPUTime: 2)
+        monitor.sampleNow()
+        XCTAssertEqual(monitor.snapshot?.residentMemoryBytes, 50)
+        XCTAssertNil(monitor.snapshot?.physicalFootprintBytes)
+        XCTAssertNil(monitor.lastError)
     }
 
     func testTabEstimatorUsesDocumentFileAndPageHeuristicAndShares() {

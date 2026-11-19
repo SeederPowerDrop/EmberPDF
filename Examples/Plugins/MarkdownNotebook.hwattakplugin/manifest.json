@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 4,
+  "identifier": "org.emberpdf.examples.markdown-notebook",
+  "displayName": "Markdown Notebook",
+  "version": "1.0.0",
+  "author": "EmberPDF community examples",
+  "description": "Keep a local note or work beside a Markdown file while reading a PDF.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "notesWrite",
+    "fileReadWrite",
+    "documentMetadata",
+    "selectedText"
+  ],
+  "actions": [
+    {
+      "id": "open-panel",
+      "title": "Open Markdown notebook",
+      "output": "notesPanel",
+      "template": ""
+    }
+  ]
+}
+

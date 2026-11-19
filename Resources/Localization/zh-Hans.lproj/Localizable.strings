@@ -12,6 +12,8 @@
 "settings.language.description" = "选择菜单和功能所使用的语言。";
 "settings.icon.title" = "应用图标";
 "settings.icon.description" = "选择在程序坞和应用内显示的图标。";
+"settings.icon.ember.title" = "余烬";
+"settings.icon.ember.subtitle" = "照亮文档的温暖微光";
 "settings.icon.stack.title" = "页面堆叠";
 "settings.icon.stack.subtitle" = "多个PDF页面与选择工具";
 "settings.icon.markup.title" = "标记";
@@ -29,13 +31,13 @@
 "mode.viewer.summary" = "专注于阅读、选择、批注、签名、翻译、AI和共享笔记。";
 "mode.editing.title" = "编辑模式";
 "mode.editing.short" = "编辑";
-"mode.editing.summary" = "在PDF上叠加文本或从视觉上替换现有字形，并编辑签名、图像、手写和页面。";
+"mode.editing.summary" = "修改、删除和添加 PDF 正文文字，并编辑签名、图像、手写和页面。";
 "mode.study.title" = "学习模式";
 "mode.study.short" = "学习";
 "mode.study.summary" = "使用AI、翻译、术语与计算辅助、笔记、手写、下划线和高亮。";
 "status.mode_changed" = "已切换到%@。";
 "tool.comment_note" = "批注笔记";
-"tool.pdf_text" = "PDF文本";
+"tool.pdf_text" = "编辑正文";
 "tool.study_note" = "学习笔记";
 "toolbar.share_note" = "共享笔记";
 "share_note.title" = "添加笔记并共享";
@@ -68,7 +70,7 @@
 "help.item.mode_viewer.title" = "阅读模式";
 "help.item.mode_viewer.detail" = "阅读和选择文本、添加批注或签名、用AI翻译或摘要，然后共享笔记。此模式不直接编辑正文。";
 "help.item.mode_editing.title" = "编辑模式";
-"help.item.mode_editing.detail" = "在PDF上直接输入文本，或用覆盖层遮住现有字形以实现视觉替换，然后放置签名和图像、手写并整理页面。原始内容流文本仍保留；覆盖层更改可撤销并随PDF保存。";
+"help.item.mode_editing.detail" = "用选择工具拖选正文，再点击“编辑正文”（가T）直接修改文字。选择“编辑正文”后点击空白处可插入新文字。还可添加签名、图像、手写内容或整理页面。修改支持撤销，并会在保存时写入。";
 "help.item.mode_study.title" = "学习模式";
 "help.item.mode_study.detail" = "将AI解释、翻译、术语和计算辅助与键入笔记、手写、下划线和可调高亮结合使用。";
 "help.shortcut.mode_viewer" = "切换到阅读模式";
@@ -151,10 +153,10 @@
 "PDF 또는 이미지 파일을 드롭해 주세요." = "请拖入PDF或图像文件。";
 "PDF를 새 탭으로 열거나 이미지 추가" = "在新标签页中打开PDF或添加图像";
 "PDF 병합…" = "合并PDF…";
-"PDF 비교 닫기" = "关闭PDF比较";
-"PDF 비교 배치" = "PDF比较布局";
-"PDF 비교 설정" = "PDF比较设置";
-"PDF 비교" = "比较PDF";
+"PDF 비교 닫기" = "结束一起查看";
+"PDF 비교 배치" = "一起查看布局";
+"PDF 비교 설정" = "一起查看设置";
+"PDF 비교" = "一起查看";
 "PDF 양식 값을 변경했습니다." = "已更改PDF表单值。";
 "PDF 없음" = "无PDF";
 "PDF 여러 개를 놓으면 각 파일을 별도의 탭으로 엽니다." = "拖入多个PDF时，每个文件都会在独立标签页中打开。";
@@ -164,7 +166,7 @@
 "PDF 추가…" = "添加PDF…";
 "PDF 탭별 부담" = "各PDF标签页负载";
 "PDF 탭을 주제별로 묶어 접거나 펼칠 수 있습니다." = "可按主题整理PDF标签页，并折叠或展开标签页堆叠。";
-"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "内容将存储为标准PDF自由文本注释。重新排布现有正文对象将在高级编辑引擎中提供支持。";
+"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "保存为标准PDF自由文本注释。要修改已有正文，请在编辑模式中用选择工具拖选，再点击“编辑正文”（가T）。";
 "PDF는 각각 새 탭에서 열고 이미지는 현재 페이지 중앙에 놓습니다." = "PDF会分别在独立标签页中打开，图像会放在当前页面中央。";
 "PDF는 각각 새 탭에서 열고, 이미지는 현재 페이지 중앙에 놓습니다." = "PDF会分别在独立标签页中打开，图像会放在当前页面中央。";
 "PDF를 새 탭으로 열기" = "在新标签页中打开PDF";
@@ -272,14 +274,14 @@
 "보기" = "视图";
 "분할선 방향까지 함께 표시합니다." = "同时显示分隔线方向。";
 "불투명도" = "不透明度";
-"비교 배치" = "比较布局";
-"비교 시작" = "开始比较";
-"비교 종료" = "结束比较";
-"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "在比较视图中锁定的文档既不会带动其他文档，也不会随其他文档移动。";
-"비교하려면 PDF 탭을 하나 더 열어 주세요." = "要进行比较，请再打开一个PDF标签页。";
-"비교할 PDF" = "要比较的PDF";
-"비교할 PDF가 부족합니다" = "用于比较的PDF不足";
-"비교할 PDF가 없습니다" = "没有可比较的PDF";
+"비교 배치" = "一起查看布局";
+"비교 시작" = "开始一起查看";
+"비교 종료" = "结束一起查看";
+"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "在“一起查看”中，固定的 PDF 不会带动其他文档，也不会跟随其他文档移动。";
+"비교하려면 PDF 탭을 하나 더 열어 주세요." = "再打开一个 PDF 标签页即可一起查看。";
+"비교할 PDF" = "一起查看的 PDF";
+"비교할 PDF가 부족합니다" = "可一起查看的 PDF 不足";
+"비교할 PDF가 없습니다" = "没有可一起查看的 PDF";
 "빈 탭 추가" = "添加空白标签页";
 "빠르게 그은 획을 더 가늘게 표현하는 정도입니다." = "控制快速绘制的笔画变细程度。";
 "빠르게" = "快速";
@@ -339,7 +341,7 @@
 "열 PDF를 선택하세요. iCloud Drive와 Finder의 파일 제공자 위치도 사용할 수 있습니다." = "请选择要打开的PDF。也可使用iCloud云盘及访达中的文件提供程序位置。";
 "열 PDF를 선택하세요. 각 파일을 별도의 탭으로 엽니다." = "请选择要打开的PDF。每个文件都会在单独的标签页中打开。";
 "열려 있는 PDF 중 2~4개를 다시 선택해 주세요." = "请从已打开的PDF中重新选择2到4个。";
-"열린 PDF 비교" = "比较已打开的PDF";
+"열린 PDF 비교" = "一起查看";
 "열린 탭 관리" = "管理已打开的标签页";
 "열린 탭" = "已打开的标签页";
 "예: 연구 자료" = "例如：研究资料";
@@ -351,8 +353,8 @@
 "왼쪽" = "左侧";
 "왼쪽으로 회전" = "向左旋转";
 "운영 체제가 잘못된 리소스 카운터를 반환했습니다." = "操作系统返回了无效的资源计数器。";
-"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "以上数值是整个HwattakPDF进程的实际RSS与CPU用量。CPU 100%表示占用一个逻辑核心。";
-"위아래 비교" = "上下比较";
+"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "以上数值是整个EmberPDF进程的实际RSS与CPU用量。CPU 100%表示占用一个逻辑核心。";
+"위아래 비교" = "垂直排列";
 "이 탭으로 전환합니다." = "切换到此标签页。";
 "이동 감도" = "移动灵敏度";
 "이동할 그룹 없음" = "没有可移动的页面组";
@@ -404,7 +406,7 @@
 "접습니다" = "将折叠";
 "접힘" = "已折叠";
 "정밀하게" = "精确";
-"좌우 비교" = "左右比较";
+"좌우 비교" = "水平并排";
 "주석 내용" = "注释内容";
 "주석 선 색상" = "注释线条颜色";
 "주석을 변경했습니다." = "已更改注释。";
@@ -533,7 +535,7 @@
 "comparison.lock_help.disabled" = "重新启用同步时，将此PDF排除在滚动组之外。";
 
 /* Semantic keys used throughout the workspace */
-"app.version" = "HwattakPDF版本%@";
+"app.version" = "EmberPDF版本%@";
 "comparison.horizontal_split" = "水平分割";
 "comparison.side_by_side" = "左右比较";
 "comparison.stacked" = "上下比较";
@@ -544,8 +546,8 @@
 "document.untitled" = "新建PDF";
 "error.cannot_open_file" = "无法打开文件：%@";
 "error.cannot_save_file" = "无法存储文件：%@";
-"error.external_file_modified" = "“%@”在打开后已被 HwattakPDF 之外的程序修改。较新的文件未被覆盖，请改为保存副本。";
-"새 HwattakPDF 창으로 분리" = "分离到新的 HwattakPDF 窗口";
+"error.external_file_modified" = "“%@”在打开后已被 EmberPDF 之外的程序修改。较新的文件未被覆盖，请改为保存副本。";
+"새 HwattakPDF 창으로 분리" = "分离到新的 EmberPDF 窗口";
 "error.choose_save_location" = "请使用“存储为”选择存储位置。";
 "error.copy_merged_page" = "无法复制合并文件的第%d页。";
 "error.copy_page" = "无法复制第%d页。";
@@ -813,7 +815,15 @@
 "ai.api_key_required" = "请在“设置”中为此提供商保存 API 密钥。";
 "ai.empty.title" = "询问有关 PDF 的问题";
 "ai.empty.message" = "只有在您选择范围并检查预览后，内容才会发送给外部 AI。相关 PDF 的搜索仅在这台 Mac 上进行。";
+"ai.empty.message.direct" = "选择随问题一起发送的范围后，将直接发送给所选 AI 提供商。相关 PDF 的搜索仅在这台 Mac 上进行。";
 "ai.external_notice.short" = "发送前，您将再次核对内容和提供商。";
+"ai.display_options" = "AI 选项";
+"ai.external_notice.show" = "显示发送提示";
+"ai.external_notice.hide" = "隐藏提示";
+"ai.confirmation.show" = "发送前显示确认窗口";
+"ai.confirmation.setting_help" = "关闭后，将按所选范围直接向所选提供商发送请求。";
+"ai.send.direct" = "发送给 AI";
+"ai.external_notice.direct" = "将按所选范围直接向所选提供商发送请求。";
 "ai.send" = "检查并发送给 AI";
 "ai.cancel_request" = "停止 AI 请求";
 "ai.clear" = "清除对话";
@@ -832,7 +842,7 @@
 "ai.draft.apply_confirmation.message" = "添加前，您可以在编辑器中检查文本。只有选择“保存”后才会写入原始文件。";
 "ai.draft.review_and_apply" = "检查并添加为文本";
 "ai.consent.title" = "发送给外部 AI 前请检查";
-"ai.consent.message" = "下方的 PDF 内容将发送到所选 AI 提供商的服务器。HwattakPDF 绝不会在请求内容中包含您的 API 密钥。";
+"ai.consent.message" = "下方的 PDF 内容将发送到所选 AI 提供商的服务器。EmberPDF 绝不会在请求内容中包含您的 API 密钥。";
 "ai.consent.preview" = "内容预览";
 "ai.consent.acknowledge" = "我同意将显示的 PDF 内容和问题发送给上述提供商。";
 "ai.consent.send" = "同意并发送";
@@ -876,9 +886,10 @@
 "ai.settings.api_key_placeholder" = "输入新的 API 密钥";
 "ai.settings.key_saved" = "已安全存储在钥匙串中";
 "ai.settings.key_missing" = "此提供商需要 API 密钥。";
+"ai.settings.key_access_requires_reentry" = "无法访问已保存的 API 密钥。请在“设置 > AI”中重新保存此提供商的 API 密钥。如果登录钥匙串已锁定，请先将其解锁。";
 "ai.settings.key_deleted" = "已删除保存的 API 密钥。";
 "ai.settings.web_search" = "允许提供商进行网页搜索";
-"ai.settings.billing_note" = "ChatGPT、Claude 或 Gemini 订阅可能与开发者 API 的使用和计费分开。AI 面板的每次请求都会要求您确认是否传输文档。";
+"ai.settings.billing_note" = "ChatGPT、Claude 或 Gemini 订阅可能与开发者 API 的使用和计费分开。";
 "ai.settings.mcp_title" = "远程 MCP 服务器";
 "ai.settings.mcp_label" = "服务器标签";
 "ai.settings.mcp_approval_note" = "仅连接公共 HTTPS 服务器，并且每次执行 MCP 工具调用前都必须经过检查和批准。";
@@ -889,21 +900,35 @@
 "ai.error.duplicate_mcp" = "此 MCP 服务器已注册。";
 
 /* About */
-"about.menu" = "关于 HwattakPDF";
-"about.title" = "关于 HwattakPDF";
+"about.menu" = "关于 EmberPDF";
+"about.title" = "关于 EmberPDF";
 "about.close" = "关闭";
 "about.confirm" = "确定";
-"about.github" = "GitHub · github.com/SeederPowerDrop/HwattakPDF";
-"about.support" = "赞助 HwattakPDF";
-"about.introduction.1" = "我曾付费购买并使用一款 PDF 软件，但如今就连基本功能也改成了订阅制，实在让人恼火，于是我通过 Vibe Coding 制作了 HwattakPDF。";
-"about.introduction.2" = "我理解那家公司也需要维持经营，有些决定或许迫不得已，但这种做法对已经付费购买的用户实在太不公平，所以我决定自己做一个。";
-"about.introduction.3" = "希望 HwattakPDF 能让更多人方便地使用 PDF。";
-"about.introduction.4" = "我会尽我所能，让 HwattakPDF 永久免费并持续提供支持，只接受大家自愿给予的小额 tip。";
-"about.introduction.5" = "以及 ERW FWS WRG";
-"about.support.title" = "让 HwattakPDF 永久免费的力量";
-"about.support.detail" = "HwattakPDF 没有订阅费，也没有广告。自愿赞助是让免费开发和维护得以持续的唯一支持方式。";
+"about.github" = "GitHub · SeederPowerDrop";
+"about.support" = "赞助 EmberPDF";
+"about.introduction.1" = "我花了不少钱购买的 PDF 阅读和编辑应用改成了订阅制，原本一直在用的功能也无法再使用了。我很生气，于是通过氛围编程（vibe coding）制作了 EmberPDF。";
+"about.introduction.2" = "就这样，我带着怒气开始制作，但不知不觉间，那份心情像余烬一样平静了下来。我想，应该有很多人和我有过同样的遭遇。我制作这款应用，是希望它能为这些人长期维护下去。";
+"about.introduction.3" = "怀着打造 PDF 领域的 Obsidian 的愿望，我也加入了插件功能。希望大家都能添加自己需要的功能，一起拓展更多可能。";
+"about.introduction.4" = "希望每个人都能从 EmberPDF 中受益，让它像余烬一样长久留存温暖。我会尽我所能，长期免费分享并用心维护它。";
+"about.introduction.5" = "谢谢。\n还有 ERW FWS WRG";
+"about.support.title" = "赞助";
+"about.support.detail" = "怀着将自己得到的帮助传递下去的心意，我制作人人都能免费使用的工具。如果 EmberPDF 对你有帮助，欢迎用一份小小的赞助支持开发和维护。";
 "about.image_accessibility" = "开发者提供的黑白角色插图";
 "about.image_unavailable" = "无法加载介绍图片";
+"about.tagline" = "人人都能自由使用的 macOS PDF 工具。";
+"about.guide" = "使用指南";
+"about.rights.title" = "软件基本权利";
+"about.rights.detail" = "我认为，使用电脑所需的基本工具，应当人人都能免费、自由地使用。愿我们分享的知识成为他人的起点，让人与 AI 一起学习、创造，拓展更多可能。";
+"about.licenses" = "开源许可证";
+"about.licenses.detail" = "EmberPDF 根据 Mozilla Public License 2.0 发布。你也可以查看所使用的开源组件的许可证和版权声明。";
+"about.licenses.project" = "EmberPDF 许可证";
+"about.licenses.components" = "组件与版权声明";
+"about.bitcoin" = "Bitcoin (BTC)";
+"about.bitcoin.detail" = "你可以向以下地址捐赠 Bitcoin (BTC)。";
+"about.bitcoin.copy" = "复制地址";
+"about.bitcoin.copied" = "地址已复制";
+"about.bitcoin.qr" = "Bitcoin 赞助地址二维码";
+"about.support.optional" = "赞助完全自愿，是否赞助不会影响可使用的应用功能。";
 "page.sidebar.layout" = "页面分组视图";
 "page.sidebar.layout.single" = "单页";
 "page.sidebar.layout.facing" = "左右双页";
@@ -920,11 +945,12 @@
 "settings.pdf_input.keyboard_speed.slow" = "慢速";
 "settings.pdf_input.keyboard_speed.normal" = "正常";
 "settings.pdf_input.keyboard_speed.fast" = "快速";
-"settings.pdf_input.keyboard_speed.help" = "控制按住方向键时的移动速度。同时按住 Shift (⇧) 可将速度提高到约 2.2 倍。Option (⌥)+方向键保留原有的页面导航操作。";
+"settings.pdf_input.keyboard_speed.help" = "控制按住方向键时的移动速度。同时按住 Shift (⇧) 可将速度提高到约 2.2 倍。在所有方向键模式下，Option (⌥)+方向键也可翻页。其他模式以及文本输入和选择仍保留原有的 Option 快捷键。";
 "pdf.navigation.label" = "主视图翻页方式";
 "pdf.navigation.vertical" = "上下滚动";
 "pdf.navigation.horizontal" = "左右翻页";
-"pdf.navigation.help" = "选择上下滚动或左右翻页。左右翻页时，使用 ←/→ 键或左右轻扫；双页和四页视图会整组翻动当前显示的页面。";
+"pdf.navigation.all_directions" = "使用所有方向键";
+"pdf.navigation.help" = "选择上下滚动、左右翻页（←/→ 键或左右轻扫）或使用所有方向键。在所有方向键模式下，PDF 区域中的 ↑/← 翻到上一页或上一组，↓/→ 翻到下一页或下一组，也可同时按住 Option (⌥)。鼠标和触控板仍可照常滚动。";
 "settings.pdf_input.zoom_modifier.label" = "滚动缩放键";
 "settings.pdf_input.zoom_modifier.option" = "Option (⌥)";
 "settings.pdf_input.zoom_modifier.command" = "Command (⌘)";
@@ -937,8 +963,8 @@
 "page.jump.help" = "输入页码并按回车键。";
 
 /* Help tutorial */
-"help.title" = "HwattakPDF 用户指南";
-"help.menu" = "HwattakPDF 用户指南";
+"help.title" = "EmberPDF 用户指南";
+"help.menu" = "EmberPDF 用户指南";
 "help.subtitle" = "了解图标、手势、快捷键和安全的文档操作流程。";
 "help.search" = "搜索功能或快捷键";
 "help.no_results.title" = "无结果";
@@ -954,16 +980,16 @@
 "help.item.open.title" = "打开PDF";
 "help.item.open.detail" = "使用文件夹图标或⌘O。选择多个PDF时，每个文件都会在独立的标签页中打开。";
 "help.item.layout.title" = "了解屏幕布局";
-"help.item.layout.detail" = "顶部栏用于管理工作区、标签页、比较和资源。下方工具栏用于控制页面、视图、编辑、OCR、AI和搜索。";
+"help.item.layout.detail" = "顶部栏用于管理标签页和工作区。“查看”工具栏提供翻页、布局和“一起查看”。";
 "help.item.resume.title" = "继续上次的工作";
-"help.item.resume.detail" = "正常退出后，文件、工作区、标签页顺序与标签组、当前页面、视图状态和比较布局都会恢复。对PDF所做的编辑仍需另行存储。";
+"help.item.resume.detail" = "正常退出应用后，将恢复文档、标签页、阅读位置和“一起查看”布局。PDF 编辑内容需另行保存。";
 
 "help.topic.tabs.title" = "标签页、标签组与工作区";
 "help.topic.tabs.summary" = "整理大量文档，同时保留每份文档各自的状态。";
 "help.item.tab_stack.title" = "创建并重新排列标签组";
 "help.item.tab_stack.detail" = "将一个标签页拖放到另一个标签页中央可将它们组成一组；拖放到边缘附近则会调整顺序。";
 "help.item.unstack.title" = "从组中取出标签页";
-"help.item.unstack.detail" = "将组内标签页拖到主标签栏末端，可使其成为独立标签页；将其拖放到文档区域，则会把原有会话完整移至新的HwattakPDF窗口。";
+"help.item.unstack.detail" = "将组内标签页拖到主标签栏末端，可使其成为独立标签页；将其拖放到文档区域，则会把原有会话完整移至新的EmberPDF窗口。";
 "help.item.workspace.title" = "使用独立工作区";
 "help.item.workspace.detail" = "通过叠放方块菜单创建、重命名、切换或删除工作区，并将相关标签页一并移动。";
 "help.item.resources.title" = "查看资源使用情况";
@@ -980,14 +1006,14 @@
 "help.item.thumbnails.title" = "调整缩略图分组";
 "help.item.thumbnails.detail" = "页面面板可以按单页、固定左右双页或四页分组显示。可使用滑块、加减按钮或触控板缩放手势调整大小，并拖动实际页面缩略图来重新排序。";
 
-"help.topic.compare.title" = "比较PDF";
+"help.topic.compare.title" = "一起查看";
 "help.topic.compare.summary" = "将两至四份已打开的文档左右或上下排列阅读。";
-"help.item.compare_start.title" = "开始比较";
-"help.item.compare_start.detail" = "至少打开两个PDF，然后选择重叠矩形图标并选取要比较的文档。";
+"help.item.compare_start.title" = "开始一起查看";
+"help.item.compare_start.detail" = "打开至少两个 PDF，在“查看”工具栏中点击“一起查看”，然后选择 2–4 个文档。";
 "help.item.compare_layout.title" = "重新排列面板并调整大小";
-"help.item.compare_layout.detail" = "选择并排或上下堆叠布局。拖动面板标题可调整顺序，拖动分隔线可调整相邻面板的宽度或高度。";
-"help.item.compare_sync.title" = "同步或锁定滚动";
-"help.item.compare_sync.detail" = "开启滚动同步后，各文档会按相对阅读进度同步移动。可锁定需要保持不动的面板。";
+"help.item.compare_layout.detail" = "选择水平、垂直或网格布局，或开启“编辑布局”后拖动 PDF。放在边缘可分区排列，放在中央可交换位置。拖动分隔线可调整大小。";
+"help.item.compare_sync.title" = "同步移动与固定";
+"help.item.compare_sync.detail" = "开启“同步移动”可保持各 PDF 的相对位置，同步滚动和翻页。需要保持不动的 PDF 可使用图钉固定。";
 
 "help.topic.edit.title" = "编辑与批注";
 "help.topic.edit.summary" = "添加标准PDF批注并安全地管理页面。";
@@ -1018,7 +1044,7 @@
 "help.item.ai_actions.title" = "选择操作和范围";
 "help.item.ai_actions.detail" = "通过闪光按钮，可以针对所选文本、页面或具有代表性的文档上下文执行摘要、分析、问题求解、填写草稿、相关PDF和网页研究等操作。";
 "help.item.ai_privacy.title" = "发送前检查";
-"help.item.ai_privacy.detail" = "每次请求前，HwattakPDF都会显示将要离开Mac的文本和对话。原始PDF不会自动上传；网页和MCP工具需主动启用，MCP调用还需获得批准。";
+"help.item.ai_privacy.detail" = "每次请求前，EmberPDF都会显示将要离开Mac的文本和对话。原始PDF不会自动上传；网页和MCP工具需主动启用，MCP调用还需获得批准。";
 
 "help.topic.save.title" = "安全存储";
 "help.topic.save.summary" = "了解何时会更改PDF文件，以及何时只会记住工作区状态。";
@@ -1029,10 +1055,10 @@
 "help.item.save_close.title" = "关闭时不丢失工作";
 "help.item.save_close.detail" = "关闭有未存储更改的标签页、窗口或应用时，系统会询问是覆盖、存储副本、丢弃还是取消。选择取消会让文档保持打开。";
 "help.item.session_vs_pdf.title" = "恢复会话不等于存储PDF";
-"help.item.session_vs_pdf.detail" = "标签组、工作区、窗口、比较布局、页面和视图位置会自动记住。只有执行存储后，批注和页面编辑才会写入PDF文件。";
+"help.item.session_vs_pdf.detail" = "标签页、工作区、阅读位置和“一起查看”布局会自动记忆。笔记和页面编辑需保存到 PDF 文件。";
 
 "help.topic.shortcuts.title" = "键盘快捷键";
-"help.topic.shortcuts.summary" = "HwattakPDF目前已实现的常用命令。";
+"help.topic.shortcuts.summary" = "EmberPDF目前已实现的常用命令。";
 "help.shortcut.new_tab" = "新建标签页";
 "help.shortcut.open" = "打开PDF";
 "help.shortcut.close" = "关闭当前标签页";
@@ -1043,7 +1069,7 @@
 "help.shortcut.previous_tab" = "上一个标签页";
 "help.shortcut.settings" = "打开设置";
 "help.shortcut.signature_undo" = "撤销上一笔签名笔画";
-"help.shortcut.compare_exit" = "退出比较或取消";
+"help.shortcut.compare_exit" = "取消排列或结束一起查看";
 "help.shortcut.help" = "打开此用户指南";
 
 "help.topic.accessibility.title" = "辅助功能与舒适操作";
@@ -1065,7 +1091,7 @@
 "status.undo_completed" = "已撤销%@";
 "status.redo_completed" = "已重做%@";
 "help.item.undo_redo.title" = "撤销与重做PDF编辑";
-"help.item.undo_redo.detail" = "使用⌘Z撤销，使用⇧⌘Z重做。HwattakPDF会为每个PDF保留最多22项可逆编辑操作，包括画笔、标记、已添加对象和页面操作，而无需保留22份完整PDF副本。";
+"help.item.undo_redo.detail" = "使用⌘Z撤销，使用⇧⌘Z重做。EmberPDF会为每个PDF保留最多22项可逆编辑操作，包括画笔、标记、已添加对象和页面操作，而无需保留22份完整PDF副本。";
 "help.shortcut.undo" = "撤销上一次PDF编辑";
 "help.shortcut.redo" = "重做上一次撤销的PDF编辑";
 
@@ -1078,16 +1104,18 @@
 "search.navigator.clear" = "清除搜索";
 "search.navigator.compact_position" = "%d/%d";
 "search.navigator.show_results" = "显示搜索结果导航器";
+"search.navigator.hide_results" = "隐藏搜索结果导航器";
 "search.navigator.results_count" = "%d 个搜索结果";
 "search.navigator.query" = "“%@”";
 "search.navigator.query_accessibility" = "搜索词：%@";
 "search.navigator.cancel" = "取消";
 "search.navigator.progress_label" = "搜索进度";
 "search.navigator.current_position" = "第 %d 个，共 %d 个";
-"search.navigator.enter_query_message" = "按 ⌘F 打开搜索框，输入内容后按 Return。";
+"search.navigator.enter_query_message" = "按 ⌘F 打开搜索框并输入搜索内容。";
 "search.navigator.no_position" = "没有可选的搜索结果。";
 "search.navigator.progress" = "已搜索 %d/%d 页";
 "search.navigator.page_heading" = "第 %@ 页 · %d 个结果";
+"search.navigator.file_page_detail" = "文件第%d页，共%d页";
 "search.navigator.result_accessibility" = "第 %@ 页，第 %d/%d 个结果：%@";
 "search.navigator.result_hint" = "选中此匹配项并转到页面上的准确位置。";
 "search.navigator.current_result" = "当前结果";
@@ -1128,7 +1156,9 @@
 "study.ai.prompt.study_points" = "请整理复习或考试中重要的概念、需要记住的关系以及容易混淆之处。";
 "study.ai.prompt.quiz" = "请制作一个检查当前内容的简短测验，并将答案单独放在最后以免立即看到。";
 "study.ai.current_page_help" = "准备当前页面的预览。确认前不会发送给外部 AI。";
+"study.ai.current_page_help.direct" = "将当前页面直接发送给所选 AI 提供商。";
 "study.ai.selection_help" = "准备所选文本的预览。确认前不会发送给外部 AI。";
+"study.ai.selection_help.direct" = "将所选文本直接发送给 AI 提供商。";
 "study.note.typed" = "键入笔记";
 "study.note.typed_help" = "单击 PDF，使用键盘添加学习笔记批注。";
 "study.note.handwriting" = "手写笔记";
@@ -1148,7 +1178,7 @@
 "study.status.underline_added" = "已添加下划线。";
 
 /* 编辑模式的页内文本编辑器 */
-"inline_text.editor" = "PDF 页内文本编辑器";
+"inline_text.editor" = "PDF 文本编辑器";
 "inline_text.font" = "字体";
 "inline_text.font_size" = "字号";
 "inline_text.text_color" = "文字颜色";
@@ -1168,10 +1198,10 @@
 "inline_text.visual_replacement_warning" = "这只是视觉替换。原 PDF 文字仍可搜索和复制；这不是安全涂黑。";
 "status.inline_text_updated" = "已更新文本和外观。";
 "status.visual_text_replacement_added" = "已添加视觉文本替换；原文仍保留在下方。";
-"help.item.inline_text.title" = "直接在 PDF 上输入文字";
-"help.item.inline_text.detail" = "在编辑模式中，用文本工具点击页面即可原位输入。双击本应用创建的文本可再次编辑。可设置字体、字号、文字颜色、背景和对齐；按 Return 或 ⌘Return 应用，Shift-Return 换行，Esc 取消。";
-"help.item.visual_text_replacement.title" = "视觉替换现有文字";
-"help.item.visual_text_replacement.detail" = "选中正文后，用文本工具点击选区可放置 FreeText 遮盖层。原 PDF 文字仍可被搜索、复制和辅助功能提取，切勿将其用于安全涂黑或敏感数据删除。";
+"help.item.inline_text.title" = "修改正文和添加文字";
+"help.item.inline_text.detail" = "在编辑模式中，用选择工具拖选正文，再点击“编辑正文”（가T），即可直接修改所选文字。输入可替换选中的文字，编辑时可点击或使用方向键移动光标。Return换行，⌘Return应用，Esc取消。要插入新文字，请选择“编辑正文”并点击空白处。已有的自由文本注释仍以注释形式编辑。";
+"help.item.visual_text_replacement.title" = "正文编辑范围和删除";
+"help.item.visual_text_replacement.detail" = "编辑器显示 PDF 中保存的整个文本对象，范围可能超出选中的单词。清空后应用会删除该对象。保存的修改会反映在搜索和复制结果中。不支持整段自动重排、倾斜或复杂变换的文字，以及扫描图像中的文字。旧版视觉替换注释下的原文仍会保留。";
 "help.item.study_palette.title" = "学习快捷工具与隐私确认";
 "help.item.study_palette.detail" = "选择文本可准备翻译、解释、摘要、解题过程、学习要点或测验；未选择时仅使用当前页面。只有确认预览后才会向外部 AI 发送。键入会创建学习笔记批注，手写则使用鼠标、触控板或通过 Sidecar 的 Apple Pencil 指针输入。可调整颜色、粗细和不透明度，并用 Command-Z 撤销。";
 "help.item.study_markup_interop.title" = "可调标记的兼容性";
@@ -1187,7 +1217,7 @@
 "error.image_unsafe_file" = "只能添加普通图像文件。";
 
 "menu.plugins" = "插件";
-"plugins.manager.title" = "HwattakPDF 插件";
+"plugins.manager.title" = "EmberPDF 插件";
 "plugins.manager.summary" = "%d 个插件 · %d 个已启用操作";
 "plugins.install" = "安装插件…";
 "plugins.install.confirm" = "安装";
@@ -1212,17 +1242,17 @@
 "plugins.permissions.none" = "无文档权限";
 "plugins.permission.document_metadata" = "读取文档名称和页面信息";
 "plugins.permission.selected_text" = "读取用户选择的文本";
-"plugins.permission.clipboard" = "将文本写入剪贴板";
+"plugins.permission.clipboard" = "将文本和图片写入剪贴板";
 "plugins.permission.external_url" = "确认后打开外部 HTTPS 链接";
 
-"plugins.safety.title" = "安全的声明式插件";
-"plugins.safety.detail" = "v1 模板操作无法直接访问任意代码、Shell、钥匙串、原始 PDF 字节、网络或 GPU。v2 网页面板会在临时会话中显示经审核的网站，但远程脚本、Cookie 和跟踪仍可运行。导航限制并非跟踪拦截器或防火墙。";
+"plugins.safety.title" = "检查权限的扩展平台";
+"plugins.safety.detail" = "会检查各项功能的权限以及插件包和代码的哈希值。可执行插件代码在独立执行程序中运行。不验证发布者签名或身份。即使是经过审核的网页面板，外部网站的远程脚本、Cookie 和跟踪也可能在会话期间运行。";
 "plugins.resources.title" = "资源与稳定性策略";
-"plugins.resources.detail" = "最多可安装 %d 个插件，每个插件最多 %d 个操作，每个包最多 %d MB。操作仅在请求时运行，不会产生常驻的 CPU 或 GPU 工作。";
+"plugins.resources.detail" = "最多可安装%d个插件，每个插件最多%d个操作，每个包最大%d MB。已授权的窗口扩展可在窗口打开期间于后台运行，整个应用最多使用8个隔离的执行进程。";
 
 "plugins.review.install_title" = "审核插件安装";
 "plugins.review.update_title" = "审核插件更新";
-"plugins.review.unsigned_notice" = "不会验证发布者签名。v1 包不能包含可执行代码，只能使用上方的受限宿主操作。v2 网页面板仅在与 App 内审核副本完全一致时安装，但远程脚本、Cookie 和跟踪可在会话期间运行。";
+"plugins.review.unsigned_notice" = "安装前请检查各项功能的权限。会检查插件包和代码的哈希值，但不验证发布者签名或身份。可执行插件代码在独立执行程序中运行。网页面板必须与应用内经过审核的副本完全一致才能安装，但外部网站的远程脚本、Cookie 和跟踪可能在会话期间运行。";
 "plugins.review.package_info" = "%d 个文件 · %d KB · SHA-256 %@";
 
 "plugins.external_url.title" = "要打开外部链接吗？";
@@ -1235,7 +1265,7 @@
 "plugins.error.title" = "插件错误";
 "plugins.error.invalid_package" = "插件包无效：%@";
 "plugins.error.invalid_manifest" = "插件清单无效：%@";
-"plugins.error.incompatible" = "此插件需要 HwattakPDF %@ 或更高版本。当前版本：%@";
+"plugins.error.incompatible" = "此插件需要 EmberPDF %@ 或更高版本。当前版本：%@";
 "plugins.error.already_installed" = "“%@”插件已安装。";
 "plugins.error.package_changed" = "审核后插件包发生了变化。请重新选择。";
 "plugins.error.limit" = "最多可安装 %d 个插件。";
@@ -1258,7 +1288,7 @@
 "action.stop" = "停止载入";
 "plugins.browser.address_placeholder" = "搜索或输入 HTTPS 地址";
 "plugins.browser.privacy" = "地址栏和顶层页面导航仅限公共 HTTPS。这并非针对子资源、fetch、WebSocket 或 DNS 的跟踪拦截器或防火墙。";
-"plugins.bundled.title" = "HwattakPDF 内置插件";
+"plugins.bundled.title" = "EmberPDF 内置插件";
 "plugins.bundled.detail" = "随 App 提供 · 安装前审核权限";
 "plugins.bundled.review_install" = "审核并安装";
 "plugins.bundled.translation.name" = "翻译助手";
@@ -1334,7 +1364,7 @@
 "settings.plugins.title" = "插件";
 "settings.plugins.description" = "安装经过验证的 .hwattakplugin 包，并管理其权限和启用状态。";
 "settings.plugins.installed_count" = "已安装 %d 个插件 · %d 个已启用操作";
-"settings.plugins.safety_note" = "只有由你发起且受限的模板操作可以运行；没有可执行代码或常驻任务。";
+"settings.plugins.safety_note" = "已授权的扩展代码在独立执行进程中运行，并接受权限检查及执行和大小限制。即使是已审核的网页面板，外部网站的脚本、Cookie和跟踪仍可能在会话期间运行。";
 "settings.plugins.resource_note" = "v1 模板操作有数量和大小限制，且不能直接访问网络或 GPU。v2 网页面板会连接经审核的网站；其导航限制并非跟踪拦截器或防火墙。";
 
 "help.topic.plugins.title" = "插件";
@@ -1521,7 +1551,7 @@
 
 "pen.pressure.enabled" = "使用数位板压感";
 
-"pen.pressure.help" = "使用 Sidecar 或数位板传来的压感。压感笔迹保存为 PDF 图章；鼠标笔迹使用固定宽度。";
+"pen.pressure.help" = "鼠标笔画使用固定粗细。通过Sidecar连接的Apple Pencil和支持压感的数位板可根据压力改变笔画粗细。";
 
 "recovery.title" = "恢复工作…";
 
@@ -1550,19 +1580,19 @@
 
 // Default PDF app association
 "settings.default_pdf.title" = "默认 PDF App";
-"settings.default_pdf.description" = "设置为在“访达”中连按 PDF 时使用 HwattakPDF 打开。";
+"settings.default_pdf.description" = "设置为在“访达”中连按 PDF 时使用 EmberPDF 打开。";
 "settings.default_pdf.current" = "当前默认 App：%@";
 "settings.default_pdf.unknown" = "无法确定";
-"settings.default_pdf.active" = "此 HwattakPDF 已是默认 PDF App。";
+"settings.default_pdf.active" = "此 EmberPDF 已是默认 PDF App。";
 "settings.default_pdf.set" = "在“访达”中设置关联…";
 "settings.default_pdf.refresh" = "刷新关联状态";
 "settings.default_pdf.failed" = "无法准备文件关联设置：%@";
-"settings.default_pdf.requires_app" = "此功能可在已安装的 HwattakPDF.app 中使用。请将 App 放入“应用程序”文件夹后启动。";
+"settings.default_pdf.requires_app" = "此功能可在已安装的 EmberPDF.app 中使用。请将 App 放入“应用程序”文件夹后启动。";
 "settings.default_pdf.location_hint" = "建议先将 App 放入“应用程序”文件夹，再将其设为默认 App。如果之后移动或删除 App，可能需要重新设置文件关联。";
 "settings.default_pdf.manual_title" = "如何设置默认 PDF App";
-"settings.default_pdf.manual_help" = "点按下方按钮后，“访达”会选中用于设置的 PDF。请打开“显示简介”（⌘I）→ 在“打开方式”中选择 HwattakPDF → 点按“全部更改”。返回 App 时会再次检查文件关联。";
+"settings.default_pdf.manual_help" = "点按下方按钮后，“访达”会选中用于设置的 PDF。请打开“显示简介”（⌘I）→ 在“打开方式”中选择 EmberPDF → 点按“全部更改”。返回 App 时会再次检查文件关联。";
 "settings.default_pdf.manual_note" = "macOS 文件关联在“访达”中确认。如果某个文件单独设置了打开方式，请同时检查该文件的“显示简介”窗口。";
-"settings.default_pdf.revealed" = "为“访达”中选中的 PDF 打开“显示简介”（⌘I），在“打开方式”中选择 HwattakPDF，然后点按“全部更改”。";
+"settings.default_pdf.revealed" = "为“访达”中选中的 PDF 打开“显示简介”（⌘I），在“打开方式”中选择 EmberPDF，然后点按“全部更改”。";
 
 /* Local region text selection */
 "selection.region_drag" = "区域选择模式。请拖出矩形，框选要翻译的文字。";
@@ -1679,3 +1709,701 @@
 "translation.local.error.timedOut" = "本地翻译操作超时。请缩短原文后重试。";
 "translation.local.error.cancelled" = "本地翻译已取消。";
 "translation.local.error.failed" = "本地翻译失败。请检查语言包和Argos Translate的安装状态。";
+
+/* EmberPDF identity and hidden origin story */
+"brand.tagline" = "像余火一样，长久相伴的可靠 PDF 工具。";
+"brand.detail" = "让每个人都能轻松阅读和编辑的 PDF 工具";
+"brand.origin.title" = "一颗火种的起点";
+"brand.origin.message" = "这款应用最初是一气之下做出来的。\n后来，我平复了心情，将这份情绪化为动力，打造一款让每个人都能轻松处理 PDF 的工具。";
+"brand.origin.close" = "返回文档";
+"brand.origin.accessibility" = "EmberPDF 名称的由来";
+"brand.origin.hint" = "点击名称五次，开启一段小故事。";
+
+/* Current-page translation preview */
+"plugins.bundled.page_translation.name" = "页面翻译";
+"plugins.bundled.page_translation.description" = "将译文叠加在原始版式上，阅读当前页面。";
+"plugins.bundled.page_translation.page.title" = "显示翻译后的页面";
+"plugins.bundled.page_translation.page.description" = "翻译当前页面，并保留图片和版式进行预览。";
+"translation.page.preview" = "页面预览";
+"translation.page.original" = "原文";
+"translation.page.translated" = "译文";
+"translation.page.expand" = "放大页面";
+"translation.page.save_pdf" = "将翻译后的页面保存为 PDF";
+"translation.page.number" = "第 %d 页";
+"translation.page.note" = "用于阅读的翻译副本。文本区域可能遮挡背景；复杂的表格和公式可能需要检查。";
+"translation.page.source_note" = "原文固定在页面中的对应位置。对于扫描页面，请先运行 OCR。";
+"translation.page.continued" = "放不下的文本将延续到后续页面。";
+"translation.page.preparing" = "正在准备页面…";
+"translation.page.preview_error" = "无法准备翻译后的页面。";
+"translation.page.close" = "关闭页面预览";
+
+/* Translated-page layout and continuation */
+"translation.layout.error.geometry" = "无法准确读取此页面的文本位置。请尝试文本翻译视图。";
+"translation.layout.error.render" = "无法显示完整的翻译页面。未使用不完整的页面。";
+"translation.layout.error.mapping" = "译文与此页面的部分文本区域不匹配。请重新翻译页面。";
+"translation.layout.continuation" = "带编号区域的完整译文续篇";
+"translation.layout.region" = "区域 %@";
+"translation.layout.continuation_note" = "每个带编号区域的完整译文如下。";
+"translation.page.html_source" = "在 HTML 中包含原文";
+
+/* Open-document current-page gallery */
+"gallery.title" = "已打开的 PDF 画廊";
+"gallery.subtitle" = "切换工作区，一览文档及其内容。";
+"gallery.open" = "已打开的 PDF 画廊";
+"gallery.close" = "关闭画廊";
+"gallery.search" = "搜索文档名称或内容";
+"gallery.count" = "%d 个 PDF";
+"gallery.current_page" = "第 %d 页，共 %d 页";
+"gallery.current_document" = "当前文档";
+"gallery.empty" = "此工作区中没有已打开的 PDF。";
+"gallery.no_results" = "没有与搜索匹配的文档。";
+"gallery.preview_loading" = "正在准备预览…";
+"gallery.preview_unavailable" = "无法显示预览。";
+"gallery.preview_locked" = "打开文档以解锁。";
+"gallery.open_document" = "继续阅读此文档";
+"gallery.shortcut_hint" = "选择卡片继续阅读 · 按 Esc 关闭";
+"gallery.modified" = "未保存的更改";
+
+/* Reading colors */
+"reading.title" = "阅读配色";
+"reading.original" = "原始颜色";
+"reading.soft" = "柔和纸张";
+"reading.sepia" = "暖色纸张";
+"reading.night" = "夜间阅读";
+"reading.description" = "调整应用和 PDF 纸张的颜色，选择适合长时间阅读的舒适画面。";
+"reading.original.detail" = "保留当前外观模式和 PDF 的原始颜色。";
+"reading.soft.detail" = "将白色纸张调整为柔和的米白色。";
+"reading.sepia.detail" = "为应用和纸张增添暖色调。";
+"reading.night.detail" = "使用深色应用界面和柔和的灰色纸张来降低亮度。";
+"reading.display_only" = "图片和批注在屏幕上的颜色也会改变。原始文件以及保存和导出的结果保持不变。";
+"reading.preview" = "阅读预览";
+"reading.preview.text" = "读一段小小的思绪，让它长久延续。";
+"reading.preview.caption" = "与 EmberPDF 一起从容阅读";
+
+/* Gallery workspace navigation and local content search */
+"gallery.all_workspaces" = "所有工作区";
+"gallery.workspace_scope" = "选择工作区";
+"gallery.all_tabs" = "所有标签页";
+"gallery.tab_scope" = "选择标签页";
+"gallery.all_groups" = "所有文档";
+"gallery.ungrouped" = "未分组的标签页";
+"gallery.group_scope" = "标签页分组";
+"gallery.search.progress" = "正在搜索 %d/%d 份文档 · 已检查 %d 页";
+"gallery.search.results" = "%d 份文档 · 内容匹配 %d 处";
+"gallery.search.stop" = "停止搜索";
+"gallery.search.retry" = "重新搜索";
+"gallery.search.cancelled" = "搜索已停止。您仍可查看已找到的结果。";
+"gallery.search.local" = "在本机搜索已打开 PDF 的文本。";
+"gallery.search.limited" = "仅显示部分结果。请细化搜索词，或在文档中继续搜索。";
+"gallery.search.unreadable" = "无法搜索 %d 份文档的内容。";
+"gallery.search.unreadable_detail" = "受密码锁定、限制文本提取的 PDF，以及无文本的扫描件不参与内容搜索。";
+"gallery.search.filename_only" = "名称匹配";
+"gallery.search.content_count" = "内容匹配 %d 处";
+"gallery.search.page" = "第 %d 页";
+"gallery.search.more" = "再显示 %d 处匹配";
+"gallery.search.less" = "收起";
+"gallery.search.open_result" = "前往此处";
+"gallery.search.no_results" = "未找到匹配的文档或内容。";
+"gallery.search.no_results_help" = "请尝试其他搜索词，或扩大工作区、标签页的搜索范围。";
+"gallery.search.waiting" = "正在查看文档内容…";
+"gallery.search.clear" = "清除搜索";
+"gallery.search.changed" = "文档已更改，请重新搜索。";
+"gallery.search.unavailable" = "内容无法搜索";
+"gallery.search.opened_result" = "已前往匹配内容。";
+"gallery.search.stale_result" = "文档已更改，无法确认搜索位置。请在图库中重新搜索。";
+
+/* Host-owned plugin companion panels, schema 4 */
+"plugins.appearance.detail" = "调整应用与纸张颜色，让阅读更舒适。原始PDF保持不变。";
+"plugins.clip.adjust" = "微调区域";
+"plugins.clip.copied" = "已复制图片，请粘贴到其他应用。";
+"plugins.clip.copy" = "复制图片";
+"plugins.clip.drag" = "将图片拖到其他应用";
+"plugins.clip.error.authorization" = "插件权限已更改，请检查后重新打开面板。";
+"plugins.clip.error.clipboard" = "无法将图片复制到剪贴板。";
+"plugins.clip.error.copy_restricted" = "此PDF不允许复制图片。";
+"plugins.clip.error.destination" = "请选择不会覆盖原始PDF的PNG文件。";
+"plugins.clip.error.geometry" = "请选择页面内的区域。";
+"plugins.clip.error.render" = "无法生成页面图片。";
+"plugins.clip.error.size" = "图片过大，请选择较小区域。";
+"plugins.clip.error.stale" = "文档已更改，请重新打开页面剪裁。";
+"plugins.clip.error.unavailable" = "请先打开PDF页面。";
+"plugins.clip.export_note" = "可将复制或保存的PNG粘贴到PDF、笔记、Word等应用。图片按原始颜色导出。";
+"plugins.clip.full_page" = "整个页面";
+"plugins.clip.height" = "高度";
+"plugins.clip.instructions" = "在页面上拖动以剪裁区域。原始PDF保持不变。";
+"plugins.clip.left" = "左侧";
+"plugins.clip.page" = "第%d页";
+"plugins.clip.save" = "保存PNG";
+"plugins.clip.saved" = "已保存PNG图片。";
+"plugins.clip.selection" = "页面剪裁区域。可在微调区域中使用键盘调整。";
+"plugins.clip.top" = "顶部";
+"plugins.clip.width" = "宽度";
+"plugins.hover.detail" = "启用后，将指针停在PDF单词上。仅在此面板打开时使用macOS设备内翻译。";
+"plugins.hover.download" = "首次使用某种语言时，macOS可能提示下载语言包。";
+"plugins.hover.enable" = "启用悬停翻译";
+"plugins.hover.language" = "目标语言";
+"plugins.hover.requires_system" = "自动悬停翻译需要macOS 15或更高版本。";
+"plugins.hover.title" = "悬停翻译";
+"plugins.notes.edit" = "编辑";
+"plugins.notes.editor" = "Markdown笔记编辑器";
+"plugins.notes.empty" = "记录想法，收集PDF中选取的段落。";
+"plugins.notes.error.changed" = "其他应用已修改此文件，请另存为以保留两个版本。";
+"plugins.notes.error.encoding" = "请选择UTF-8文本文件。";
+"plugins.notes.error.file" = "请选择普通.md或.markdown文件。不打开替身或符号链接。";
+"plugins.notes.error.linked" = "不覆盖硬链接文件，请另存为。";
+"plugins.notes.error.path" = "仅可打开您选择的本地Markdown文件。";
+"plugins.notes.error.size" = "笔记的UTF-8大小不得超过1 MB。";
+"plugins.notes.insert_selection" = "所选文字";
+"plugins.notes.insert_source" = "页面出处";
+"plugins.notes.local_only" = "在此设备上编辑。链接、图片与HTML不会自动打开。";
+"plugins.notes.mode" = "笔记视图";
+"plugins.notes.new" = "新建笔记";
+"plugins.notes.open" = "打开Markdown";
+"plugins.notes.page" = "第%d页";
+"plugins.notes.preview" = "预览";
+"plugins.notes.preview_limit" = "仅预览长笔记的开头。编辑和保存仍保留完整内容。";
+"plugins.notes.save" = "保存Markdown";
+"plugins.notes.save_as" = "另存为";
+"plugins.notes.unsaved.title" = "保存笔记更改？";
+"plugins.notes.untitled" = "未命名.md";
+"plugins.permission.appearance" = "更改阅读颜色";
+"plugins.permission.export" = "将图片保存或拖到所选位置";
+"plugins.permission.files" = "打开和保存所选Markdown文件";
+"plugins.permission.hover" = "读取指针下的PDF单词";
+"plugins.permission.local_translation" = "使用macOS设备内翻译";
+"plugins.permission.notes" = "读写本地笔记";
+"plugins.permission.open_documents" = "搜索已打开PDF的正文";
+"plugins.permission.page_image" = "将当前PDF页面读取为图片";
+"plugins.related.detail" = "在已打开的PDF中寻找共同词语。仅抽查各文档的部分页面，不向外部发送数据。";
+"plugins.related.empty" = "抽查页面中未找到相关内容，请尝试其他关键词。";
+"plugins.related.page" = "从当前页面获取主题";
+"plugins.related.query" = "主题或关键词";
+"plugins.safe_mode.detail" = "暂停全部插件，并保留安装状态与设置。";
+"plugins.safe_mode.title" = "暂停全部插件";
+
+"plugins.review.action.appearance" = "打开应用的阅读颜色设置，不更改原始PDF。";
+"plugins.review.action.notes" = "在PDF旁编辑本地Markdown笔记。仅打开和保存您选择的文件。";
+"plugins.review.action.clip" = "将选定页面区域复制、保存或拖动为PNG，遵守PDF的复制权限。";
+"plugins.review.action.related" = "在已打开PDF的部分页面中查找共同词语。不向外部发送，也不访问整个文件夹。";
+"plugins.review.action.hover" = "启用时使用macOS设备内翻译显示指针下的PDF单词。可能需要下载语言包。";
+
+/* Isolated script SDK */
+"plugins.permission.storage" = "保存插件专用的本地设置";
+"plugins.review.action.script" = "在独立进程中运行开发者代码，仅使用获准API。不直接访问文件、网络或命令行。";
+"plugins.script.invalid" = "插件请求格式无效。";
+"plugins.script.limit" = "插件超出了大小或请求次数限制。";
+"plugins.script.unavailable" = "找不到插件运行助手。";
+"plugins.script.revoked" = "权限或文档已更改，插件已停止。";
+"plugins.script.timeout" = "插件无响应，已终止。您可以继续处理PDF。";
+"plugins.script.running" = "插件运行中";
+"plugins.script.stopped" = "插件已停止";
+"plugins.script.stop" = "停止";
+"plugins.script.restart" = "重新运行";
+"plugins.permission.background_execution" = "使用应用期间运行";
+"plugins.permission.document_text" = "读取整个文档的文本";
+"plugins.runtime.title" = "随应用运行的扩展";
+"plugins.runtime.disclosure" = "安装并启用后，此扩展会在应用窗口打开期间自动启动。关闭面板后，已授权的命令和事件仍会运行。停用插件或撤销“使用应用期间运行”权限即可停止。";
+"plugins.extensions.title" = "扩展";
+"plugins.script.contextChanged" = "文档已更改，之前的请求已取消。";
+
+/* Native PDF body text editing */
+"body_text.edit_hint" = "直接修改正文。点击页面其他位置或按⌘Return即可应用。";
+"status.body_text_updated" = "已修改正文文字。";
+"status.body_text_deleted" = "已删除正文文字。";
+"status.body_text_added" = "已添加正文文字。";
+"error.body_text_stale" = "编辑中的页面已更改。请取消编辑，然后重新选择文字。";
+"body_text.error.restricted" = "请以所有者权限打开此 PDF，以编辑正文文字。";
+"body_text.error.unreadable" = "无法以可编辑形式读取 PDF 正文。";
+"body_text.error.too_complex" = "此页面或文字超过支持的编辑大小。";
+"body_text.error.unsupported" = "暂不支持编辑采用此结构、变换或渲染方式的文字或页面。";
+"body_text.error.reading_order" = "应用此修改可能会改变页面文字的阅读顺序。PDF 未被更改，草稿仍保留在编辑器中。";
+"body_text.error.reopen_for_edit" = "要保留此页的无障碍标记，请取消当前草稿，保存并重新打开 PDF 后再编辑。";
+"body_text.error.save_accessibility_tags" = "无法保留第 %d 页的辅助功能标签，已停止保存。编辑内容仍保留在打开的文档中。请撤销该页的正文编辑后重新保存。";
+"body_text.error.scan_background" = "无法在安全保留布局和背景的同时编辑所选扫描文本。请选择同一段落中的行，或逐行编辑。";
+"body_text.error.scan_selection_fit" = "输入的文字超出了所选扫描区域。请选择更大的句子或段落范围，或缩小字号。";
+"body_text.error.changed" = "编辑期间原文已更改。请重新选择文字。";
+"body_text.error.failed" = "无法完成 PDF 正文修改。原文未改变。";
+"body_text.error.does_not_fit" = "输入的文字无法放入当前编辑区域。请调整字体或字号，或缩短内容。";
+
+/* Recent PDF access recovery */
+"recent.reconnect.title" = "重新关联最近的 PDF";
+"recent.reconnect.choose" = "重新选择文件…";
+"recent.reconnect.message" = "无法使用“%@”已保存的访问授权。应用更新或文件移动后可能出现此情况。请重新选择文件以恢复关联。";
+"recent.reconnect.panel" = "请重新选择“%@”。如果文件已移动，请选择当前位置的 PDF。";
+
+/* Study notes, pen and eraser controls, and thumbnail zoom */
+"page.sidebar.settings" = "页面预览设置";
+"page.sidebar.thumbnail_reset" = "将预览重置为100%";
+"pen.opacity" = "不透明度";
+"study.pen.style" = "笔粗细与不透明度";
+"study.eraser.settings" = "橡皮擦设置";
+"study.eraser.mode" = "擦除方式";
+"study.eraser.stroke" = "整笔擦除";
+"study.eraser.partial" = "局部擦除";
+"study.eraser.option_help" = "按住Option键时，临时切换为另一种擦除方式。";
+"study.eraser.size" = "橡皮擦大小";
+"study.notes.open" = "学习笔记";
+"eraser.changed" = "已擦除手写笔迹。";
+"study.notes.title" = "笔记";
+"study.notes.add" = "新建笔记";
+"study.notes.quote" = "用所选文字创建笔记";
+"study.notes.empty.title" = "暂无笔记";
+"study.notes.empty.detail" = "阅读PDF时添加笔记，即可在这里集中查看。";
+"study.notes.scanning" = "正在查找笔记…";
+"study.notes.saved_in_pdf" = "笔记以批注形式保存在此PDF中。请保存文件以保留笔记。";
+"study.notes.edit" = "编辑笔记";
+"study.notes.reveal" = "跳转到笔记位置";
+"study.notes.delete" = "删除笔记";
+"study.notes.delete_unavailable" = "对于已保存的笔记，可以在编辑模式下删除，也可以修改内容后再删除。";
+"study.notes.untitled" = "空白笔记";
+"study.notes.editor_hint" = "应用后，笔记会添加到页面和笔记列表中。较长的笔记可从列表重新打开阅读。";
+"study.notes.deleted" = "已删除笔记。";
+"study.notes.count" = "%d条笔记";
+"tool.select.help" = "拖动以选择PDF文字。在图像页面上，会识别所拖选区域内的文字。";
+"tool.select.edit_help" = "拖选正文后点击“编辑正文”（가T），即可直接修改所选文字。";
+
+// Study note editor, appearance, links and pen styles
+"study.notes.editor.float" = "在独立窗口中编辑";
+"study.notes.editor.dock" = "移回侧边栏";
+"pen.style" = "笔类型";
+"pen.style.ink" = "墨水笔";
+"pen.style.pencil" = "铅笔";
+"pen.style.fountain" = "钢笔";
+"pen.style.highlighter" = "荧光笔";
+"pen.style.ink.help" = "书写流畅的墨水笔画，并随笔压变化。";
+"pen.style.pencil.help" = "呈现铅笔在纸上绘画般的细腻颗粒质感。";
+"pen.style.fountain.help" = "笔画方向和笔压会改变笔画粗细。";
+"pen.style.highlighter.help" = "用宽而半透明的笔画标记正文。选择后可调整粗细和不透明度。";
+"study.note.style.title" = "笔记外观";
+"study.note.style.background" = "背景颜色";
+"study.note.style.foreground" = "文字颜色";
+"study.note.style.opacity" = "背景不透明度";
+"study.note.style.width" = "宽度";
+"study.note.style.height" = "高度";
+"study.note.style.x" = "水平位置";
+"study.note.style.y" = "垂直位置";
+"study.note.style.font_size" = "字号";
+"study.note.style.units" = "尺寸和位置以磅（pt）为单位，垂直位置从页面底部算起。";
+"study.note.style.move_resize" = "在页面上移动和调整大小";
+"study.note.style.updated" = "已更新笔记外观。";
+"study.links.title" = "关联";
+"study.links.add" = "添加关联";
+"study.links.empty" = "关联到另一个 PDF 页面、笔记或书签。";
+"study.links.local_hint" = "关联列表保存在这台 Mac 的 EmberPDF 中，不会包含在其他应用中。要保留笔记关联，请同时保存已添加笔记标识符的 PDF。";
+"study.links.open" = "打开关联位置";
+"study.links.reconnect" = "重新关联文件…";
+"study.links.remove" = "删除关联";
+"study.links.target" = "关联目标";
+"study.links.pdf" = "已打开的 PDF";
+"study.links.page" = "页码";
+"study.links.page_only" = "此页面";
+"study.links.open_target" = "请先在应用中打开要关联的 PDF。";
+"study.links.save_first" = "请先将 PDF 保存为文件，再创建关联。";
+"study.links.invalid_target" = "请重新选择目标页面或笔记。";
+"study.links.duplicate" = "这些位置已有关联。";
+"study.links.limit" = "关联存储空间已满。请删除不再需要的关联。";
+"study.links.unavailable" = "无法打开关联的 PDF。请使用“重新关联文件”选择文件。";
+"study.links.storage_error" = "无法读取已保存的关联列表。原始数据已保留。";
+"study.links.note_missing" = "未找到关联的笔记，已打开其所在页面。";
+"study.links.note_permission" = "关联此笔记需要保存其标识符的修改权限。请在学习模式下关联，或改为关联页面。";
+
+"study.notes.insert.selection" = "在光标处插入选中的 PDF 文字";
+
+"study.notes.insert.time" = "在光标处插入当前日期和时间";
+
+"study.notes.insert.location" = "在光标处插入当前 PDF 文件名和页码";
+
+"study.notes.insert.location_format" = "%@ · 第 %d/%d 页";
+
+"study.links.target_load_failed" = "无法加载此 PDF。请检查文件访问权限后重试。";
+
+"study.links.all_notes" = "所有笔记";
+
+"study.links.bookmarks" = "书签";
+
+"study.links.target_loading" = "正在加载 PDF…";
+
+"study.links.retry" = "重新加载";
+
+"study.links.targets_scanning" = "正在查找所有笔记和书签…";
+
+"study.links.targets_limited" = "项目过多，仅显示部分内容。也可以按页码创建关联。";
+
+"study.links.filter_targets" = "搜索笔记和书签";
+
+"study.links.bookmark_hint" = "关联到 PDF 目录或书签指向的页面。";
+
+"study.links.targets_empty" = "没有可选项目。";
+
+"study.links.total_pages" = "共 %d 页";
+
+"study.links.current_page" = "当前阅读位置：第 %d 页";
+
+"study.links.page_range" = "请输入 1 至 %d 之间的页码。";
+
+"study.links.search_text" = "正文搜索";
+
+"study.links.search_placeholder" = "在所选 PDF 正文中查找";
+
+"study.links.search_hint" = "选择搜索结果中的页面进行关联。搜索包含文本或 OCR 文字层的页面。";
+
+"study.links.search_no_text" = "没有可搜索的文字。请先对纯图像 PDF 应用 OCR，再搜索。";
+
+"study.links.search_empty" = "未找到匹配的正文。";
+
+"study.links.search_copy_restricted" = "此 PDF 限制复制，无法搜索正文预览。";
+
+"study.links.search_changed" = "PDF 内容已更改，正在更新搜索。";
+
+"study.links.search_unavailable" = "无法加载要搜索的 PDF。";
+
+"study.links.connect_current" = "直接关联到当前阅读的第 %d 页";
+
+"study.links.search_pages" = "在 %d 个页面中找到";
+
+"study.links.search_progress" = "正在搜索第 %d/%d 页";
+
+"study.links.search_limited" = "仅显示前 %d 个匹配页面。请使用更具体的搜索词。";
+
+"study.links.choose_pdf" = "选择要关联的 PDF";
+
+"study.note.style.preview" = "笔记颜色和不透明度预览";
+
+"study.note.style.color_target" = "选择要更改颜色的部分";
+
+"study.note.style.apply_failed" = "无法更改笔记。请重新打开笔记后重试。";
+
+"study.note.style.apply_hint" = "查看预览后，点击“应用”。";
+
+"study.notes.visibility.menu" = "笔记显示";
+
+"study.notes.visibility.hide_all" = "隐藏全部笔记";
+
+"study.notes.visibility.show_all" = "显示全部笔记";
+
+"study.notes.visibility.hide" = "在 PDF 上隐藏笔记";
+
+"study.notes.visibility.show" = "在 PDF 上显示笔记";
+
+"study.notes.visibility.hidden" = "已隐藏";
+
+"study.notes.visibility.count" = "%d 条笔记 · %d 条已隐藏";
+
+"study.notes.visibility.hint" = "隐藏的笔记仍可在列表中阅读和重新显示。保存 PDF 时也会保存隐藏状态。";
+
+"comparison.entry.open" = "一起查看";
+
+"comparison.entry.close" = "结束一起查看";
+
+"comparison.entry.help" = "从已打开的 PDF 中选择 2–4 个，一起查看并排列。";
+
+"comparison.arrange.horizontal" = "水平并排";
+
+"comparison.arrange.vertical" = "垂直排列";
+
+"comparison.arrange.grid" = "网格排列";
+
+"comparison.arrange.equal" = "大小均等";
+
+"comparison.arrange.hint" = "拖动标题或开启“编辑布局”即可调整 PDF 位置。拖动分隔线可调整大小。";
+
+"comparison.arrange.panel" = "排列此 PDF";
+
+"comparison.arrange.document" = "排列 %@";
+
+"comparison.arrange.custom" = "自定义布局 · 可在“一起查看”中更改各区域的方向和大小。";
+
+"comparison.motion_sync" = "同步移动";
+
+"comparison.motion_sync.help" = "保持各 PDF 已调整好的相对位置，同步滚动和翻页。";
+
+"comparison.all_previous" = "所有未固定的 PDF 上一页";
+
+"comparison.all_next" = "所有未固定的 PDF 下一页";
+
+"comparison.place.left" = "所选 PDF 的左侧";
+
+"comparison.place.right" = "所选 PDF 的右侧";
+
+"comparison.place.above" = "所选 PDF 的上方";
+
+"comparison.place.below" = "所选 PDF 的下方";
+
+"comparison.place.swap" = "交换位置";
+
+"comparison.pin" = "固定 %@";
+
+"comparison.unpin" = "取消固定 %@";
+
+"comparison.pin.help" = "固定的 PDF 将保持滚动位置、页码和缩放比例。再次点击可取消固定。";
+
+"comparison.pinned" = "已固定";
+
+"comparison.page.previous" = "%@ 上一页";
+
+"comparison.page.next" = "%@ 下一页";
+
+"comparison.resize.width" = "调整区域宽度";
+
+"comparison.resize.height" = "调整区域高度";
+
+"comparison.arrange.edit" = "编辑布局";
+
+"comparison.arrange.done" = "完成布局";
+
+"comparison.arrange.edit_hint" = "将 PDF 拖到另一个 PDF 的边缘或中央。完成后，点击“完成布局”。";
+
+"comparison.drag.handle" = "拖动排列";
+
+"comparison.drag.document" = "拖动此 PDF 进行排列";
+
+"comparison.drag.cancel_hint" = "按 Esc 取消排列";
+
+"comparison.drop.left" = "左侧";
+
+"comparison.drop.right" = "右侧";
+
+"comparison.drop.above" = "上方";
+
+"comparison.drop.below" = "下方";
+
+"comparison.drop.swap" = "交换";
+// Together view document chooser
+"comparison.chooser.gallery" = "图库";
+"comparison.chooser.list" = "列表";
+"comparison.chooser.presentation" = "文档显示方式";
+"comparison.chooser.preview" = "预览页面";
+"comparison.chooser.preview.current" = "当前页面";
+"comparison.chooser.preview.cover" = "首页";
+"comparison.chooser.workspace" = "工作区";
+"comparison.chooser.search" = "按 PDF 名称、工作区或分组查找";
+"comparison.chooser.selected_order" = "已选 PDF · 显示顺序";
+"comparison.chooser.select_hint" = "在下方选择 2–4 个 PDF 一起查看。";
+"comparison.chooser.remove" = "取消选择";
+"comparison.chooser.no_results_help" = "请尝试其他名称或扩大工作区范围。";
+"comparison.chooser.tab" = "第 %d 个标签页";
+"comparison.focus.help" = "隐藏标签页和工具栏，让一起查看的 PDF 铺满窗口。";
+
+/* Recent internal validation, with scope and limitations */
+
+/* Continuous spreads with compact page spacing */
+"view.two_page.compact.title" = "自动调整双页间距";
+"view.two_page.compact.help" = "连续查看时，即使页面宽度不同，也让它们紧靠显示。";
+
+/* Quick document changes in View Together */
+"comparison.document.add" = "添加 PDF";
+"comparison.document.replace" = "替换 PDF";
+"comparison.document.close" = "从一起查看中关闭";
+"comparison.document.close.help" = "仅从一起查看中移除，原 PDF 标签页保持打开。";
+"comparison.document.open" = "打开 PDF 文件…";
+"comparison.document.no_candidates" = "没有其他已打开的 PDF 可添加";
+"comparison.document.add.help" = "添加已打开的 PDF 或打开文件（最多 4 个 PDF）。";
+"comparison.document.replace.help" = "在此区域显示另一个 PDF。";
+"comparison.document.limit" = "最多可同时查看 4 个 PDF。";
+"comparison.document.error" = "无法加载 PDF。现有文档保持不变。";
+
+/* Current-document page gallery and page organization */
+"page_gallery.title" = "页面图库";
+"page_gallery.open" = "显示页面图库";
+"page_gallery.close" = "返回阅读";
+"page_gallery.subtitle" = "共 %d 页";
+"page_gallery.selected" = "已选择 %d 页";
+"page_gallery.select_all" = "全选";
+"page_gallery.deselect_all" = "取消全选";
+"page_gallery.size" = "缩略图大小";
+"page_gallery.hint" = "按住 ⌘ 点击以多选 · 按住 Shift 点击以选择范围 · 双击阅读";
+"page_gallery.edit" = "编辑页面";
+"page_gallery.edit_hint" = "开始编辑以旋转、移动或删除页面。";
+"page_gallery.extract" = "提取";
+"page_gallery.rotate" = "旋转";
+"page_gallery.move" = "移动";
+"page_gallery.delete" = "删除";
+"page_gallery.move_title" = "移动所选页面";
+"page_gallery.move_start" = "移至文档开头";
+"page_gallery.move_end" = "移至文档末尾";
+"page_gallery.move_before" = "之前";
+"page_gallery.move_after" = "之后";
+"page_gallery.move_page" = "参照页面";
+"page_gallery.move_apply" = "移动";
+"page_gallery.move_hint" = "所选页面的顺序保持不变。";
+"page_gallery.delete_title" = "删除所选的 %d 页？";
+"page_gallery.delete_message" = "您可以通过撤销（⌘Z）恢复这些页面。";
+"page_gallery.minimum_one" = "文档中至少需要保留一页。";
+"page_gallery.drop_end" = "拖放到此处以移至文档末尾";
+"page_gallery.drag_hint" = "拖动所选页面以调整顺序。";
+"page_gallery.open_page" = "阅读此页";
+
+// AI conversation management and rich responses
+"ai.history.open" = "对话列表";
+"ai.history.new" = "新对话";
+"ai.history.rename" = "重命名对话";
+"ai.history.title" = "对话名称";
+"ai.history.delete_title" = "删除此对话？";
+"ai.history.delete_message" = "保存在这台Mac上的对话记录也将被删除。";
+"ai.history.heading" = "此PDF的对话";
+"ai.history.search" = "搜索对话名称";
+"ai.history.empty" = "没有可显示的对话。";
+"ai.history.saved_locally" = "对话记录保存在这台Mac上。";
+"ai.history.memory_only" = "此PDF的对话仅在应用运行期间保留。";
+"ai.history.message_count" = "%d条消息";
+"ai.history.delete" = "删除对话";
+"ai.history.options" = "管理对话";
+"ai.message.copy" = "复制";
+"ai.message.delete" = "删除消息";
+"ai.message.options" = "消息选项";
+"ai.rich.load_image" = "加载图片";
+"ai.rich.loading_image" = "正在加载…";
+"ai.rich.image_failed" = "无法加载图片。";
+"ai.rich.image_unavailable" = "不支持此图片。";
+"ai.history.untitled" = "新对话";
+"ai.history.error.invalid" = "无法读取已保存的对话记录。现有记录已保留。";
+"ai.history.error.large" = "对话记录已达到存储上限。请删除不再需要的对话。";
+"ai.history.error.limit" = "每个PDF最多可保存100个对话。请先删除不再需要的对话，再开始新对话。";
+"ai.history.error.conversation_full" = "此对话已达到存储上限。现有内容会保留，开始新对话即可继续提问。";
+"ai.rich.image_alt" = "AI回复图片";
+
+"body_text.shortcuts" = "Return 换行 · ⌘Return 应用 · Esc 取消";
+
+/* Image insertion choices and PDF size reduction. */
+"image.insert.quality.original" = "优先原图";
+"image.insert.quality.balanced" = "均衡";
+"image.insert.quality.small" = "较小文件";
+"image.insert.quality.original.detail" = "尽可能保留原始JPEG而不重新压缩。大图会调整至安全尺寸。";
+"image.insert.quality.balanced.detail" = "缩小至最长边2,400px并重新压缩照片，部分细节可能发生变化。";
+"image.insert.quality.small.detail" = "缩小至最长边1,600px并更强地压缩照片，放大时可能看到画质损失。";
+"image.insert.batch_too_large" = "所选图片超出处理容量。请选择“较小文件”，或分批添加图片。";
+"image.insert.options.title" = "图片画质与大小";
+"image.insert.options.detail" = "插入PDF前请确认画质与预计大小。此设置仅应用于本次图片。";
+"image.insert.quality" = "图片画质";
+"image.insert.preparing" = "正在准备预览和大小估算…";
+"image.insert.estimated_size" = "PDF预计增加量";
+"image.insert.estimate_note" = "保存后的实际大小可能有所不同。透明背景会保留。";
+"image.insert.confirm" = "插入图片";
+"image.insert.source_size" = "原始文件";
+"image.insert.resized" = "已调整尺寸";
+"image.insert.transparency" = "保留透明度 · 无损压缩";
+"compression.title" = "减小 PDF 大小";
+"compression.detail" = "选择图像质量，查看实际文件大小，然后保存副本。";
+"compression.quality" = "图像质量";
+"compression.preservation" = "文字和图形会保留。照片将重新压缩，因此画质可能随所选设置而变化。";
+"compression.current_size" = "当前 PDF";
+"compression.processing" = "正在优化图像并计算实际大小…";
+"compression.result_size" = "优化后";
+"compression.no_reduction" = "此设置无法进一步减小文件。请尝试其他质量选项。当前 PDF 未被更改。";
+"compression.preview_help" = "点击“计算大小”，即可在保存前查看文件大小。";
+"compression.stop" = "停止";
+"compression.preview" = "计算大小";
+"compression.quality.high" = "高质量";
+"compression.quality.balanced" = "均衡";
+"compression.quality.small" = "小文件";
+"compression.quality.high_detail" = "优先保留照片清晰度，同时减小文件大小。";
+"compression.quality.balanced_detail" = "适合日常屏幕阅读和文件分享。";
+"compression.quality.small_detail" = "更大幅度地减小文件。放大或打印时，照片可能变得模糊。";
+"compression.savings" = "减小 %@";
+"compression.menu" = "缩小PDF大小…";
+"compression.preparing" = "正在准备PDF…";
+"compression.document_changed" = "文档已更改，请重试。";
+"compression.saved" = "已保存较小的副本：%@";
+"compression.error.unreadable" = "无法读取要缩小的PDF。";
+"compression.error.protected" = "无法缩小已加密或带有数字签名的PDF。";
+"compression.error.unsupported" = "无法安全保留此PDF的特殊结构，因此未缩小文件。";
+"compression.error.too_large" = "此PDF超出当前缩小功能的处理上限。";
+"compression.error.validation_failed" = "无法确认PDF内容和编辑信息是否完整保留，原文件未更改。";
+
+// Quick writing tools and saved pen presets
+"pen.quick.title" = "书写工具";
+"pen.quick.settings" = "当前笔设置";
+"pen.quick.more" = "已保存的笔";
+"pen.preset.save" = "保存当前笔";
+"pen.preset.replace" = "替换为当前设置";
+"pen.preset.delete" = "删除已保存的笔";
+"pen.preset.limit" = "最多可保存8支笔。";
+"pen.preset.help" = "单击即可使用，再次单击已选中的笔可打开设置。";
+"pen.shape" = "绘图";
+"pen.shape.freehand" = "自由书写";
+"pen.shape.line" = "直线";
+"pen.shape.rectangle" = "矩形";
+"pen.shape.ellipse" = "椭圆";
+"pen.pattern" = "线型";
+"pen.pattern.solid" = "实线";
+"pen.pattern.dashed" = "虚线";
+"pen.tip" = "荧光笔笔尖";
+"pen.tip.square" = "方形笔尖";
+"pen.tip.round" = "圆形笔尖";
+"pen.quick.width" = "选择粗细";
+"pen.quick.color" = "选择颜色";
+"pen.quick.draw_help" = "选择自由书写或形状，然后用鼠标或笔拖动绘制。";
+
+/* Text comparison */
+"comparison.difference.title" = "正文更改";
+"comparison.difference.close" = "关闭更改列表";
+"comparison.difference.scope" = "比较可提取的正文以及页面的添加和删除。不会比较图像、布局和批注的差异。";
+"comparison.difference.before" = "基准文档";
+"comparison.difference.after" = "修改后文档";
+"comparison.difference.start" = "比较正文";
+"comparison.difference.restart" = "重新比较";
+"comparison.difference.cancel" = "取消";
+"comparison.difference.navigation" = "选择更改即可跳转到两个文档中的对应页面。已固定的PDF会保持原位置。";
+"comparison.difference.ready" = "请选择两个PDF以比较正文。";
+"comparison.difference.reading" = "正在读取正文：%d / %d页";
+"comparison.difference.comparing" = "正在比较正文…";
+"comparison.difference.cancelled" = "已取消比较。请重新比较以查看结果。";
+"comparison.difference.changed" = "参与比较的PDF已更改。请重新比较最新内容。";
+"comparison.difference.identical" = "未发现正文更改。";
+"comparison.difference.count" = "正文更改：%d处";
+"comparison.difference.textless" = "有%d页无法提取正文，因此未能比较。请先对扫描文字应用OCR，再进行比较。";
+"comparison.difference.truncated" = "已达到结果数量上限，仅显示部分更改。";
+"comparison.difference.whole_page" = "页面";
+"comparison.difference.page" = "第%d页";
+"comparison.difference.added" = "添加";
+"comparison.difference.removed" = "删除";
+"comparison.difference.modified" = "修改";
+"comparison.difference.unavailable" = "无法从这些PDF中读取正文。";
+"comparison.difference.restricted" = "比较正文需要两个PDF都允许复制文字。";
+"comparison.difference.too_large" = "这些PDF超出比较处理上限。请拆分为更小的文档后比较。";
+"comparison.difference.no_text" = "这些PDF没有可提取的正文。请先对扫描文字应用OCR，再进行比较。";
+"comparison.difference.timed_out" = "比较用时超出上限。请拆分为更小的文档后比较。";
+
+/* Page structure preservation */
+"page_structure.error.unsupported" = "此 PDF 包含附件、图层、无障碍标签、数字签名等特殊结构，页面组合后无法安全保留。原文件未更改。";
+"page_structure.error.page_labels" = "此 PDF 的自定义页码目前无法在页面组合后保存时保留。原文件未更改。";
+"page_structure.error.destination" = "无法安全确认 PDF 内部链接的目标页面，因此未组合页面。";
+"page_structure.error.form_fields" = "存在重名表单字段或复杂的字段关联，无法安全保留字段值。请调整副本中的字段名称后重试。";
+"page_structure.error.too_complex" = "PDF 的书签、链接或表单结构超出了安全组合页面的处理范围。";
+"page_structure.error.copy" = "无法将页面注释和内部链接复制为独立副本。原文件未更改。";
+"page_structure.imported_document" = "导入的 PDF";
+
+"pdf.rendering_unavailable" = "当前环境无法显示 PDF。请在正常的 macOS 桌面会话中重新打开 EmberPDF。";
+
+"page_structure.signed_original_notice" = "已将签名原件保留为附件。新文档未签名。";
+
+/* Asynchronous document saving */
+"action.saving" = "正在保存";
+"status.saving_file" = "正在保存 %@…";
+"status.save_cancelled" = "已取消保存。";
+"status.saved_earlier_edits" = "之前的编辑已保存到 %@。较新的更改尚未保存。";
+"error.save_in_progress" = "正在保存。请在完成后重试。";
+
+"resource.memory_footprint" = "应用内存";
+"resource.memory_note" = "应用内存是当前进程的内存占用，包括压缩内存。RSS是当前驻留内存，不包含独立辅助进程。CPU 100%表示一个逻辑核心。";
+
+/* Native menu roles refreshed when the app language changes. */
+"native_menu.file" = "文件";
+"native_menu.edit" = "编辑";
+"native_menu.view" = "显示";
+"native_menu.window" = "窗口";
+"native_menu.help" = "帮助";
+
+"native_menu.close_all" = "全部关闭";
+"native_menu.cut" = "剪切";
+"native_menu.copy" = "复制";
+"native_menu.paste" = "粘贴";
+"native_menu.select_all" = "全选";
+
+/* AppKit tab commands use the current application language. */
+"native_menu.show_tab_bar" = "显示标签栏";
+"native_menu.hide_tab_bar" = "隐藏标签栏";
+"native_menu.show_all_tabs" = "显示所有标签页";
+"native_menu.exit_tab_overview" = "退出标签页概览";
+"native_menu.enter_full_screen" = "进入全屏幕";
+"native_menu.exit_full_screen" = "退出全屏幕";

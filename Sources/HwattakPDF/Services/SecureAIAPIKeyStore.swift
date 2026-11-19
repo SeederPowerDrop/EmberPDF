@@ -48,41 +48,61 @@ protocol AIKeychainItemOperating {
 struct SystemAIKeychainItemOperator: AIKeychainItemOperating {
     func copyMatching(_ query: [CFString: Any]) -> AIKeychainCopyResult {
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = SystemKeychainAccess.perform(query: query) {
+            SecItemCopyMatching(query as CFDictionary, &result)
+        }
         return AIKeychainCopyResult(status: status, data: result as? Data)
     }
 
     func add(_ attributes: [CFString: Any]) -> OSStatus {
-        SecItemAdd(attributes as CFDictionary, nil)
+        SystemKeychainAccess.perform(query: attributes) {
+            SecItemAdd(attributes as CFDictionary, nil)
+        }
     }
 
     func update(
         _ query: [CFString: Any],
         attributes: [CFString: Any]
     ) -> OSStatus {
-        SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        SystemKeychainAccess.perform(query: query) {
+            SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        }
     }
 
     func delete(_ query: [CFString: Any]) -> OSStatus {
-        SecItemDelete(query as CFDictionary)
+        SystemKeychainAccess.perform(query: query) {
+            SecItemDelete(query as CFDictionary)
+        }
     }
+
 }
 
 enum SecureAIAPIKeyStoreError: LocalizedError, Equatable {
     case invalidAPIKey
+    case authenticationRequired
     case keychain(OSStatus)
-    case legacyCleanupFailed(OSStatus)
 
     var errorDescription: String? {
         switch self {
         case .invalidAPIKey:
             return "The API key is empty or invalid."
+        case .authenticationRequired:
+            return L10n.string(
+                "ai.settings.key_access_requires_reentry",
+                defaultValue: "저장된 API 키에 접근할 수 없습니다. 설정 > AI에서 이 공급자의 API 키를 다시 저장해 주세요. 로그인 키체인이 잠겨 있다면 먼저 잠금을 해제해 주세요."
+            )
         case let .keychain(status):
             return (SecCopyErrorMessageString(status, nil) as String?)
                 ?? "Keychain error \(status)"
-        case let .legacyCleanupFailed(status):
-            return (SecCopyErrorMessageString(status, nil) as String?)
-                ?? "Legacy Keychain cleanup error \(status)"
+        }
+    }
+
+    static func fromStatus(_ status: OSStatus) -> Self {
+        switch status {
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
+            return .authenticationRequired
+        default:
+            return .keychain(status)
         }
     }
 }
@@ -91,7 +111,9 @@ enum SecureAIAPIKeyStoreError: LocalizedError, Equatable {
 /// metadata is persisted separately and never contains an API key.
 final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
     static let shared = KeychainSecureAIAPIKeyStore()
+    // Keep the storage identifier so existing credentials remain associated.
     static let defaultService = "com.hwattakpdf.ai-api-keys"
+    static let credentialLabel = "EmberPDF AI Provider Credential"
     static let maximumAPIKeyByteCount = 64 * 1_024
 
     private let service: String
@@ -115,8 +137,11 @@ final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
             return try loadLegacyAPIKey(for: scope)
         }
         guard result.status == errSecSuccess else {
-            throw SecureAIAPIKeyStoreError.keychain(result.status)
+            throw SecureAIAPIKeyStoreError.fromStatus(result.status)
         }
+        // Reading a credential must never change its label or access controls.
+        // Legacy ACL updates can force a second password dialog even when the
+        // optional Keychain interaction switch is disabled.
         return try decodedAPIKey(from: result.data)
     }
 
@@ -133,83 +158,102 @@ final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
 
         var attributes = baseQuery(for: scope)
         attributes[kSecValueData] = data
-        attributes[kSecAttrLabel] = "HwattakPDF AI Provider Credential"
+        attributes[kSecAttrLabel] = Self.credentialLabel
         attributes[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
         let addStatus = keychain.add(attributes)
         switch addStatus {
         case errSecSuccess:
-            try removeLegacyCopy(for: scope)
+            removeLegacyCopy(for: scope)
         case errSecDuplicateItem:
             let updateStatus = keychain.update(
                 baseQuery(for: scope),
-                attributes: [kSecValueData: data]
+                attributes: [kSecValueData: data, kSecAttrLabel: Self.credentialLabel]
             )
             if updateStatus == errSecMissingEntitlement {
                 try saveLegacyAPIKey(data, for: scope)
                 return
             }
             guard updateStatus == errSecSuccess else {
-                throw SecureAIAPIKeyStoreError.keychain(updateStatus)
+                throw SecureAIAPIKeyStoreError.fromStatus(updateStatus)
             }
-            try removeLegacyCopy(for: scope)
+            removeLegacyCopy(for: scope)
         case errSecMissingEntitlement:
             try saveLegacyAPIKey(data, for: scope)
         default:
-            throw SecureAIAPIKeyStoreError.keychain(addStatus)
+            throw SecureAIAPIKeyStoreError.fromStatus(addStatus)
         }
     }
 
     func deleteAPIKey(for scope: AIAPIKeyScope) throws {
         let legacyStatus = keychain.delete(legacyBaseQuery(for: scope))
         guard legacyStatus == errSecSuccess || legacyStatus == errSecItemNotFound else {
-            throw SecureAIAPIKeyStoreError.keychain(legacyStatus)
+            throw SecureAIAPIKeyStoreError.fromStatus(legacyStatus)
         }
 
         let status = keychain.delete(baseQuery(for: scope))
         if status == errSecMissingEntitlement { return }
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw SecureAIAPIKeyStoreError.keychain(status)
+            throw SecureAIAPIKeyStoreError.fromStatus(status)
         }
     }
 
     func containsAPIKey(for scope: AIAPIKeyScope) throws -> Bool {
-        // Existence checks deliberately omit kSecReturnData so settings UI
-        // refreshes never copy provider secrets into process memory.
-        let result = keychain.copyMatching(baseQuery(for: scope))
+        // App launch and UI refreshes inspect metadata only, without prompting
+        // or loading a secret. Actual AI requests also prohibit system dialogs.
+        let result = keychain.copyMatching(availabilityQuery(baseQuery(for: scope)))
         switch result.status {
-        case errSecSuccess:
+        case errSecSuccess, errSecInteractionNotAllowed:
+            // The item exists; a read will explain if it needs to be re-saved.
             return true
         case errSecItemNotFound, errSecMissingEntitlement:
-            let legacyResult = keychain.copyMatching(legacyBaseQuery(for: scope))
-            if legacyResult.status == errSecSuccess { return true }
+            let legacyResult = keychain.copyMatching(availabilityQuery(legacyBaseQuery(for: scope)))
+            if legacyResult.status == errSecSuccess || legacyResult.status == errSecInteractionNotAllowed {
+                return true
+            }
             if legacyResult.status == errSecItemNotFound { return false }
-            throw SecureAIAPIKeyStoreError.keychain(legacyResult.status)
+            throw SecureAIAPIKeyStoreError.fromStatus(legacyResult.status)
         default:
-            throw SecureAIAPIKeyStoreError.keychain(result.status)
+            throw SecureAIAPIKeyStoreError.fromStatus(result.status)
         }
+    }
+
+    private func noninteractiveQuery(_ query: [CFString: Any]) -> [CFString: Any] {
+        var query = query
+        // Use an explicit query policy rather than depending on LAContext's
+        // service-backed property setter. SystemKeychainAccess also enforces
+        // this policy for the file-based login Keychain, which ignores it.
+        query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail
+        return query
+    }
+
+    private func availabilityQuery(_ query: [CFString: Any]) -> [CFString: Any] {
+        var query = query
+        query[kSecReturnAttributes] = kCFBooleanTrue
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        return query
     }
 
     /// Internal for deterministic security-policy tests.
     func baseQuery(for scope: AIAPIKeyScope) -> [CFString: Any] {
-        [
+        noninteractiveQuery([
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: account(for: scope),
             kSecAttrSynchronizable: kCFBooleanFalse as Any,
             kSecUseDataProtectionKeychain: kCFBooleanTrue as Any
-        ]
+        ])
     }
 
     /// Compatibility path for ad-hoc builds without a provisioned access
     /// group. It remains user-scoped and explicitly non-synchronizing.
     func legacyBaseQuery(for scope: AIAPIKeyScope) -> [CFString: Any] {
-        [
+        noninteractiveQuery([
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: account(for: scope),
             kSecAttrSynchronizable: kCFBooleanFalse as Any
-        ]
+        ])
     }
 
     private func account(for scope: AIAPIKeyScope) -> String {
@@ -237,7 +281,7 @@ final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
         let result = keychain.copyMatching(query)
         if result.status == errSecItemNotFound { return nil }
         guard result.status == errSecSuccess else {
-            throw SecureAIAPIKeyStoreError.keychain(result.status)
+            throw SecureAIAPIKeyStoreError.fromStatus(result.status)
         }
         return try decodedAPIKey(from: result.data)
     }
@@ -245,7 +289,7 @@ final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
     private func saveLegacyAPIKey(_ data: Data, for scope: AIAPIKeyScope) throws {
         var attributes = legacyBaseQuery(for: scope)
         attributes[kSecValueData] = data
-        attributes[kSecAttrLabel] = "HwattakPDF AI Provider Credential"
+        attributes[kSecAttrLabel] = Self.credentialLabel
 
         let status = keychain.add(attributes)
         switch status {
@@ -254,21 +298,20 @@ final class KeychainSecureAIAPIKeyStore: SecureAIAPIKeyStoring {
         case errSecDuplicateItem:
             let updateStatus = keychain.update(
                 legacyBaseQuery(for: scope),
-                attributes: [kSecValueData: data]
+                attributes: [kSecValueData: data, kSecAttrLabel: Self.credentialLabel]
             )
             guard updateStatus == errSecSuccess else {
-                throw SecureAIAPIKeyStoreError.keychain(updateStatus)
+                throw SecureAIAPIKeyStoreError.fromStatus(updateStatus)
             }
         default:
-            throw SecureAIAPIKeyStoreError.keychain(status)
+            throw SecureAIAPIKeyStoreError.fromStatus(status)
         }
     }
 
-    private func removeLegacyCopy(for scope: AIAPIKeyScope) throws {
-        let status = keychain.delete(legacyBaseQuery(for: scope))
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw SecureAIAPIKeyStoreError.legacyCleanupFailed(status)
-        }
+    private func removeLegacyCopy(for scope: AIAPIKeyScope) {
+        // The preferred store already has the new value. Cleanup must not
+        // turn a successful save into an error or authorize an old item's ACL.
+        _ = keychain.delete(legacyBaseQuery(for: scope))
     }
 }
 

@@ -13,9 +13,13 @@ struct PluginSettingsSheet: View {
     @State private var draftEnabled: Bool
     @State private var errorMessage: String?
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var configurationKind: PluginConfigurationKind {
         manager.configurationKind(for: plugin)
+    }
+    private var isPageTranslator: Bool {
+        configurationKind == .translation
+            && plugin.id == "dev.hwattakpdf.plugins.page-translator"
     }
     private var currentPlugin: InstalledPlugin {
         manager.installedPlugins.first(where: { $0.id == plugin.id }) ?? plugin
@@ -141,37 +145,39 @@ struct PluginSettingsSheet: View {
                     defaultValue: "플러그인 옵션"
                 )
             ) {
-                Toggle(
-                    L10n.string("translation.settings.web_default", defaultValue: "웹 번역 도우미를 기본으로 열기"),
-                    isOn: $draft.translationUsesWebCompanion
-                )
-
-                cardDivider
-
-                settingRow(
-                    title: L10n.string(
-                        "plugins.settings.translation_provider",
-                        defaultValue: "기본 번역 서비스"
-                    ),
-                    detail: L10n.string(
-                        "plugins.settings.translation_provider_detail",
-                        defaultValue: "새 번역 패널을 열 때 먼저 선택할 서비스를 정합니다."
+                if !isPageTranslator {
+                    Toggle(
+                        L10n.string("translation.settings.web_default", defaultValue: "웹 번역 도우미를 기본으로 열기"),
+                        isOn: $draft.translationUsesWebCompanion
                     )
-                ) {
-                    Picker("", selection: $draft.translationProvider) {
-                        ForEach(PluginTranslationProvider.allCases) { provider in
-                            Text(provider.title).tag(provider)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 190)
-                    .accessibilityLabel(L10n.string(
-                        "plugins.settings.translation_provider",
-                        defaultValue: "기본 번역 서비스"
-                    ))
-                }
 
-                cardDivider
+                    cardDivider
+
+                    settingRow(
+                        title: L10n.string(
+                            "plugins.settings.translation_provider",
+                            defaultValue: "기본 번역 서비스"
+                        ),
+                        detail: L10n.string(
+                            "plugins.settings.translation_provider_detail",
+                            defaultValue: "새 번역 패널을 열 때 먼저 선택할 서비스를 정합니다."
+                        )
+                    ) {
+                        Picker("", selection: $draft.translationProvider) {
+                            ForEach(PluginTranslationProvider.allCases) { provider in
+                                Text(provider.title).tag(provider)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 190)
+                        .accessibilityLabel(L10n.string(
+                            "plugins.settings.translation_provider",
+                            defaultValue: "기본 번역 서비스"
+                        ))
+                    }
+
+                    cardDivider
+                }
 
                 settingRow(
                     title: L10n.string(
@@ -348,9 +354,17 @@ struct PluginSettingsSheet: View {
                 ForEach(Array(plugin.manifest.capabilities.enumerated()), id: \.element.id) {
                     index, capability in
                     if index > 0 { cardDivider }
-                    Label(capability.title, systemImage: capabilitySystemImage(capability))
+                    Toggle(isOn: Binding(
+                        get: { manager.isCapabilityGranted(capability, for: plugin.id) },
+                        set: { value in
+                            do { try manager.setCapabilityGranted(capability, granted: value, identifier: plugin.id) }
+                            catch { errorMessage = error.localizedDescription }
+                        }
+                    )) { Label(capability.title, systemImage: capabilitySystemImage(capability)) }
+                        .toggleStyle(.switch)
                         .font(.callout)
                         .padding(.vertical, 2)
+                        .accessibilityIdentifier("plugin-permission-\(capability.rawValue)")
                 }
             }
         }
@@ -363,6 +377,20 @@ struct PluginSettingsSheet: View {
                 defaultValue: "제공하는 작업"
             )
         ) {
+            if plugin.manifest.runtime != nil {
+                Label {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.string("plugins.runtime.title", defaultValue: "앱과 함께 동작하는 확장 기능"))
+                            .font(.callout.weight(.medium))
+                        Text(L10n.string("plugins.runtime.disclosure", defaultValue: "설치하고 활성화하면 앱 창이 열려 있는 동안 자동으로 시작합니다. 패널을 닫아도 승인한 명령·이벤트 기능이 계속 동작하며, 플러그인을 끄거나 ‘앱을 사용하는 동안 동작’ 권한을 해제하면 중지됩니다."))
+                            .font(.caption)
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                } icon: {
+                    Image(systemName: "puzzlepiece.extension").foregroundStyle(theme.accent)
+                }
+                if !plugin.manifest.actions.isEmpty { cardDivider }
+            }
             ForEach(Array(plugin.manifest.actions.enumerated()), id: \.element.id) {
                 index, action in
                 if index > 0 { cardDivider }
@@ -547,12 +575,20 @@ struct PluginSettingsSheet: View {
 
     private func capabilitySystemImage(_ capability: PluginCapability) -> String {
         switch capability {
+        case .backgroundExecution: "bolt.circle"
+        case .pluginStorage: "internaldrive"
+        case .appearanceWrite: "paintpalette"
+        case .notesWrite, .fileReadWrite: "note.text"
+        case .pageImage, .fileExport: "crop"
+        case .openDocumentsRead: "doc.text.magnifyingglass"
+        case .hoverText, .localTranslation: "character.cursor.ibeam"
         case .annotationWrite: "highlighter"
         case .toolControl: "pencil.tip"
         case .workspaceNavigation: "arrow.left.arrow.right"
         case .documentMetadata: "doc.text.magnifyingglass"
         case .selectedText: "text.cursor"
         case .currentPageText: "doc.text"
+        case .documentTextRead: "text.book.closed"
         case .clipboardWrite: "clipboard"
         case .externalURL: "safari"
         case .translationService: "character.bubble"
@@ -563,6 +599,12 @@ struct PluginSettingsSheet: View {
 
     private func actionSystemImage(_ output: PluginActionOutput) -> String {
         switch output {
+        case .scriptPanel: "puzzlepiece.extension"
+        case .appearancePanel: "paintpalette"
+        case .notesPanel: "note.text"
+        case .pageClipPanel: "crop"
+        case .relatedDocumentsPanel: "doc.text.magnifyingglass"
+        case .hoverTranslationPanel: "character.cursor.ibeam"
         case .showText: "doc.plaintext"
         case .copyText: "clipboard"
         case .openURL: "arrow.up.right.square"

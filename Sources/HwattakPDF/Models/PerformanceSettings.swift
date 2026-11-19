@@ -32,12 +32,13 @@ struct PDFThumbnailRenderingPolicy: Equatable {
     var maximumPixelCount: CGFloat {
         efficientRenderingEnabled ? 2_400_000 : 5_000_000
     }
-    var renderScale: CGFloat { efficientRenderingEnabled ? 0.8 : 1 }
-
+    /// Width is in view points; the result is a bounded bitmap size in pixels.
+    /// Efficient mode limits retained pixels, not the sharpness of visible text.
     func targetSize(
         pageBounds: CGRect,
         rotation: Int,
-        requestedWidth: CGFloat
+        requestedWidth: CGFloat,
+        displayScale: CGFloat = 1
     ) -> CGSize {
         let rawWidth = abs(pageBounds.width)
         let rawHeight = abs(pageBounds.height)
@@ -52,7 +53,11 @@ struct PDFThumbnailRenderingPolicy: Equatable {
             : 1.414
         let aspect = min(8, max(0.125, rawAspect.isFinite ? rawAspect : 1.414))
         let finiteRequested = requestedWidth.isFinite ? requestedWidth : 80
-        var width = min(maximumDimension, max(80, finiteRequested * renderScale))
+        let backingScale = displayScale.isFinite && displayScale > 0
+            ? min(4, max(1, displayScale)) : 1
+        // Clamp before multiplying: callers and PDF geometry can contain very
+        // large values, while real backing scales normally range from 1 to 2.
+        var width = min(maximumDimension, max(80, min(maximumDimension, finiteRequested) * backingScale))
         var height = width * aspect
 
         let largest = max(width, height)
@@ -68,8 +73,8 @@ struct PDFThumbnailRenderingPolicy: Equatable {
             height *= reduction
         }
         return CGSize(
-            width: max(1, width.rounded(.up)),
-            height: max(1, height.rounded(.up))
+            width: max(1, width.rounded(.down)),
+            height: max(1, height.rounded(.down))
         )
     }
 

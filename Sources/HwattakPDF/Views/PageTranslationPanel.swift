@@ -41,6 +41,9 @@ struct PageTranslationPanel: View {
     @State private var includesSourceInExport = true
     @State private var result: PageTranslationResult?
     @State private var resultID: UUID?
+    @State private var originalPagePDF: Data?
+    @State private var translatedPagePDF: Data?
+    @State private var showsResultText = false
     @State private var pendingConsent: PageTranslationConsent?
     @State private var appleJob: ApplePageTranslationJob?
     @State private var activeID: UUID?
@@ -66,7 +69,7 @@ struct PageTranslationPanel: View {
         _showingSource = State(initialValue: preferences.translationShowsSource)
     }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var isBusy: Bool { activeID != nil }
     private var selectedConfiguration: AIProviderConfiguration { providerSettings.selectedConfiguration }
     private var languageCodes: [String] {
@@ -98,7 +101,23 @@ struct PageTranslationPanel: View {
                         .foregroundStyle(theme.secondaryText)
                         .textSelection(.enabled)
                 }
-                if let result { translatedContent(result) }
+                if let layout = request.pageLayout {
+                    PageTranslationPreview(
+                        pageNumber: layout.pageNumber,
+                        originalPDF: originalPagePDF,
+                        translatedPDF: translatedPagePDF,
+                        onSave: exportTranslatedPage
+                    )
+                }
+                if let result {
+                    if request.pageLayout != nil {
+                        DisclosureGroup(L10n.string("translation.result.title", defaultValue: "번역 결과"), isExpanded: $showsResultText) {
+                            translatedContent(result)
+                        }
+                    } else {
+                        translatedContent(result)
+                    }
+                }
             }
             .padding(12)
         }
@@ -114,7 +133,13 @@ struct PageTranslationPanel: View {
                 confirmTransmission(consent)
             }
         }
-        .onAppear { isVisible = true }
+        .onAppear {
+            isVisible = true
+            if originalPagePDF == nil, let layout = request.pageLayout {
+                do { originalPagePDF = try PageTranslationLayoutRenderer.originalPDFData(layout: layout) }
+                catch { statusMessage = error.localizedDescription }
+            }
+        }
         .onDisappear {
             isVisible = false
             invalidateTranslation()
@@ -157,7 +182,9 @@ struct PageTranslationPanel: View {
                 }
             }
             .labelsHidden()
-            Text(L10n.string("translation.output.description", defaultValue: "문단을 나란히 검토하고, 읽기 좋은 새 PDF·HTML로 저장합니다. 원본 페이지의 그림과 배치는 재현하지 않습니다."))
+            Text(request.pageLayout == nil
+                 ? L10n.string("translation.output.description", defaultValue: "문단을 나란히 검토하고, 읽기 좋은 새 PDF·HTML로 저장합니다. 원본 페이지의 그림과 배치는 재현하지 않습니다.")
+                 : L10n.string("translation.page.note", defaultValue: "번역해서 읽기 위한 사본입니다. 글 영역의 배경이 가려질 수 있으며 복잡한 표와 수식은 확인이 필요합니다."))
                 .font(.caption)
                 .foregroundStyle(theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -202,13 +229,24 @@ struct PageTranslationPanel: View {
 
     private var sourceEditor: some View {
         DisclosureGroup(isExpanded: $showingSource) {
-            TextEditor(text: $sourceText)
-                .font(.system(size: 12))
-                .frame(minHeight: 100, maxHeight: 190)
-                .padding(5)
+            if request.pageLayout != nil {
+                ScrollView {
+                    Text(sourceText).font(.system(size: 12)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(5)
+                }
+                .frame(height: 160)
                 .background(theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-            Text(L10n.string("translation.source.edit_note", defaultValue: "번역에 사용할 원문을 수정할 수 있습니다. 스캔 페이지에 텍스트가 없다면 먼저 OCR을 실행하세요."))
+            } else {
+                TextEditor(text: $sourceText)
+                    .font(.system(size: 12))
+                    .frame(minHeight: 100, maxHeight: 190)
+                    .padding(5)
+                    .background(theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            Text(request.pageLayout == nil
+                 ? L10n.string("translation.source.edit_note", defaultValue: "번역에 사용할 원문을 수정할 수 있습니다. 스캔 페이지에 텍스트가 없다면 먼저 OCR을 실행하세요.")
+                 : L10n.string("translation.page.source_note", defaultValue: "페이지 위치에 맞춰 원문을 사용합니다. 스캔 페이지는 먼저 OCR을 실행하세요."))
                 .font(.caption2).foregroundStyle(theme.secondaryText)
         } label: {
             HStack {
@@ -246,14 +284,24 @@ struct PageTranslationPanel: View {
             HStack(spacing: 8) {
                 Button(L10n.string("translation.action.copy", defaultValue: "번역 복사")) { copy(result.translatedText) }
                 Menu(L10n.string("translation.action.export", defaultValue: "파일로 저장")) {
-                    Button(L10n.string("translation.action.export_pdf", defaultValue: "PDF 저장")) { export(result, asPDF: true) }
+                    if request.pageLayout != nil {
+                        Button(L10n.string("translation.page.save_pdf", defaultValue: "번역 페이지 PDF 저장"), action: exportTranslatedPage)
+                            .disabled(translatedPagePDF == nil)
+                    } else {
+                        Button(L10n.string("translation.action.export_pdf", defaultValue: "PDF 저장")) { export(result, asPDF: true) }
+                    }
                     Button(L10n.string("translation.action.export_html", defaultValue: "HTML 저장")) { export(result, asPDF: false) }
                 }
                 Spacer(minLength: 0)
             }
             .controlSize(.small)
-            Toggle(L10n.string("translation.export.include_source", defaultValue: "저장할 파일에 원문 포함"), isOn: $includesSourceInExport)
-                .font(.caption)
+            if request.pageLayout == nil {
+                Toggle(L10n.string("translation.export.include_source", defaultValue: "저장할 파일에 원문 포함"), isOn: $includesSourceInExport)
+                    .font(.caption)
+            } else {
+                Toggle(L10n.string("translation.page.html_source", defaultValue: "HTML 파일에 원문 포함"), isOn: $includesSourceInExport)
+                    .font(.caption)
+            }
             ForEach(result.blocks, id: \.id) { block in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(block.source)
@@ -418,6 +466,7 @@ struct PageTranslationPanel: View {
         cancelTranslation()
         result = nil
         resultID = nil
+        translatedPagePDF = nil
         statusMessage = nil
         let id = UUID()
         activeID = id
@@ -430,7 +479,17 @@ struct PageTranslationPanel: View {
         translationTask = nil
         appleJob = nil
         switch completion {
-        case .success(let value): result = value; resultID = id
+        case .success(let value):
+            result = value
+            resultID = id
+            if let layout = request.pageLayout {
+                do {
+                    translatedPagePDF = try PageTranslationLayoutRenderer.pdfData(layout: layout, result: value)
+                } catch {
+                    statusMessage = error.localizedDescription
+                    showsResultText = true
+                }
+            }
         case .failure(let error): statusMessage = error.localizedDescription
         }
     }
@@ -447,6 +506,7 @@ struct PageTranslationPanel: View {
         pendingConsent = nil
         result = nil
         resultID = nil
+        translatedPagePDF = nil
         statusMessage = nil
     }
 
@@ -555,6 +615,26 @@ struct PageTranslationPanel: View {
                 data = try PageTranslationExporter.pdfData(result, title: request.title, includeSource: includesSourceInExport)
             } else {
                 data = Data(PageTranslationExporter.html(result, title: request.title, includeSource: includesSourceInExport).utf8)
+            }
+            try data.write(to: url, options: .atomic)
+            statusMessage = L10n.string("translation.export.saved", defaultValue: "번역 파일을 저장했습니다.")
+        } catch { statusMessage = error.localizedDescription }
+    }
+
+    private func exportTranslatedPage() {
+        guard let data = translatedPagePDF, let expectedID = resultID,
+              let layout = request.pageLayout else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "Translation-page-\(layout.pageNumber).pdf"
+        guard panel.runModal() == .OK, let url = panel.url,
+              isVisible, resultID == expectedID else { return }
+        do {
+            let access = url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            guard !PageTranslationExportPolicy.replacesSource(url, sourceURL: request.sourceDocumentURL) else {
+                throw PageTranslationUIError.sourceOverwrite
             }
             try data.write(to: url, options: .atomic)
             statusMessage = L10n.string("translation.export.saved", defaultValue: "번역 파일을 저장했습니다.")

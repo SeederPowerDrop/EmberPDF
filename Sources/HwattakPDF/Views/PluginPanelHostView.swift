@@ -107,11 +107,14 @@ final class PluginWebSessionModel: ObservableObject {
 
 struct PluginPanelHostView: View {
     let request: PluginPanelRequest
+    @ObservedObject var workspace: PDFWorkspaceState
+    let collection: MultiDocumentWorkspaceState
+    let onOpenRelated: (PDFRelatedDocumentResult) -> Void
     let onClose: () -> Void
 
     @EnvironmentObject private var pluginManager: PluginManager
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     private var preferences: PluginPreferences {
         let configurationKind = pluginManager.configurationKind(
@@ -128,6 +131,23 @@ struct PluginPanelHostView: View {
         return matchesTrustedKind
             ? pluginManager.preferences(for: request.pluginIdentifier)
             : .default
+    }
+
+    private func isAuthorized() -> Bool {
+        workspace.pluginPanelRequest?.id == request.id
+            && workspace.revision == request.documentRevision
+            && pluginManager.isAuthorized(pluginIdentifier: request.pluginIdentifier,
+                manifestDigest: request.manifestDigest, actionID: request.actionID)
+    }
+
+    private func noteSource() -> PluginNoteSource? {
+        guard isAuthorized(), let document = workspace.document else { return nil }
+        let selection = workspace.currentSelection
+        let belongsToDocument = selection?.pages.allSatisfy { document.index(for: $0) != NSNotFound } == true
+        let text = workspace.allows(.copyAndPaste) && belongsToDocument
+            ? PDFShareNote.boundedExcerpt(from: selection) : nil
+        return PluginNoteSource(documentName: workspace.displayName,
+            pageNumber: workspace.currentPageIndex + 1, selectedText: text)
     }
 
     var body: some View {
@@ -161,6 +181,18 @@ struct PluginPanelHostView: View {
 
             Group {
                 switch request.kind {
+                case .script:
+                    PluginScriptPanel(request: request, workspace: workspace, collection: collection, isAuthorized: isAuthorized)
+                case .appearance:
+                    PluginAppearancePanel(isAuthorized: isAuthorized)
+                case .notes:
+                    PluginNotesPanel(session: workspace.pluginNotesSession, sourceProvider: noteSource, isAuthorized: isAuthorized)
+                case .pageClip:
+                    PluginPageClipPanel(workspace: workspace, documentRevision: request.documentRevision, isAuthorized: isAuthorized)
+                case .relatedDocuments:
+                    PluginRelatedDocumentsPanel(workspace: workspace, collection: collection, isAuthorized: isAuthorized, onOpen: onOpenRelated)
+                case .hoverTranslation:
+                    PluginHoverTranslationPanel(workspace: workspace, isAuthorized: isAuthorized)
                 case .translation:
                     TranslationWorkspacePanel(
                         request: request,
@@ -200,17 +232,19 @@ private struct TranslationWorkspacePanel: View {
     init(request: PluginPanelRequest, preferences: PluginPreferences) {
         self.request = request
         self.preferences = preferences
-        _usesWeb = State(initialValue: preferences.translationUsesWebCompanion)
+        _usesWeb = State(initialValue: request.pageLayout == nil && preferences.translationUsesWebCompanion)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker(L10n.string("translation.experience", defaultValue: "번역 방식"), selection: $usesWeb) {
-                Text(L10n.string("translation.experience.in_app", defaultValue: "앱에서 번역")).tag(false)
-                Text(L10n.string("translation.experience.web", defaultValue: "웹 번역 도우미")).tag(true)
+            if request.pageLayout == nil {
+                Picker(L10n.string("translation.experience", defaultValue: "번역 방식"), selection: $usesWeb) {
+                    Text(L10n.string("translation.experience.in_app", defaultValue: "앱에서 번역")).tag(false)
+                    Text(L10n.string("translation.experience.web", defaultValue: "웹 번역 도우미")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .padding(10)
             }
-            .pickerStyle(.segmented)
-            .padding(10)
             if usesWeb {
                 PluginTranslationPanel(request: request, preferences: preferences)
             } else {
@@ -255,7 +289,7 @@ private struct PluginBrowserPanel: View {
     @StateObject private var session: PluginWebSessionModel
     @State private var address = ""
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     init(
         request: PluginPanelRequest,
@@ -477,6 +511,7 @@ private struct TranslationTarget: Hashable, Identifiable {
         .init(code: "de"),
         .init(code: "es"),
         .init(code: "pt"),
+        .init(code: "ru"),
         .init(code: "vi"),
         .init(code: "ar")
     ]
@@ -492,7 +527,7 @@ private struct TranslationTarget: Hashable, Identifiable {
         case .japanese: desiredCode = "ja"
         case .simplifiedChinese: desiredCode = "zh-CN"
         case .arabic: desiredCode = "ar"
-        case .portuguese: desiredCode = "pt"
+        case .russian: desiredCode = "ru"
         case .vietnamese: desiredCode = "vi"
         }
         return all.first(where: { $0.code == desiredCode }) ?? all[0]
@@ -524,7 +559,7 @@ private struct PluginTranslationPanel: View {
     @State private var statusMessage: String?
     @State private var webDestination: TranslationWebDestination?
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     init(request: PluginPanelRequest, preferences: PluginPreferences) {
         self.request = request
@@ -788,7 +823,7 @@ private struct TranslationWebSurface: View {
 
     @StateObject private var session: PluginWebSessionModel
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     init(destination: TranslationWebDestination) {
         self.destination = destination

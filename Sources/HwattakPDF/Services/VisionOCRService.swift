@@ -92,10 +92,31 @@ enum VisionOCRService {
         checkpointStore: OCRCheckpointStore = OCRCheckpointStore(),
         progress: @escaping (Progress) -> Void
     ) async throws -> OCRCheckpoint {
+        // Admission is global across workspaces. Queued work owns no PDFKit
+        // document or Vision raster, and keeps its request data separate.
+        return try await OCRRecognitionGate.shared.withPermit {
+            try await recognizeAdmitted(
+                pdfURL: pdfURL,
+                documentFingerprint: suppliedDocumentFingerprint,
+                configuration: configuration,
+                checkpointStore: checkpointStore,
+                progress: progress
+            )
+        }
+    }
+
+    private static func recognizeAdmitted(
+        pdfURL: URL,
+        documentFingerprint suppliedDocumentFingerprint: String?,
+        configuration: OCRConfiguration,
+        checkpointStore: OCRCheckpointStore,
+        progress: @escaping (Progress) -> Void
+    ) async throws -> OCRCheckpoint {
         // [학습 05] async를 붙인다고 오래 걸리는 작업이 UI 격리(isolation) 영역 밖으로 이동하지는 않습니다.
         // 이 작업은 별도 스냅샷(snapshot)을 열어 화면에서 사용하는 PDF 객체와 분리된 객체를 사용합니다.
         let worker = Task.detached(priority: .utility) {
-            try checkpointStore.withProcessingLease {
+            try Task.checkCancellation()
+            return try checkpointStore.withProcessingLease {
             guard let document = PDFDocument(url: pdfURL) else {
                 throw WorkspaceError.operationFailed(L10n.string("error.ocr_pdf_data"))
             }

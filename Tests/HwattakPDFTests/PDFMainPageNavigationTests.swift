@@ -5,6 +5,30 @@ import XCTest
 @testable import HwattakPDF
 
 final class PDFMainPageNavigationTests: XCTestCase {
+    func testAllDirectionKeysMapToAdjacentPagesWithoutChangingLegacyModes() {
+        for key: UInt16 in [123, 126] {
+            XCTAssertEqual(PDFPageNavigationMode.allDirectionsPaging.pageTurnStep(forArrowKeyCode: key), -1)
+        }
+        for key: UInt16 in [124, 125] {
+            XCTAssertEqual(PDFPageNavigationMode.allDirectionsPaging.pageTurnStep(forArrowKeyCode: key), 1)
+        }
+        for key: UInt16 in [0, 36, 53] {
+            XCTAssertNil(PDFPageNavigationMode.allDirectionsPaging.pageTurnStep(forArrowKeyCode: key))
+        }
+        for key: UInt16 in [123, 124, 125, 126] {
+            XCTAssertNil(PDFPageNavigationMode.verticalScroll.pageTurnStep(forArrowKeyCode: key))
+        }
+        XCTAssertNil(PDFPageNavigationMode.horizontalPaging.pageTurnStep(forArrowKeyCode: 125))
+        XCTAssertNil(PDFPageNavigationMode.horizontalPaging.pageTurnStep(forArrowKeyCode: 126))
+    }
+
+    @MainActor
+    func testAllDirectionsKeepsVerticalContinuousGeometryAndFixedSpreadPreference() {
+        XCTAssertEqual(displayMode(columns: 1, twoPageMode: .continuous, navigation: .allDirectionsPaging), .singlePageContinuous)
+        XCTAssertEqual(displayMode(columns: 2, twoPageMode: .continuous, navigation: .allDirectionsPaging), .twoUpContinuous)
+        XCTAssertEqual(displayMode(columns: 2, twoPageMode: .paged, navigation: .allDirectionsPaging), .twoUp)
+    }
+
     func testSinglePageTurnsVisitEveryPageAndStopAtBothEnds() {
         XCTAssertNil(target(from: 0, count: 5, pagesPerTurn: 1, step: -1))
         for index in 0..<4 {
@@ -96,17 +120,16 @@ final class PDFMainPageNavigationTests: XCTestCase {
     }
 
     @MainActor
-    func testComparisonAlwaysRetainsContinuousScrollingRegardlessOfMainPreference() {
+    func testComparisonUsesOneColumnRegardlessOfMainNavigationAndPageGrouping() {
         for navigation in PDFPageNavigationMode.allCases {
             for twoPageMode in PDFTwoPageDisplayMode.allCases {
-                XCTAssertEqual(
-                    displayMode(columns: 1, twoPageMode: twoPageMode, navigation: navigation, context: .comparison),
-                    .singlePageContinuous
-                )
-                XCTAssertEqual(
-                    displayMode(columns: 2, twoPageMode: twoPageMode, navigation: navigation, context: .comparison),
-                    .twoUpContinuous
-                )
+                for columns in 1...12 {
+                    XCTAssertEqual(
+                        displayMode(columns: columns, twoPageMode: twoPageMode, navigation: navigation, context: .comparison),
+                        .singlePageContinuous,
+                        "Comparison must not inherit the source tab's spread or overview: \(columns), \(twoPageMode), \(navigation)"
+                    )
+                }
             }
         }
     }
@@ -153,7 +176,7 @@ final class PDFMainPageNavigationTests: XCTestCase {
         workspace.recordPDFViewport(autoScales: false, scaleFactor: 1.7, scrollProgress: position, context: .comparison)
         let comparisonViewport = workspace.pdfViewportState(for: .comparison)
 
-        for mode in [PDFPageNavigationMode.horizontalPaging, .verticalScroll] {
+        for mode in [PDFPageNavigationMode.horizontalPaging, .allDirectionsPaging, .horizontalPaging, .verticalScroll] {
             workspace.preparePDFViewportForNavigationMode(mode)
             XCTAssertEqual(workspace.pdfViewportState.navigationMode, mode)
             XCTAssertNil(workspace.pdfViewportState.scrollProgress)
@@ -162,6 +185,20 @@ final class PDFMainPageNavigationTests: XCTestCase {
             XCTAssertFalse(workspace.pdfViewportState.autoScales)
             XCTAssertEqual(workspace.pdfViewportState(for: .comparison), comparisonViewport)
             workspace.recordPDFViewport(autoScales: false, scaleFactor: 2.4, scrollProgress: position)
+        }
+    }
+
+    @MainActor
+    func testTogglingAllArrowsPreservesVerticalReadingPosition() {
+        let workspace = hibernatedWorkspace()
+        let position = PDFScrollProgress(horizontal: 0.4, vertical: 0.7)
+        workspace.recordPDFViewport(autoScales: false, scaleFactor: 2, scrollProgress: position)
+        for mode in [PDFPageNavigationMode.allDirectionsPaging, .verticalScroll] {
+            workspace.preparePDFViewportForNavigationMode(mode)
+            XCTAssertEqual(workspace.pdfViewportState.navigationMode, mode)
+            XCTAssertEqual(workspace.pdfViewportState.scrollProgress(forPageIndex: 3), position)
+            XCTAssertEqual(workspace.pdfViewportState.scaleFactor, 2)
+            XCTAssertEqual(workspace.currentPageIndex, 3)
         }
     }
 

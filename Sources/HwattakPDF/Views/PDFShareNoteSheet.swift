@@ -19,7 +19,7 @@ struct PDFShareNoteSheet: View {
         _note = State(initialValue: note)
     }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

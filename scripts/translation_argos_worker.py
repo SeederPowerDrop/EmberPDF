@@ -514,7 +514,7 @@ def main():
         worker_main()
     elif arguments.serve and 1 <= arguments.port <= 65535:
         with TranslationServer(arguments.port) as server:
-            print("HwattakPDF local translation: http://127.0.0.1:" + str(server.server_port), flush=True)
+            print("EmberPDF local translation: http://127.0.0.1:" + str(server.server_port), flush=True)
             try:
                 server.serve_forever()
             except KeyboardInterrupt:

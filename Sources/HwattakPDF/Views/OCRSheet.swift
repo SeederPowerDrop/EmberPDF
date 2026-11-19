@@ -25,9 +25,7 @@ struct OCRSheet: View {
     @State private var completionMessage: String?
     @State private var hasAppliedResult = false
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(spacing: 0) {

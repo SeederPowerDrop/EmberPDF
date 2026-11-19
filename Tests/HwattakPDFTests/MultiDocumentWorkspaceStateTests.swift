@@ -7,6 +7,35 @@ import XCTest
 
 final class MultiDocumentWorkspaceStateTests: XCTestCase {
     @MainActor
+    func testComparisonCatalogIncludesOtherWorkspacesWithoutResumingOrSelectingTabs() throws {
+        let fixture = try makePDFFixture(names: ["first.pdf", "hidden.pdf"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let collection = MultiDocumentWorkspaceState(initialWorkspace: PDFWorkspaceState(), initialWorkspaceTitle: "Reading")
+        let firstWorkspaceID = collection.activeWorkspaceID
+        let firstID = try XCTUnwrap(collection.openPDFsInTabs(urls: [fixture.urls[0]]).first)
+        _ = collection.newTab() // A home tab must not appear as a PDF candidate.
+        let secondWorkspaceID = collection.createWorkspace(title: "Research")
+        let hiddenID = try XCTUnwrap(collection.openPDFsInTabs(urls: [fixture.urls[1]]).first)
+        _ = collection.createTabGroup(title: "Sources", tabIDs: [hiddenID])
+        let hiddenWorkspace = try XCTUnwrap(collection.activeWorkspace)
+        XCTAssertTrue(collection.selectWorkspace(firstWorkspaceID))
+        collection.selectTab(firstID)
+        XCTAssertTrue(hiddenWorkspace.hibernateIfPossible())
+
+        let candidates = collection.comparisonDocuments
+        XCTAssertEqual(candidates.map(\.id), [firstID, hiddenID])
+        XCTAssertEqual(candidates.map(\.workspaceID), [firstWorkspaceID, secondWorkspaceID])
+        XCTAssertEqual(candidates.map(\.workspaceTitle), ["Reading", "Research"])
+        XCTAssertEqual(candidates.map(\.tabIndex), [1, 1])
+        XCTAssertEqual(candidates.last?.groupTitle, "Sources")
+        XCTAssertTrue(candidates.last?.workspace === hiddenWorkspace)
+        XCTAssertTrue(hiddenWorkspace.isHibernated)
+        XCTAssertNil(hiddenWorkspace.document)
+        XCTAssertEqual(collection.activeWorkspaceID, firstWorkspaceID)
+        XCTAssertEqual(collection.activeTabID, firstID)
+    }
+
+    @MainActor
     func testInitialStateContainsOneActiveEmptyTab() {
         let workspace = MultiDocumentWorkspaceState()
 

@@ -15,7 +15,7 @@ final class OCRExportDestinationTests: XCTestCase {
     func testUnsavedDocumentDoesNotInventAnOriginalFolder() {
         let suggestion = OCRExportDestination(sourceURL: nil)
         XCTAssertNil(suggestion.directoryURL)
-        XCTAssertEqual(suggestion.fileName, "HwattakPDF-ocr.pdf")
+        XCTAssertEqual(suggestion.fileName, "EmberPDF-ocr.pdf")
     }
 
     func testLongUnicodeStemLeavesRoomForSuffix() {

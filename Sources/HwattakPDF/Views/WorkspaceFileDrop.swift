@@ -183,7 +183,16 @@ enum WorkspaceFileDropCoordinator {
 
             let blockedImageCount: Int
             if let imageTarget {
+                let previousRequestID = imageTarget.pendingImageInsertion?.id
                 blockedImageCount = insertImages(images, into: imageTarget)
+                if let newRequestID = imageTarget.pendingImageInsertion?.id,
+                   newRequestID != previousRequestID,
+                   let targetTab = multiDocumentWorkspace.tabs.first(where: { $0.workspace === imageTarget }) {
+                    // Opening the PDF portion of a mixed drop activates a new
+                    // tab. Bring the actual image destination back into view
+                    // so its quality approval sheet is visible before insertion.
+                    multiDocumentWorkspace.selectTab(targetTab.id)
+                }
             } else {
                 blockedImageCount = 0
             }
@@ -203,9 +212,7 @@ enum WorkspaceFileDropCoordinator {
         guard !images.isEmpty else { return 0 }
         guard workspace.allows(.imageInsertion) else { return images.count }
         _ = workspace.resumeIfNeeded()
-        for image in images {
-            workspace.insertImage(url: image.url)
-        }
+        workspace.requestImageInsertion(urls: images.map(\.url))
         return 0
     }
 
@@ -244,7 +251,7 @@ struct WorkspaceFileDropOverlay: View {
     let hasOpenDocument: Bool
     @Environment(\.colorScheme) private var colorScheme
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         VStack(spacing: 12) {

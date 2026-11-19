@@ -77,13 +77,13 @@ enum PDFWorkspaceMode: String, CaseIterable, Codable, Identifiable {
     }
 
     /// `WorkspaceTool.text`는 mode에 따라 서로 다른 사용자 의미를 갖는다.
-    /// 뷰어/학습에서는 주석 메모이고, 에디팅에서는 PDF 본문 위의
-    /// 직접 텍스트 입력이다. 같은 icon을 보여 주더라도 label은 솔직해야 한다.
+    /// 뷰어/학습에서는 주석 메모이고, 에디팅에서는 본문 편집이다.
+    /// 선택한 본문을 편집하거나 빈 위치에 새 본문을 추가한다.
     func title(for tool: WorkspaceTool) -> String {
         guard tool == .text else { return tool.title }
         return switch self {
         case .viewer: L10n.string("tool.comment_note", defaultValue: "주석 메모")
-        case .editing: L10n.string("tool.pdf_text", defaultValue: "PDF 텍스트")
+        case .editing: L10n.string("tool.pdf_text", defaultValue: "본문 편집")
         case .study: L10n.string("tool.study_note", defaultValue: "학습 메모")
         }
     }

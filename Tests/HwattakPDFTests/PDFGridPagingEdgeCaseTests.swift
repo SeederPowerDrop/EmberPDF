@@ -4,6 +4,98 @@ import XCTest
 @testable import HwattakPDF
 
 final class PDFGridPagingEdgeCaseTests: XCTestCase {
+    func testAllDirectionPreferenceIsSharedWithTheMainPDFCanvas() {
+        XCTAssertEqual(
+            PDFGridPagingDirection(rawValue: PDFPageNavigationMode.allDirectionsPaging.rawValue),
+            .allDirections
+        )
+    }
+
+    func testEveryArrowTurnsTheVisibleGroupInAllGridSizes() {
+        for groupSize in 3...12 {
+            for (keyCode, expectedStep): (UInt16, Int) in [
+                (123, -1), (126, -1), (124, 1), (125, 1)
+            ] {
+                let step = PDFGridPagingDirection.allDirections.keyboardPageStep(
+                    keyCode: keyCode,
+                    requestedPageCount: groupSize
+                )
+                XCTAssertEqual(step, expectedStep)
+                XCTAssertEqual(
+                    PDFPageNavigationMode.targetPage(
+                        from: groupSize + 1,
+                        pageCount: groupSize * 3,
+                        pagesPerTurn: groupSize,
+                        step: step ?? 0
+                    ),
+                    expectedStep < 0 ? 0 : groupSize * 2
+                )
+            }
+        }
+    }
+
+    func testAllDirectionGridPagingStopsAtDocumentEndsIncludingPartialGroup() {
+        for groupSize in 3...12 {
+            let count = groupSize * 2 + 1
+            for previousKey: UInt16 in [123, 126] {
+                let step = PDFGridPagingDirection.allDirections.keyboardPageStep(
+                    keyCode: previousKey, requestedPageCount: groupSize
+                )
+                XCTAssertNil(PDFPageNavigationMode.targetPage(
+                    from: 0, pageCount: count, pagesPerTurn: groupSize, step: step ?? 0
+                ))
+                XCTAssertEqual(PDFPageNavigationMode.targetPage(
+                    from: count - 1, pageCount: count, pagesPerTurn: groupSize, step: step ?? 0
+                ), groupSize)
+            }
+            for nextKey: UInt16 in [124, 125] {
+                let step = PDFGridPagingDirection.allDirections.keyboardPageStep(
+                    keyCode: nextKey, requestedPageCount: groupSize
+                )
+                XCTAssertEqual(PDFPageNavigationMode.targetPage(
+                    from: groupSize, pageCount: count, pagesPerTurn: groupSize, step: step ?? 0
+                ), count - 1)
+                XCTAssertNil(PDFPageNavigationMode.targetPage(
+                    from: count - 1, pageCount: count, pagesPerTurn: groupSize, step: step ?? 0
+                ))
+            }
+        }
+    }
+
+    func testExistingGridModesKeepTheirArrowAxisAndNonFourPageBehavior() {
+        XCTAssertEqual(PDFGridPagingDirection.vertical.keyboardPageStep(keyCode: 126, requestedPageCount: 4), -1)
+        XCTAssertEqual(PDFGridPagingDirection.vertical.keyboardPageStep(keyCode: 125, requestedPageCount: 4), 1)
+        XCTAssertNil(PDFGridPagingDirection.vertical.keyboardPageStep(keyCode: 123, requestedPageCount: 4))
+        XCTAssertNil(PDFGridPagingDirection.vertical.keyboardPageStep(keyCode: 124, requestedPageCount: 4))
+        XCTAssertEqual(PDFGridPagingDirection.horizontal.keyboardPageStep(keyCode: 123, requestedPageCount: 4), -1)
+        XCTAssertEqual(PDFGridPagingDirection.horizontal.keyboardPageStep(keyCode: 124, requestedPageCount: 4), 1)
+        XCTAssertNil(PDFGridPagingDirection.horizontal.keyboardPageStep(keyCode: 125, requestedPageCount: 4))
+        XCTAssertNil(PDFGridPagingDirection.horizontal.keyboardPageStep(keyCode: 126, requestedPageCount: 4))
+
+        for mode: PDFGridPagingDirection in [.vertical, .horizontal] {
+            for groupSize in (3...12).filter({ $0 != 4 }) {
+                for keyCode: UInt16 in [123, 124, 125, 126, 116, 121] {
+                    XCTAssertNil(mode.keyboardPageStep(keyCode: keyCode, requestedPageCount: groupSize))
+                }
+            }
+        }
+    }
+
+    func testPageUpDownRemainGroupShortcutsWithoutConsumingReturnOrOtherKeys() {
+        for mode in PDFGridPagingDirection.allCases {
+            XCTAssertEqual(mode.keyboardPageStep(keyCode: 116, requestedPageCount: 4), -1)
+            XCTAssertEqual(mode.keyboardPageStep(keyCode: 121, requestedPageCount: 4), 1)
+            for keyCode: UInt16 in [36, 48, 49, 51, 53, 0] {
+                XCTAssertNil(mode.keyboardPageStep(keyCode: keyCode, requestedPageCount: 4))
+            }
+        }
+        for invalidGroupSize in [0, 1, 2, 13] {
+            XCTAssertNil(PDFGridPagingDirection.allDirections.keyboardPageStep(
+                keyCode: 125, requestedPageCount: invalidGroupSize
+            ))
+        }
+    }
+
     func testGroupsNormalizeEveryDocumentBoundaryToFourPageStarts() {
         let expectations: [(pageCount: Int, pageIndex: Int, start: Int, slots: [Int?])] = [
             (1, 0, 0, [0, nil, nil, nil]),

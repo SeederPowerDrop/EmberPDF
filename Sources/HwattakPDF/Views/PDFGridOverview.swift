@@ -15,15 +15,17 @@ struct PDFGridOverview: View {
     var onVisiblePageChange: (Int) -> Void = { _ in }
     var onPageDoubleClick: (Int) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isPDFViewportResizing) private var isViewportResizing
     @State private var pageDragSession: PDFPageDragSession?
     @State private var pageReportedFromScroll: Int?
     @State private var hasEstablishedInitialPosition = false
     @State private var initialPositionGeneration = 0
+    @State private var geometryNavigationTask: Task<Void, Never>?
     @State private var transientMagnification: CGFloat = 1
     @State private var magnificationBaseline: CGFloat?
     @FocusState private var isPageGridFocused: Bool
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     /// Cards remain selectable in every mode. A page drag, however, changes
     /// document structure and must be authorized by Editing mode.
     private var canEditPages: Bool { workspace.allows(.pageEditing) }
@@ -128,7 +130,12 @@ struct PDFGridOverview: View {
                     establishInitialPosition(using: proxy, metrics: metrics)
                 }
                 .onChange(of: geometry.size) { _, _ in
-                    if workspace.pageFitMode != nil {
+                    scheduleGeometryNavigation(using: proxy, metrics: metrics)
+                }
+                .onChange(of: isViewportResizing) { _, isResizing in
+                    geometryNavigationTask?.cancel()
+                    geometryNavigationTask = nil
+                    if !isResizing, workspace.pageFitMode != nil {
                         establishInitialPosition(using: proxy, metrics: metrics)
                     }
                 }
@@ -180,6 +187,7 @@ struct PDFGridOverview: View {
         .modifier(PDFArrowKeyNavigationModifier(
             isFocused: $isPageGridFocused,
             contextID: "\(workspace.revision)-\(workspace.mode)-\(workspace.pageColumns)-\(layoutMode)-\(pagingDirection)",
+            allowsOption: pagingDirection == .allDirections,
             onArrow: handlePagingKey
         ))
         .onKeyPress(
@@ -192,6 +200,8 @@ struct PDFGridOverview: View {
             return handlePagingKey(keyPress.key)
         }
         .onDisappear {
+            geometryNavigationTask?.cancel()
+            geometryNavigationTask = nil
             transientMagnification = 1
             magnificationBaseline = nil
             pageDragSession = nil
@@ -297,7 +307,7 @@ struct PDFGridOverview: View {
     @ViewBuilder
     private var groupPagingControls: some View {
         switch pagingDirection {
-        case .vertical:
+        case .vertical, .allDirections:
             VStack {
                 pagingButton(groupOffset: -1, systemImage: "chevron.up")
                 Spacer()
@@ -405,36 +415,28 @@ struct PDFGridOverview: View {
     }
 
     private func handlePagingKey(_ key: KeyEquivalent) -> KeyPress.Result {
-        guard isFourPagePager else { return .ignored }
-
-        let offset: Int?
+        let keyCode: UInt16?
         if key == .pageUp {
-            offset = -1
+            keyCode = 116
         } else if key == .pageDown {
-            offset = 1
+            keyCode = 121
         } else {
-            switch pagingDirection {
-            case .vertical:
-                if key == .upArrow {
-                    offset = -1
-                } else if key == .downArrow {
-                    offset = 1
-                } else {
-                    offset = nil
-                }
-            case .horizontal:
-                if key == .leftArrow {
-                    offset = -1
-                } else if key == .rightArrow {
-                    offset = 1
-                } else {
-                    offset = nil
-                }
-            }
+            keyCode = PDFArrowKeyNavigationModifier.keyCode(for: key)
         }
 
-        guard let offset else { return .ignored }
-        requestPageGroup(offset: offset)
+        guard let keyCode,
+              let offset = pagingDirection.keyboardPageStep(
+                keyCode: keyCode,
+                requestedPageCount: workspace.pageColumns
+              ) else { return .ignored }
+        if let target = PDFPageNavigationMode.targetPage(
+            from: workspace.currentPageIndex,
+            pageCount: workspace.pageCount,
+            pagesPerTurn: workspace.pageColumns,
+            step: offset
+        ) {
+            onPageGroupChange(target)
+        }
         return .handled
     }
 
@@ -505,6 +507,7 @@ struct PDFGridOverview: View {
             pageIndex: index,
             width: width,
             revision: workspace.revision,
+            fileSource: workspace.thumbnailFileSource,
             selected: selected,
             theme: theme
         )
@@ -604,7 +607,8 @@ struct PDFGridOverview: View {
         from pageFrames: [Int: CGRect],
         viewportSize: CGSize
     ) {
-        guard hasEstablishedInitialPosition else { return }
+        guard hasEstablishedInitialPosition, !isViewportResizing,
+              geometryNavigationTask == nil else { return }
         let viewport = CGRect(origin: .zero, size: viewportSize)
         let visibleAreas = pageFrames.reduce(into: [Int: CGFloat]()) { result, element in
             let (index, frame) = element
@@ -694,10 +698,32 @@ struct PDFGridOverview: View {
         )
     }
 
+    /// A divider/window resize can deliver dozens of fitted viewport sizes.
+    /// Navigating on every one queued two main-thread callbacks per frame,
+    /// fighting the pointer and occasionally selecting a different page. Keep
+    /// layout live, but restore the reading anchor only once geometry settles.
+    private func scheduleGeometryNavigation(
+        using proxy: ScrollViewProxy,
+        metrics: PDFGridLayoutMetrics
+    ) {
+        geometryNavigationTask?.cancel()
+        geometryNavigationTask = nil
+        guard workspace.pageFitMode != nil, !isViewportResizing else { return }
+        geometryNavigationTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(120)) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            geometryNavigationTask = nil
+            establishInitialPosition(using: proxy, metrics: metrics)
+        }
+    }
+
     private func establishInitialPosition(
         using proxy: ScrollViewProxy,
         metrics: PDFGridLayoutMetrics
     ) {
+        geometryNavigationTask?.cancel()
+        geometryNavigationTask = nil
         initialPositionGeneration += 1
         let generation = initialPositionGeneration
         let currentPage = min(max(0, workspace.currentPageIndex), max(0, workspace.pageCount - 1))
@@ -725,6 +751,7 @@ private struct PDFGridPageCard: View {
     let pageIndex: Int
     let width: CGFloat
     let revision: UUID
+    let fileSource: PDFThumbnailFileSource?
     let selected: Bool
     let theme: HwattakPDFTheme
 
@@ -733,9 +760,10 @@ private struct PDFGridPageCard: View {
             PageThumbnailView(
                 page: page,
                 pageIndex: pageIndex,
-                width: max(80, (width - PDFGridLayoutMetrics.thumbnailHorizontalInset) * 2),
+                width: max(1, width - PDFGridLayoutMetrics.thumbnailHorizontalInset),
                 revision: revision,
-                showPageNumber: false
+                showPageNumber: false,
+                fileSource: fileSource
             )
             .frame(width: max(1, width - PDFGridLayoutMetrics.thumbnailHorizontalInset))
 

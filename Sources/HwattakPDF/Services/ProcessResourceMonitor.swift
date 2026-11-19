@@ -31,8 +31,25 @@ struct SystemProcessResourceCountersReader: ProcessResourceCountersReading {
     func readCounters() throws -> ProcessResourceCounters {
         ProcessResourceCounters(
             residentMemoryBytes: try residentMemoryBytes(),
-            cumulativeCPUTime: try cumulativeCPUTime()
+            cumulativeCPUTime: try cumulativeCPUTime(),
+            physicalFootprintBytes: physicalFootprintBytes()
         )
+    }
+
+    private func physicalFootprintBytes() -> UInt64? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), rebound, &count)
+            }
+        }
+        // Keep RSS and CPU available if a future OS denies this optional counter.
+        // Never silently relabel RSS as the physical footprint.
+        guard result == KERN_SUCCESS else { return nil }
+        return info.phys_footprint
     }
 
     private func residentMemoryBytes() throws -> UInt64 {
@@ -203,7 +220,8 @@ final class ProcessResourceMonitor: ObservableObject {
             snapshot = ProcessResourceSnapshot(
                 residentMemoryBytes: counters.residentMemoryBytes,
                 cpuPercent: cpuPercent,
-                sampledAt: sampledAt
+                sampledAt: sampledAt,
+                physicalFootprintBytes: counters.physicalFootprintBytes
             )
             previousCPUCounter = (counters.cumulativeCPUTime, uptime)
             lastError = nil

@@ -88,6 +88,47 @@ protocol PDFMemoryPressureMonitoring: AnyObject {
     func stop()
 }
 
+protocol PDFTabMemoryCleanupToken: AnyObject {
+    func cancel()
+}
+
+protocol PDFTabMemoryCleanupScheduling {
+    @MainActor
+    func schedule(
+        after delay: TimeInterval,
+        action: @escaping @MainActor () -> Void
+    ) -> any PDFTabMemoryCleanupToken
+}
+
+struct RunLoopPDFTabMemoryCleanupScheduler: PDFTabMemoryCleanupScheduling {
+    @MainActor
+    func schedule(
+        after delay: TimeInterval,
+        action: @escaping @MainActor () -> Void
+    ) -> any PDFTabMemoryCleanupToken {
+        let timer = Timer(timeInterval: delay, repeats: false) { _ in
+            MainActor.assumeIsolated { action() }
+        }
+        // Releasing a PDFKit graph can be expensive. Default mode lets active
+        // scroll/resize tracking finish before this discretionary cleanup.
+        RunLoop.main.add(timer, forMode: .default)
+        return RunLoopPDFTabMemoryCleanupToken(timer: timer)
+    }
+}
+
+private final class RunLoopPDFTabMemoryCleanupToken: PDFTabMemoryCleanupToken {
+    private var timer: Timer?
+
+    init(timer: Timer) { self.timer = timer }
+
+    func cancel() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    deinit { timer?.invalidate() }
+}
+
 /// Darwin's dispatch memory-pressure source is the platform signal Apple
 /// provides for releasing recreatable cache/data at warning and critical
 /// pressure. Delivery happens on the main queue because PDFKit is main-thread
@@ -137,10 +178,13 @@ final class PDFTabMemoryManager: ObservableObject {
     private weak var workspace: MultiDocumentWorkspaceState?
     private let policy: PDFTabMemoryPolicy
     private let pressureMonitor: any PDFMemoryPressureMonitoring
+    private let cleanupScheduler: any PDFTabMemoryCleanupScheduling
     private let uptime: () -> TimeInterval
     private var accessSequence: UInt64 = 0
     private var lastAccessSequence: [UUID: UInt64] = [:]
     private var protectedTabIDs: Set<UUID> = []
+    private var cleanupToken: (any PDFTabMemoryCleanupToken)?
+    private var cleanupGeneration: UUID?
 
     init(
         workspace: MultiDocumentWorkspaceState,
@@ -149,6 +193,7 @@ final class PDFTabMemoryManager: ObservableObject {
         ),
         policy: PDFTabMemoryPolicy = PDFTabMemoryPolicy(),
         pressureMonitor: any PDFMemoryPressureMonitoring = DispatchPDFMemoryPressureMonitor(),
+        cleanupScheduler: any PDFTabMemoryCleanupScheduling = RunLoopPDFTabMemoryCleanupScheduler(),
         uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.workspace = workspace
@@ -157,6 +202,7 @@ final class PDFTabMemoryManager: ObservableObject {
         )
         self.policy = policy
         self.pressureMonitor = pressureMonitor
+        self.cleanupScheduler = cleanupScheduler
         self.uptime = uptime
 
         recordAccess(to: workspace.activeTabID)
@@ -171,6 +217,7 @@ final class PDFTabMemoryManager: ObservableObject {
     }
 
     deinit {
+        cleanupToken?.cancel()
         pressureMonitor.stop()
     }
 
@@ -197,26 +244,80 @@ final class PDFTabMemoryManager: ObservableObject {
 
     /// Comparison panes are simultaneously visible, so they are treated as
     /// active until comparison mode exits.
-    func setProtectedTabIDs(_ ids: Set<UUID>) {
+    func setProtectedTabIDs(_ ids: Set<UUID>, deferCleanup: Bool = false) {
+        cancelDeferredCleanup()
         protectedTabIDs = ids
         guard let workspace else { return }
         for session in workspace.allTabs where ids.contains(session.id) {
             resume(session)
             recordAccess(to: session.id)
         }
-        enforceBudget()
+        if deferCleanup {
+            // A removed/replaced pane must detach its PDFView before its
+            // document becomes eligible for hibernation.
+            let generation = UUID()
+            cleanupGeneration = generation
+            scheduleCleanupSlice(after: 0.2, generation: generation)
+            refreshMetrics()
+        } else {
+            enforceBudget()
+        }
+    }
+
+    /// Let comparison PDFViews dismantle and the normal reader restore its
+    /// viewport before releasing their documents. Subsequent budget/eligibility
+    /// notifications join this pass instead of doing the same work inline.
+    func releaseComparisonProtectionAfterTransition() {
+        protectedTabIDs.removeAll()
+        guard cleanupGeneration == nil else { return }
+        let generation = UUID()
+        cleanupGeneration = generation
+        scheduleCleanupSlice(after: 0.2, generation: generation)
     }
 
     func handleMemoryPressure(_ level: PDFMemoryPressureLevel) {
+        guard level != .normal else {
+            enforceBudget()
+            return
+        }
+        // Real memory pressure takes precedence over transition smoothness.
+        cancelDeferredCleanup()
         enforce(pressure: level)
     }
 
     func enforceBudget() {
+        guard cleanupGeneration == nil else {
+            refreshMetrics()
+            return
+        }
         enforce(pressure: .normal)
     }
 
-    private func enforce(pressure: PDFMemoryPressureLevel) {
-        guard let workspace else { return }
+    private func scheduleCleanupSlice(after delay: TimeInterval, generation: UUID) {
+        cleanupToken = cleanupScheduler.schedule(after: delay) { [weak self] in
+            guard let self, self.cleanupGeneration == generation else { return }
+            self.cleanupToken = nil
+            // Recompute candidates every time: a tab may have become active,
+            // dirty, protected, or closed since the previous slice.
+            let hasMoreCandidates = self.enforce(pressure: .normal, maximumAttempts: 1)
+            guard self.cleanupGeneration == generation else { return }
+            if hasMoreCandidates {
+                self.scheduleCleanupSlice(after: 0.05, generation: generation)
+            } else {
+                self.cleanupGeneration = nil
+            }
+        }
+    }
+
+    private func cancelDeferredCleanup() {
+        cleanupGeneration = nil
+        cleanupToken?.cancel()
+        cleanupToken = nil
+    }
+
+    @discardableResult
+    private func enforce(pressure: PDFMemoryPressureLevel, maximumAttempts: Int = .max) -> Bool {
+        guard let workspace else { return false }
         let sessions = workspace.allTabs
         let activeID = workspace.activeTabID
         let inputs = sessions.map { session in
@@ -237,7 +338,7 @@ final class PDFTabMemoryManager: ObservableObject {
         let sessionByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
         let startedAt = uptime()
         var releasedCount = 0
-        for id in candidateIDs {
+        for id in candidateIDs.prefix(maximumAttempts) {
             if sessionByID[id]?.workspace.hibernateIfPossible() == true {
                 releasedCount += 1
             }
@@ -248,6 +349,7 @@ final class PDFTabMemoryManager: ObservableObject {
         }
         metrics.lastPressureLevel = pressure
         refreshMetrics()
+        return candidateIDs.count > maximumAttempts
     }
 
     private func resumeActiveTabIfNeeded() {

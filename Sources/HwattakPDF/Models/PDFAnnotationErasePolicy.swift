@@ -101,6 +101,7 @@ extension PDFWorkspaceState {
         // here so a stale Eraser mouse-down cannot select a deletion target
         // after Select or Text has already become active.
         activeTool == .eraser
+            && annotation.shouldDisplay
             && allows(.markup)
             && PDFAnnotationErasePolicy.allows(
                 annotation,
@@ -124,6 +125,7 @@ extension PDFWorkspaceState {
         guard allowsEraserRemoval(of: annotation) else { return false }
         prepareForDeactivation()
         guard
+            pendingInlineTextEdit == nil,
             activeTool == .eraser,
             allowsEraserRemoval(of: annotation),
             let document,
@@ -139,7 +141,7 @@ extension PDFWorkspaceState {
             annotation,
             from: page,
             originalIndex: originalIndex,
-            message: L10n.string("주석을 삭제했습니다.")
+            message: L10n.string("주석을 삭제했습니다."), actionLocalization: .init(key: "주석을 삭제했습니다.")
         )
         return true
     }

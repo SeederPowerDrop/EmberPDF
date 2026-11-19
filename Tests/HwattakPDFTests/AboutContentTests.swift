@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import CoreImage
 import SwiftUI
 import XCTest
 @testable import HwattakPDF
 
 final class AboutContentTests: XCTestCase {
-    func testAuthorIntroductionPreservesProvidedWordingAndParagraphOrder() {
-        XCTAssertEqual(
-            AboutContent.introductionParagraphs,
-            [
-                "모 PDF 프로그램을 유로로 구입해서 사용하고 있는데 이제는 기본적인 기능 조차 구독으로 바뀌어서 화딱지나서 바이브 코딩으로 만들었습니다.",
-                "그 회사도 먹고 살기위해서 어쩔 수 없는 것을 알지만 기존에 유로 구입자에게 너무한 조치라서 만들었습니다.",
-                "많은 사람들이 편리하게 사용했으면 합니다.",
-                "그리고 평생 무료로 최대한 지원해드리며 소정의 tip만 받도록 하겠습니다.",
-                "그리고 ERW FWS WRG"
-            ]
-        )
+    func testIntroductionExplainsTheNameAndItsPurpose() {
+        let story = AboutContent.introductionParagraphs.joined(separator: "\n")
+        XCTAssertTrue(story.contains("구독제"))
+        XCTAssertTrue(story.contains("바이브 코딩"))
+        XCTAssertTrue(story.contains("잉걸불"))
+        XCTAssertTrue(story.contains("Obsidian"))
+        XCTAssertTrue(story.contains("제가 할 수 있는 한"))
+        XCTAssertTrue(story.hasSuffix("그리고 ERW FWS WRG"))
         XCTAssertEqual(
             AboutContent.introductionLocalizationKeys,
             (1...5).map { "about.introduction.\($0)" }
@@ -41,6 +39,8 @@ final class AboutContentTests: XCTestCase {
             let paragraphs = AboutContent.localizedIntroductionParagraphs
 
             XCTAssertEqual(paragraphs.count, 5)
+            XCTAssertTrue(paragraphs[0].contains("EmberPDF"), language.rawValue)
+            XCTAssertTrue(paragraphs[2].contains("Obsidian"), language.rawValue)
             XCTAssertTrue(
                 paragraphs.allSatisfy {
                     !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -48,6 +48,8 @@ final class AboutContentTests: XCTestCase {
             )
             XCTAssertFalse(AboutContent.supportTitle.isEmpty)
             XCTAssertFalse(AboutContent.supportDetail.isEmpty)
+            XCTAssertFalse(AboutContent.rightsDetail.isEmpty)
+            XCTAssertTrue(paragraphs[4].contains("ERW FWS WRG"), language.rawValue)
 
             if language != .korean {
                 XCTAssertNotEqual(paragraphs, AboutContent.introductionParagraphs)
@@ -90,13 +92,13 @@ final class AboutContentTests: XCTestCase {
             defaults.set(language.rawValue, forKey: AppPreferences.languageDefaultsKey)
             for colorScheme in [ColorScheme.light, .dark] {
                 let variant = "\(language.rawValue)-\(colorScheme == .dark ? "dark" : "light")"
-                let rootView = AboutView(authorImage: AboutContent.authorImage())
+                let rootView = AboutView(authorImage: AboutContent.authorImage(), version: "0.9.0")
                     .environment(\.locale, language.locale)
                     .environment(\.layoutDirection, language.layoutDirection)
                     .environment(\.colorScheme, colorScheme)
                 let hostingView = NSHostingView(rootView: rootView)
                 hostingView.appearance = NSAppearance(named: colorScheme == .dark ? .darkAqua : .aqua)
-                hostingView.frame = NSRect(x: 0, y: 0, width: 840, height: 690)
+                hostingView.frame = NSRect(origin: .zero, size: AboutContent.windowSize)
                 hostingView.layoutSubtreeIfNeeded()
 
                 let representation = try XCTUnwrap(
@@ -117,15 +119,15 @@ final class AboutContentTests: XCTestCase {
                     Int(backingBounds.height.rounded()),
                     variant
                 )
-                XCTAssertEqual(hostingView.bounds.width, 840, accuracy: 0.01, variant)
-                XCTAssertEqual(hostingView.bounds.height, 690, accuracy: 0.01, variant)
+                XCTAssertEqual(hostingView.bounds.width, AboutContent.windowSize.width, accuracy: 0.01, variant)
+                XCTAssertEqual(hostingView.bounds.height, AboutContent.windowSize.height, accuracy: 0.01, variant)
 
                 // Sample the empty dialog margin, clear of content in both
                 // layout directions, to catch a window stuck in one appearance.
                 let canvasColor = try XCTUnwrap(
                     representation.colorAt(
-                        x: representation.pixelsWide * 10 / 840,
-                        y: representation.pixelsHigh * 200 / 690
+                        x: Int(CGFloat(representation.pixelsWide) * 10 / AboutContent.windowSize.width),
+                        y: Int(CGFloat(representation.pixelsHigh) * 200 / AboutContent.windowSize.height)
                     )?.usingColorSpace(.sRGB)
                 )
                 let brightness = (canvasColor.redComponent + canvasColor.greenComponent + canvasColor.blueComponent) / 3
@@ -145,6 +147,37 @@ final class AboutContentTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testSupportAndLicensePanelsRenderInBothAppearances() throws {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: AppPreferences.languageDefaultsKey)
+        defaults.set(AppLanguage.korean.rawValue, forKey: AppPreferences.languageDefaultsKey)
+        defer {
+            if let previous { defaults.set(previous, forKey: AppPreferences.languageDefaultsKey) }
+            else { defaults.removeObject(forKey: AppPreferences.languageDefaultsKey) }
+        }
+        for scheme in [ColorScheme.light, .dark] {
+            let panels: [(String, AnyView, CGSize)] = [
+                ("bitcoin", AnyView(AboutBitcoinSupportView()), CGSize(width: 400, height: 510)),
+                ("licenses", AnyView(AboutLicensesView()), CGSize(width: 740, height: 560))
+            ]
+            for (name, panel, size) in panels {
+                let host = NSHostingView(rootView: panel.environment(\.colorScheme, scheme))
+                host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+                host.frame = CGRect(origin: .zero, size: size)
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                XCTAssertGreaterThan(png.count, 10_000)
+                if let output = ProcessInfo.processInfo.environment["HWATTAK_ABOUT_PREVIEWS"] {
+                    let suffix = scheme == .dark ? "dark" : "light"
+                    try png.write(to: URL(fileURLWithPath: output).appendingPathComponent("\(name)-\(suffix).png"))
+                }
+            }
+        }
+    }
+
     func testPublishedLinksUseExactExpectedWebDestinations() throws {
         let githubURL = try XCTUnwrap(AboutContent.githubURL)
         let supportURL = try XCTUnwrap(AboutContent.supportURL)
@@ -154,6 +187,29 @@ final class AboutContentTests: XCTestCase {
             "https://github.com/SeederPowerDrop/HwattakPDF"
         )
         XCTAssertEqual(supportURL.absoluteString, "https://buymeacoffee.com/master_chief")
+    }
+
+    func testDonationQRCodeDecodesToTheDisplayedPublicReceivingAddress() throws {
+        XCTAssertEqual(AboutSupport.koFiURL.absoluteString, "https://ko-fi.com/seederpower")
+        XCTAssertEqual(AboutSupport.bitcoinAddress, "BC1QUEUAX3FJP77NZUKF732AEWVFE0YVS9ZPKUMLTV")
+        let image = CIImage(cgImage: try XCTUnwrap(AboutSupport.makeBitcoinQRCode()))
+        let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode,
+            context: CIContext(options: [.useSoftwareRenderer: true]),
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        let codes = detector.features(in: image).compactMap { $0 as? CIQRCodeFeature }
+        XCTAssertEqual(codes.count, 1)
+        XCTAssertEqual(codes.first?.messageString, "bitcoin:" + AboutSupport.bitcoinAddress)
+    }
+
+    func testLocalLicensePanelsIncludeTheProjectAndBundledComponents() {
+        let project = AboutLicenseContent.combinedText(AboutLicenseContent.projectDocuments())
+        XCTAssertTrue(project.contains("Mozilla Public License Version 2.0"))
+        XCTAssertTrue(project.contains("SeederPowerDrop"))
+        let components = AboutLicenseContent.componentDocuments()
+        for name in ["KaTeX", "Marked", "DOMPurify", "PDFium"] {
+            XCTAssertTrue(components.contains { $0.title.contains(name) && !$0.text.isEmpty }, name)
+        }
+        XCTAssertTrue(components.contains { $0.title == "PDFium · pdfium.txt" })
     }
 
     func testExternalLinkValidationAllowsOnlyHTTPWebOriginsWithoutUserInfo() {

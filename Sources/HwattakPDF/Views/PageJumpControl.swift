@@ -8,12 +8,13 @@ import SwiftUI
 /// available when either surface is hidden or moved.
 struct PageJumpControl: View {
     @ObservedObject var workspace: PDFWorkspaceState
+    var onNavigate: ((Int) -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isFocused: Bool
     @State private var draft = ""
     @State private var isInvalid = false
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         HStack(spacing: 4) {
@@ -126,7 +127,8 @@ struct PageJumpControl: View {
         case let .destination(pageIndex, pageNumber):
             isInvalid = false
             draft = String(pageNumber)
-            workspace.setCurrentPage(pageIndex)
+            if let onNavigate { onNavigate(pageIndex) }
+            else { workspace.setCurrentPage(pageIndex) }
             isFocused = false
         }
     }

@@ -23,11 +23,15 @@ struct PDFKitViewer: NSViewRepresentable {
     private var wheelZoomModifierValue = PDFWheelZoomModifier.defaultValue.rawValue
     @AppStorage(AppPerformanceSettings.efficientRenderingEnabledKey)
     private var efficientRenderingEnabled = AppPerformanceSettings.defaultEfficientRenderingEnabled
+    @AppStorage(PDFReadingTheme.defaultsKey)
+    private var readingThemeValue = PDFReadingTheme.original.rawValue
+    @EmberTheme private var theme
     private let scrollSyncCoordinator: PDFScrollSyncCoordinator?
     private let scrollSyncID: UUID?
     private let scrollSyncLocked: Bool
     private let onScrollActivity: ((PDFVerticalScrollMetrics) -> Void)?
     private let viewportContext: PDFViewerViewportContext
+    private let compactSpread: PDFCompactSpreadContext?
 
     init(
         workspace: PDFWorkspaceState,
@@ -35,6 +39,7 @@ struct PDFKitViewer: NSViewRepresentable {
         scrollSyncID: UUID? = nil,
         scrollSyncLocked: Bool = false,
         viewportContext: PDFViewerViewportContext = .normal,
+        compactSpread: PDFCompactSpreadContext? = nil,
         onScrollActivity: ((PDFVerticalScrollMetrics) -> Void)? = nil
     ) {
         _state = ObservedObject(wrappedValue: workspace)
@@ -42,6 +47,7 @@ struct PDFKitViewer: NSViewRepresentable {
         self.scrollSyncID = scrollSyncID
         self.scrollSyncLocked = scrollSyncLocked
         self.viewportContext = viewportContext
+        self.compactSpread = compactSpread
         self.onScrollActivity = onScrollActivity
     }
 
@@ -51,6 +57,7 @@ struct PDFKitViewer: NSViewRepresentable {
         scrollSyncID: UUID? = nil,
         scrollSyncLocked: Bool = false,
         viewportContext: PDFViewerViewportContext = .normal,
+        compactSpread: PDFCompactSpreadContext? = nil,
         onScrollActivity: ((PDFVerticalScrollMetrics) -> Void)? = nil
     ) {
         _state = ObservedObject(wrappedValue: state)
@@ -58,6 +65,7 @@ struct PDFKitViewer: NSViewRepresentable {
         self.scrollSyncID = scrollSyncID
         self.scrollSyncLocked = scrollSyncLocked
         self.viewportContext = viewportContext
+        self.compactSpread = compactSpread
         self.onScrollActivity = onScrollActivity
     }
 
@@ -71,17 +79,23 @@ struct PDFKitViewer: NSViewRepresentable {
     }
 
     /// AppKit view의 변하지 않는 기본 설정은 생성 시 한 번만 적용한다.
-    func makeNSView(context: Context) -> InteractivePDFView {
-        let pdfView = InteractivePDFView(frame: .zero)
+    func makeNSView(context: Context) -> NSView {
+        let nativeView = PDFNativeViewFactory.makeView {
+            InteractivePDFView(frame: .zero)
+        }
+        guard let pdfView = nativeView as? InteractivePDFView else { return nativeView }
+        pdfView.compactSpread = compactSpread
+        if compactSpread != nil { pdfView.displayMode = .twoUp }
         pdfView.pageNavigationMode = pageNavigationMode
         pdfView.displayDirection = pageNavigationMode == .horizontalPaging ? .horizontal : .vertical
-        pdfView.displaysPageBreaks = true
+        pdfView.displaysPageBreaks = compactSpread == nil
         pdfView.displaysAsBook = false
         pdfView.displayBox = .cropBox
-        pdfView.backgroundColor = adaptiveCanvasColor()
+        pdfView.readingDisplayFilter.apply(readingTheme, to: pdfView, canvasColor: NSColor(theme.canvas))
         pdfView.pageShadowsEnabled = viewportContext == .normal || !efficientRenderingEnabled
-        pdfView.autoScales = true
+        pdfView.autoScales = viewportContext == .normal && compactSpread == nil
         pdfView.viewportContext = viewportContext
+        pdfView.comparisonContentFixed = scrollSyncLocked
         pdfView.wheelZoomModifier = wheelZoomModifier
         pdfView.configure(with: state)
         context.coordinator.attach(to: pdfView)
@@ -95,8 +109,27 @@ struct PDFKitViewer: NSViewRepresentable {
     }
 
     /// 매 SwiftUI 갱신마다 호출되므로 비싼 작업은 identity/revision 비교 뒤 실행한다.
-    func updateNSView(_ pdfView: InteractivePDFView, context: Context) {
+    func updateNSView(_ nativeView: NSView, context: Context) {
+        guard let pdfView = nativeView as? InteractivePDFView else {
+            (nativeView as? PDFNativeRenderingUnavailableView)?.refreshMessage()
+            return
+        }
         let coordinator = context.coordinator
+        pdfView.compactSpread = compactSpread
+        pdfView.comparisonAllowsProgrammaticScale = true
+        defer { pdfView.comparisonAllowsProgrammaticScale = false }
+        if let scrollSyncCoordinator, let scrollSyncID {
+            scrollSyncCoordinator.beginProgrammaticUpdate(id: scrollSyncID)
+        }
+        defer {
+            if let scrollSyncCoordinator, let scrollSyncID {
+                scrollSyncCoordinator.endProgrammaticUpdate(id: scrollSyncID)
+            }
+        }
+        let canvasColor = NSColor(theme.canvas)
+        // Keep the unfiltered canvas explicit: PDFView's getter can return
+        // the clip's compensated background after a reading theme is applied.
+        pdfView.readingDisplayFilter.apply(readingTheme, to: pdfView, canvasColor: canvasColor)
         coordinator.updateState(state)
         coordinator.updateScrollActivityHandler(onScrollActivity)
         // [학습 03] 여기서 go(to:)를 호출하면 PDFKit 알림도 발생할 수 있습니다.
@@ -105,18 +138,21 @@ struct PDFKitViewer: NSViewRepresentable {
         defer { coordinator.isApplyingState = false }
         var pdfKitHierarchyMayHaveChanged = false
 
-        if viewportContext == .normal {
+        if viewportContext == .normal, compactSpread == nil {
             state.preparePDFViewportForNavigationMode(pageNavigationMode)
         }
         let navigationChanged = pdfView.pageNavigationMode != pageNavigationMode
         if navigationChanged {
-            coordinator.cancelViewportRestoration()
+            if (pdfView.pageNavigationMode == .horizontalPaging) != (pageNavigationMode == .horizontalPaging) {
+                coordinator.cancelViewportRestoration()
+            }
             pdfView.pageNavigationMode = pageNavigationMode
         }
 
         if pdfView.viewportContext != viewportContext {
             pdfView.viewportContext = viewportContext
         }
+        pdfView.comparisonContentFixed = scrollSyncLocked
         pdfView.configure(with: state)
         if pdfView.wheelZoomModifier != wheelZoomModifier {
             pdfView.wheelZoomModifier = wheelZoomModifier
@@ -130,13 +166,19 @@ struct PDFKitViewer: NSViewRepresentable {
         // 지금 PDFView가 바로 그 PDFDocument 객체를 표시하는지 검사합니다.
         let documentChanged = pdfView.document !== state.document
         if documentChanged {
+            pdfView.searchScroll.cancelMotion()
             pdfView.resetPageTurnGesture()
             pdfKitHierarchyMayHaveChanged = true
+            if viewportContext == .comparison {
+                pdfView.comparisonAutomaticallyFitsPage = state.pdfViewportState(for: .comparison).autoScales
+                pdfView.pendingComparisonPageIndex = state.currentPageIndex
+                pdfView.autoScales = false
+            }
             pdfView.document = state.document
             coordinator.lastAppliedPageIndex = nil
             coordinator.lastAppliedPage = nil
             coordinator.lastSearchSelection = nil
-            if state.document != nil {
+            if state.document != nil, compactSpread == nil {
                 let viewport = state.pdfViewportState(for: viewportContext)
                 if
                     let scaleFactor = viewport.scaleFactor,
@@ -145,19 +187,19 @@ struct PDFKitViewer: NSViewRepresentable {
                     pdfView.autoScales = false
                     pdfView.scaleFactor = min(20, max(0.05, scaleFactor))
                 } else {
-                    pdfView.autoScales = true
+                    pdfView.autoScales = viewportContext == .normal
                 }
             }
         }
 
-        let requestedMode = Self.requestedDisplayMode(
+        let requestedMode: PDFDisplayMode = compactSpread != nil ? .twoUp : Self.requestedDisplayMode(
             pageColumns: state.pageColumns,
             twoPageDisplayMode: state.twoPageDisplayMode,
             viewportContext: viewportContext,
             navigationMode: pageNavigationMode
         )
         let requestedDirection: PDFDisplayDirection = pageNavigationMode == .horizontalPaging ? .horizontal : .vertical
-        if pdfView.displayMode != requestedMode || pdfView.displayDirection != requestedDirection || navigationChanged {
+        if pdfView.displayMode != requestedMode || pdfView.displayDirection != requestedDirection {
             pdfKitHierarchyMayHaveChanged = true
             coordinator.cancelViewportRestoration()
             pdfView.resetPageTurnGesture()
@@ -184,21 +226,27 @@ struct PDFKitViewer: NSViewRepresentable {
             pdfView.needsDisplay = true
         }
 
+        let requestedPageIndex = compactSpread?.pageIndex ?? state.currentPageIndex
         if
             let document = state.document,
-            state.currentPageIndex >= 0,
-            state.currentPageIndex < document.pageCount,
-            let page = document.page(at: state.currentPageIndex),
+            requestedPageIndex >= 0,
+            requestedPageIndex < document.pageCount,
+            let page = document.page(at: requestedPageIndex),
             coordinator.requiresNavigation(
                 to: page,
-                at: state.currentPageIndex,
+                at: requestedPageIndex,
                 in: pdfView
             )
         {
             state.primeWidgetValues(on: page)
-            coordinator.lastAppliedPageIndex = state.currentPageIndex
+            coordinator.lastAppliedPageIndex = requestedPageIndex
             coordinator.lastAppliedPage = page
-            pdfView.go(to: page)
+            pdfView.searchScroll.cancelMotion()
+            if viewportContext == .comparison {
+                pdfView.revealComparisonPage(page)
+            } else {
+                pdfView.go(to: page)
+            }
             if requestedMode == .twoUp {
                 pdfView.visiblePages.forEach { state.primeWidgetValues(on: $0) }
             }
@@ -223,24 +271,46 @@ struct PDFKitViewer: NSViewRepresentable {
             coordinator.refreshScrollActivityObservation()
             coordinator.scheduleScrollActivityObservationRefresh()
         }
+        if let compactSpread {
+            pdfView.autoScales = false
+            pdfView.minScaleFactor = min(pdfView.minScaleFactor, compactSpread.scaleFactor)
+            pdfView.maxScaleFactor = max(pdfView.maxScaleFactor, compactSpread.scaleFactor)
+            if abs(pdfView.scaleFactor - compactSpread.scaleFactor) > 0.0001 {
+                pdfView.scaleFactor = compactSpread.scaleFactor
+                pdfView.layoutDocumentView()
+            }
+            // The outer scroll view owns the continuous position. A row has no
+            // native scrolling range, even when PDFKit recreates its clip view.
+            if let scroll = pdfView.firstDocumentScrollView() {
+                scroll.hasVerticalScroller = false
+                scroll.hasHorizontalScroller = false
+                scroll.verticalScrollElasticity = .none
+                scroll.horizontalScrollElasticity = .none
+            }
+        } else {
+            // A body edit replaces a page with identical geometry. Revealing
+            // it again queues a fit-mode go(to:) after viewport restoration,
+            // which would undo that restoration on the next run loop.
+            pdfView.updatePageFitMode(revealCurrentPage: pdfKitHierarchyMayHaveChanged
+                && !coordinator.isPreservingBodyTextViewport)
+        }
         applySearchSelection(to: pdfView, coordinator: coordinator)
+        coordinator.applyStudyNoteReveal(state.studyNoteRevealRequest, to: pdfView)
         coordinator.clearSelectionAfterMarkup(in: pdfView)
-        pdfView.updatePageFitMode(revealCurrentPage: pdfKitHierarchyMayHaveChanged)
         pdfView.regionSelection.synchronize()
-        if documentChanged {
+        pdfView.readingDisplayFilter.refreshTarget()
+        pdfView.searchScroll.synchronize(with: state)
+        coordinator.restoreBodyTextViewportAfterUpdate()
+        if documentChanged, compactSpread == nil {
             coordinator.scheduleViewportRestoration(
                 state.pdfViewportState(for: viewportContext)
             )
         }
+        pdfView.revealPendingBodyTextSelection()
     }
 
-    private func adaptiveCanvasColor() -> NSColor {
-        NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return isDark
-                ? NSColor(white: 0.105, alpha: 1)
-                : NSColor(white: 0.945, alpha: 1)
-        }
+    private var readingTheme: PDFReadingTheme {
+        PDFReadingTheme(rawValue: readingThemeValue) ?? .original
     }
 
     /// PDFKit이 지원하는 1·2페이지 표시 모드로 워크스페이스 선택을 변환한다.
@@ -252,14 +322,18 @@ struct PDFKitViewer: NSViewRepresentable {
         viewportContext: PDFViewerViewportContext = .normal,
         navigationMode: PDFPageNavigationMode = .verticalScroll
     ) -> PDFDisplayMode {
-        if viewportContext == .normal, navigationMode == .horizontalPaging, pageColumns <= 2 {
+        // Each comparison pane represents one document in one continuous
+        // column. Inheriting the source tab's two-page or 3–12-page overview
+        // silently created spreads, especially visible after a pane resized.
+        // Leave the source tab's display preferences untouched on exit.
+        if viewportContext == .comparison { return .singlePageContinuous }
+        if navigationMode == .horizontalPaging, pageColumns <= 2 {
             return pageColumns > 1 ? .twoUp : .singlePage
         }
         guard pageColumns > 1 else { return .singlePageContinuous }
-        // The comparison synchronizer coordinates normalized clip positions,
-        // not discrete spread identity. Keep comparison and defensive 3+ page
-        // calls on the established continuous path.
-        guard viewportContext == .normal, pageColumns == 2 else {
+        // Normal 3+ page calls use the SwiftUI overview. Keep their defensive
+        // PDFKit fallback separate from comparison presentation.
+        guard pageColumns == 2 else {
             return .twoUpContinuous
         }
         return twoPageDisplayMode == .paged ? .twoUp : .twoUpContinuous
@@ -274,7 +348,11 @@ struct PDFKitViewer: NSViewRepresentable {
         return PDFPageNavigationMode(rawValue: pageNavigationModeValue) ?? .defaultValue
     }
 
-    static func dismantleNSView(_ pdfView: InteractivePDFView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nativeView: NSView, coordinator: Coordinator) {
+        guard let pdfView = nativeView as? InteractivePDFView else {
+            coordinator.detach()
+            return
+        }
         // A replacement coordinator may already have installed its token on
         // the shared workspace. Commit through this outgoing view directly so
         // normal↔comparison/layout rebuilds cannot route the old field editor
@@ -282,6 +360,7 @@ struct PDFKitViewer: NSViewRepresentable {
         // Synchronize/commit the custom inline draft before the PDFView and its
         // native field editors leave the responder chain.
         pdfView.prepareInlineTextEditingOverlayForRemoval()
+        pdfView.finishEraserGesture()
         coordinator.prepareForDismantling()
         coordinator.detach()
         pdfView.cancelInkStroke()
@@ -289,6 +368,9 @@ struct PDFKitViewer: NSViewRepresentable {
         pdfView.resetPageTurnGesture()
         pdfView.prepareAnnotationEditingOverlayForRemoval()
         pdfView.regionSelection.cancel()
+        pdfView.finishNativeSelectionPreview()
+        pdfView.searchScroll.detach()
+        pdfView.readingDisplayFilter.detach()
         pdfView.workspaceState = nil
     }
 
@@ -324,6 +406,9 @@ struct PDFKitViewer: NSViewRepresentable {
         private var lastObservedVerticalScrollOrigin: CGFloat?
         private var scrollActivityRefreshScheduled = false
         private var viewportRestoreGeneration = UUID()
+        private var bodyTextViewport: (document: PDFDocument, pageIndex: Int, origin: CGPoint, scale: CGFloat)?
+        private var wasApplyingStateBeforeBodyReplacement = false
+        private var searchNavigationGeneration = UUID()
         private var lastMarkupSelectionClearRequestID: UUID?
         private var onScrollActivity: ((PDFVerticalScrollMetrics) -> Void)?
         private let currentTime: () -> TimeInterval
@@ -354,6 +439,10 @@ struct PDFKitViewer: NSViewRepresentable {
             // object: pdfView는 이 창의 PDFView에서 온 알림만 받도록 범위를 제한하는 필터(filter)입니다.
             detach()
             self.pdfView = pdfView
+            NotificationCenter.default.addObserver(self, selector: #selector(bodyPageWillReplace(_:)),
+                name: PDFBodyPageReplacementEvents.willReplace, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(bodyPageDidReplace(_:)),
+                name: PDFBodyPageReplacementEvents.didReplace, object: nil)
             observeActiveSearchSelection()
             registerDeactivationCommitHandlerIfNeeded()
             NotificationCenter.default.addObserver(
@@ -389,6 +478,11 @@ struct PDFKitViewer: NSViewRepresentable {
             formEventMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseUp, .rightMouseUp, .keyUp]
             ) { [weak self, weak pdfView] event in
+                if event.type == .leftMouseUp, event.window === pdfView?.window {
+                    // PDFKit can finish a selection in its own tracking loop,
+                    // including a release outside the original page bounds.
+                    pdfView?.scheduleNativeSelectionCommit()
+                }
                 guard
                     let self,
                     let pdfView,
@@ -416,7 +510,7 @@ struct PDFKitViewer: NSViewRepresentable {
                 return event
             }
             viewportScrollEventMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.scrollWheel, .magnify, .smartMagnify]
+                matching: [.scrollWheel, .magnify, .smartMagnify, .leftMouseDown, .rightMouseDown, .keyDown]
             ) { [weak self, weak pdfView] event in
                 guard
                     let self,
@@ -426,6 +520,28 @@ struct PDFKitViewer: NSViewRepresentable {
                     pdfView.finishViewportScrollGesture()
                     return event
                 }
+                if self.eventTargetsPDFView(event, pdfView: pdfView) {
+                    if pdfView.suppressesFixedComparisonNavigation(event) { return nil }
+                    // A later pointer/key gesture owns the viewport, even if
+                    // SwiftUI has not consumed the edit's final update yet.
+                    self.bodyTextViewport = nil
+                    self.cancelSearchNavigation()
+                }
+                if let spread = pdfView.compactSpread,
+                   self.eventTargetsPDFView(event, pdfView: pdfView) {
+                    if event.type == .scrollWheel {
+                        spread.scroll(with: event)
+                        return nil
+                    }
+                    if event.type == .magnify {
+                        spread.zoom(by: max(0.1, 1 + event.magnification))
+                        return nil
+                    }
+                    if event.type == .smartMagnify {
+                        spread.zoom(by: 1.5)
+                        return nil
+                    }
+                }
                 if event.type == .magnify || event.type == .smartMagnify {
                     if self.eventTargetsPDFView(event, pdfView: pdfView),
                        event.type == .smartMagnify || abs(event.magnification) > 0.0001 {
@@ -433,6 +549,7 @@ struct PDFKitViewer: NSViewRepresentable {
                     }
                     return event
                 }
+                guard event.type == .scrollWheel else { return event }
                 // Native scrolling stays on PDFKit's path. Page turns and
                 // modified zoom/pan first check which view owns the gesture.
                 guard pdfView.viewportScrollRequiresInterception(event) else {
@@ -448,12 +565,34 @@ struct PDFKitViewer: NSViewRepresentable {
             pdfView.onModifiedScrollGestureEnded = { [weak self] in
                 self?.captureViewportState()
             }
+            pdfView.onSearchAssistedScrollEnded = { [weak self] in
+                self?.captureViewportState()
+            }
+            pdfView.onComparisonSynchronizedScroll = { [weak self, weak pdfView] in
+                guard let self, let pdfView, self.pdfView === pdfView,
+                      let document = pdfView.document,
+                      let page = PDFScrollSyncCoordinator.readingPage(in: pdfView) else { return }
+                let index = document.index(for: page)
+                guard index != NSNotFound else { return }
+                self.lastAppliedPageIndex = index
+                self.lastAppliedPage = page
+                if self.state?.currentPageIndex != index { self.state?.setCurrentPage(index) }
+                self.captureViewportState()
+            }
+            pdfView.onComparisonViewportReflowCompleted = { [weak self, weak pdfView] in
+                guard let self, let pdfView else { return }
+                if let coordinator = self.scrollSyncCoordinator, let id = self.scrollSyncID {
+                    coordinator.refreshAfterLayout(pdfView: pdfView, id: id, locked: self.scrollSyncLocked)
+                }
+                self.refreshScrollActivityObservation()
+            }
             refreshScrollActivityObservation()
             scheduleScrollActivityObservationRefresh()
         }
 
         func updateState(_ state: PDFWorkspaceState) {
             guard self.state !== state else { return }
+            cancelSearchNavigation()
             unregisterDeactivationCommitHandler()
             activeSearchSelectionCancellable?.cancel()
             activeSearchSelectionCancellable = nil
@@ -473,17 +612,34 @@ struct PDFKitViewer: NSViewRepresentable {
         /// model-side bridge.
         private func observeActiveSearchSelection() {
             activeSearchSelectionCancellable?.cancel()
+            var isInitialReplay = true
             activeSearchSelectionCancellable = state?.$activeSearchSelection.sink {
                 [weak self, weak state] selection in
                 MainActor.assumeIsolated {
                     guard let self, self.state === state else { return }
+                    if isInitialReplay {
+                        isInitialReplay = false
+                        // A reattached reader receives the existing hit before
+                        // any new search command. A later drag or editor owns
+                        // the current selection, including an explicit nil.
+                        self.lastSynchronizedSearchSelection = selection
+                        return
+                    }
+                    if selection != nil {
+                        // An explicit activation can select the very same hit
+                        // again after a manual drag. Reapply it to PDFKit too.
+                        self.lastSearchSelection = nil
+                    }
                     self.synchronizeActiveSearchSelection(selection)
                 }
             }
         }
 
         private func synchronizeActiveSearchSelection(_ selection: PDFSelection?) {
-            guard let state else { return }
+            // Virtual rows can mount long after a search. The workspace owns
+            // the selected result; remounting must not replace a later manual
+            // text selection with the previously active search hit.
+            guard pdfView?.compactSpread == nil, let state else { return }
             if let selection {
                 lastSynchronizedSearchSelection = selection
                 if state.currentSelection !== selection {
@@ -511,13 +667,13 @@ struct PDFKitViewer: NSViewRepresentable {
             pdfView.clearSelection()
         }
 
-        /// Applies the same search selection to PDFKit and the workspace. This is
-        /// internal so the representable boundary can be exercised without a
-        /// SwiftUI hosting window in regression tests.
+        /// Renders a hit only while search still owns the workspace selection.
+        /// Repeated SwiftUI updates must not turn an old search highlight into
+        /// a new command and replace a later native drag or editor selection.
+        /// This boundary is internal for regression tests without a host window.
         func applySearchSelection(_ selection: PDFSelection?, to pdfView: PDFView) {
-            synchronizeActiveSearchSelection(selection)
-
             guard let selection else {
+                cancelSearchNavigation()
                 if let previous = lastSearchSelection {
                     pdfView.highlightedSelections = nil
                     if let current = pdfView.currentSelection, current === previous {
@@ -528,12 +684,135 @@ struct PDFKitViewer: NSViewRepresentable {
                 return
             }
 
+            if let spread = (pdfView as? InteractivePDFView)?.compactSpread,
+               !selection.pages.contains(where: { spread.contains(page: $0) }) {
+                cancelSearchNavigation()
+                lastSearchSelection = nil
+                pdfView.highlightedSelections = nil
+                return
+            }
+            guard state?.currentSelection === selection else { return }
             guard lastSearchSelection !== selection else { return }
+            // A pending tab/view restoration must not pull an explicit search
+            // jump back to the old scroll position on the next run loop.
+            cancelViewportRestoration()
+            cancelSearchNavigation()
+            let generation = searchNavigationGeneration
+            let wasApplyingState = isApplyingState
+            isApplyingState = true
+            defer { isApplyingState = wasApplyingState }
+            (pdfView as? InteractivePDFView)?.searchScroll.cancelMotion()
             selection.color = NSColor.systemYellow.withAlphaComponent(0.62)
             pdfView.highlightedSelections = [selection]
             lastSearchSelection = selection
-            pdfView.setCurrentSelection(selection, animate: true)
+            pdfView.setCurrentSelection(selection, animate: false)
+            let shouldReveal = (pdfView as? InteractivePDFView)?.compactSpread?.claimSearchReveal(selection) ?? true
+            guard shouldReveal else { return }
             pdfView.go(to: selection)
+            centerSearchSelection(selection, in: pdfView)
+
+            // PDFKit and width/height fitting can finish layout after SwiftUI's
+            // update. Correct once using that final viewport, never on result
+            // batches or later user scrolling. A saved tab position takes
+            // precedence when this is an existing search restored with a tab.
+            let document = pdfView.document
+            let revision = state?.revision
+            DispatchQueue.main.async { [weak self, weak pdfView, weak selection, weak document] in
+                guard let self, let pdfView, let selection, let document,
+                      self.searchNavigationGeneration == generation,
+                      self.pdfView === pdfView, pdfView.document === document,
+                      self.state?.document === document, self.state?.revision == revision,
+                      self.lastSearchSelection === selection,
+                      self.state?.activeSearchSelection === selection,
+                      let page = selection.pages.first,
+                      self.state?.currentPageIndex == document.index(for: page) else { return }
+                let wasApplyingState = self.isApplyingState
+                self.isApplyingState = true
+                defer { self.isApplyingState = wasApplyingState }
+                self.centerSearchSelection(selection, in: pdfView)
+                self.captureViewportState()
+            }
+        }
+
+        private func cancelSearchNavigation() {
+            searchNavigationGeneration = UUID()
+        }
+
+        private func centerSearchSelection(_ selection: PDFSelection, in pdfView: PDFView) {
+            guard let page = selection.pages.first,
+                  let document = pdfView.document, document.index(for: page) != NSNotFound else { return }
+            centerPageBounds(selection.bounds(for: page), on: page, in: pdfView)
+        }
+
+        /// Notes on the current page still need an explicit bounds reveal: a
+        /// page-index change alone cannot move between two notes on that page.
+        func applyStudyNoteReveal(_ request: StudyNoteRevealRequest?, to pdfView: PDFView) {
+            guard viewportContext == .normal, let request,
+                  !request.isConsumed,
+                  let state, let document = state.document, pdfView.document === document,
+                  state.studyNoteRevealRequest === request,
+                  ObjectIdentifier(document) == request.documentID, state.revision == request.revision,
+                  let annotation = request.annotation, let page = annotation.page,
+                  document.index(for: page) != NSNotFound,
+                  page.annotations.contains(where: { $0 === annotation }),
+                  !annotation.bounds.isEmpty, !annotation.bounds.isNull, !annotation.bounds.isInfinite else { return }
+            guard (pdfView as? InteractivePDFView)?.compactSpread?.contains(page: page) != false else { return }
+            request.isConsumed = true
+            cancelViewportRestoration()
+            cancelSearchNavigation()
+            let generation = searchNavigationGeneration
+            let wasApplyingState = isApplyingState
+            isApplyingState = true
+            defer { isApplyingState = wasApplyingState }
+            (pdfView as? InteractivePDFView)?.searchScroll.cancelMotion()
+            pdfView.go(to: annotation.bounds, on: page)
+            centerPageBounds(annotation.bounds, on: page, in: pdfView)
+
+            DispatchQueue.main.async { [weak self, weak pdfView, weak document, weak request] in
+                guard let self, let request else { return }
+                defer {
+                    if self.state?.studyNoteRevealRequest === request {
+                        self.state?.studyNoteRevealRequest = nil
+                    }
+                }
+                guard let pdfView, let document,
+                      self.searchNavigationGeneration == generation,
+                      self.pdfView === pdfView, pdfView.document === document,
+                      self.state?.document === document, self.state?.revision == request.revision,
+                      self.state?.studyNoteRevealRequest === request,
+                      let annotation = request.annotation, let page = annotation.page,
+                      document.index(for: page) != NSNotFound,
+                      page.annotations.contains(where: { $0 === annotation }),
+                      self.state?.currentPageIndex == document.index(for: page) else { return }
+                let wasApplyingState = self.isApplyingState
+                self.isApplyingState = true
+                defer { self.isApplyingState = wasApplyingState }
+                self.centerPageBounds(annotation.bounds, on: page, in: pdfView)
+                self.captureViewportState()
+            }
+        }
+
+        private func centerPageBounds(_ bounds: CGRect, on page: PDFPage, in pdfView: PDFView) {
+            if let spread = (pdfView as? InteractivePDFView)?.compactSpread {
+                spread.reveal(bounds, on: page)
+                return
+            }
+            (pdfView as? InteractivePDFView)?.applyPageFitScale()
+            pdfView.layoutSubtreeIfNeeded()
+            guard let scrollView = firstScrollView(in: pdfView) ?? pdfView.enclosingScrollView else { return }
+            let clip = scrollView.contentView
+            let hit = clip.convert(pdfView.convert(bounds, from: page), from: pdfView)
+            guard !hit.isNull, !hit.isInfinite, hit.midY.isFinite,
+                  hit.width > 0, hit.height > 0, clip.bounds.height > 0 else { return }
+            var proposed = clip.bounds
+            // Both rectangles use clip coordinates, so magnification, flipped
+            // views, crop boxes and rotated pages need no special arithmetic.
+            // Keep PDFKit's horizontal reveal and clamp at document edges.
+            proposed.origin.y = hit.midY - proposed.height / 2
+            let constrained = clip.constrainBoundsRect(proposed)
+            guard constrained.origin.x.isFinite, constrained.origin.y.isFinite else { return }
+            clip.setBoundsOrigin(constrained.origin)
+            scrollView.reflectScrolledClipView(clip)
         }
 
         /// Ends editing only when this PDFView (or its private field editor)
@@ -555,7 +834,14 @@ struct PDFKitViewer: NSViewRepresentable {
         func prepareForDismantling() {
             pdfView?.commitAnnotationEditingBeforeDeactivation()
             commitFocusedFormEditing()
-            state?.synchronizeWidgetValues()
+            // Comparison panes cannot edit native widgets. Re-scanning every
+            // page visited by each of the four read-only panes here duplicates
+            // the normal editor's commit and delays returning to that editor.
+            // Keep its form commit intact; every pane still records its own
+            // viewport before observers and scroll synchronization are removed.
+            if viewportContext == .normal, pdfView?.compactSpread == nil {
+                state?.synchronizeWidgetValues()
+            }
             captureViewportState()
         }
 
@@ -586,14 +872,21 @@ struct PDFKitViewer: NSViewRepresentable {
             registeredDeactivationState = state
             state.installDeactivationCommitHandler(id: deactivationCommitToken) { [weak self, weak pdfView] in
                 guard let self else { return }
+                self.cancelSearchNavigation()
                 // Save, tab switch, close, and hibernation all enter through
                 // this hook. Settle image/crop geometry first, then commit the
                 // custom on-page text editor and native PDFKit form fields, so
                 // no visible mutation remains only in a view hierarchy while
                 // the model still appears clean.
                 pdfView?.commitAnnotationEditingBeforeDeactivation()
+                pdfView?.finishEraserGesture()
                 pdfView?.commitInlineTextEditorBeforePointerAction()
                 self.commitFocusedFormEditing()
+                // A gallery may keep this PDFView mounted while hiding it.
+                // Stop pending motion before recording the position so no
+                // delayed snap or modified gesture changes it underneath.
+                pdfView?.searchScroll.cancelMotion()
+                pdfView?.resetViewportScrollGesture()
                 // Quit/close persistence flushes before SwiftUI dismantles
                 // the view, so capture the final zoom/scroll here as well.
                 self.captureViewportState()
@@ -608,7 +901,7 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         private func eventTargetsPDFView(_ event: NSEvent, pdfView: PDFView) -> Bool {
-            if event.type == .keyUp {
+            if event.type == .keyUp || event.type == .keyDown {
                 guard let responder = event.window?.firstResponder else { return false }
                 return Self.responder(responder, belongsTo: pdfView)
             }
@@ -654,6 +947,10 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         func refreshScrollActivityObservation() {
+            guard pdfView?.compactSpread == nil else {
+                removeScrollActivityObservation()
+                return
+            }
             guard
                 let pdfView,
                 let scrollView = firstScrollView(in: pdfView) ?? pdfView.enclosingScrollView
@@ -699,7 +996,9 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         func detach() {
+            bodyTextViewport = nil
             viewportRestoreGeneration = UUID()
+            cancelSearchNavigation()
             unregisterDeactivationCommitHandler()
             activeSearchSelectionCancellable?.cancel()
             activeSearchSelectionCancellable = nil
@@ -723,6 +1022,9 @@ struct PDFKitViewer: NSViewRepresentable {
                 self.viewportScrollEventMonitor = nil
             }
             pdfView?.onModifiedScrollGestureEnded = nil
+            pdfView?.onSearchAssistedScrollEnded = nil
+            pdfView?.onComparisonViewportReflowCompleted = nil
+            pdfView?.onComparisonSynchronizedScroll = nil
             pdfView = nil
         }
 
@@ -734,6 +1036,11 @@ struct PDFKitViewer: NSViewRepresentable {
                 return
             }
 
+            if let scrollSyncCoordinator, let scrollSyncID, let pdfView {
+                scrollSyncCoordinator.receiveLiveScroll(
+                    pdfView: pdfView, id: scrollSyncID, locked: scrollSyncLocked
+                )
+            }
             let currentOriginY = scrollView.contentView.bounds.origin.y
             guard PDFLiveScrollReportingPolicy.hasMeaningfulVerticalMovement(
                 from: lastObservedVerticalScrollOrigin,
@@ -810,6 +1117,76 @@ struct PDFKitViewer: NSViewRepresentable {
             pendingLiveScrollReportWorkItem = nil
         }
 
+        @objc private func bodyPageWillReplace(_ notification: Notification) {
+            guard let pdfView, pdfView.compactSpread == nil,
+                  let document = notification.object as? PDFDocument,
+                  pdfView.document === document,
+                  let page = pdfView.currentPage,
+                  let scroll = pdfView.firstDocumentScrollView() else { return }
+            let index: Int
+            if usesPagedTwoPageMode,
+               let requestedIndex = state?.currentPageIndex,
+               let requestedPage = document.page(at: requestedIndex),
+               pdfView.visiblePages.contains(where: { $0 === requestedPage }) {
+                // PDFKit reports the left page for a spread, including while
+                // the editor and workspace are on its right page.
+                index = requestedIndex
+            } else {
+                let readingPage = viewportContext == .comparison
+                    ? PDFScrollSyncCoordinator.readingPage(in: pdfView) ?? page : page
+                index = document.index(for: readingPage)
+            }
+            guard index != NSNotFound else { return }
+            cancelViewportRestoration()
+            bodyTextViewport = (document, index, scroll.contentView.bounds.origin, pdfView.scaleFactor)
+            wasApplyingStateBeforeBodyReplacement = isApplyingState
+            // Removing a page briefly exposes its neighbour. That is not user
+            // navigation and must not change the workspace's current page.
+            isApplyingState = true
+        }
+
+        @objc private func bodyPageDidReplace(_ notification: Notification) {
+            guard let snapshot = bodyTextViewport,
+                  let document = notification.object as? PDFDocument,
+                  snapshot.document === document, let pdfView,
+                  let page = document.page(at: snapshot.pageIndex) else { return }
+            defer { isApplyingState = wasApplyingStateBeforeBodyReplacement }
+            lastAppliedPageIndex = snapshot.pageIndex
+            lastAppliedPage = page
+            pdfView.layoutDocumentView()
+            if pdfView.currentPage !== page { pdfView.go(to: page) }
+            restoreBodyTextViewport(consume: false)
+        }
+
+        /// SwiftUI performs another layout/fit after the transaction publishes
+        /// its revision. Restore once at the end of that same update as well.
+        func restoreBodyTextViewportAfterUpdate() {
+            restoreBodyTextViewport(consume: true)
+        }
+
+        var isPreservingBodyTextViewport: Bool {
+            guard let snapshot = bodyTextViewport, let pdfView else { return false }
+            return pdfView.document === snapshot.document
+                && state?.currentPageIndex == snapshot.pageIndex
+        }
+
+        private func restoreBodyTextViewport(consume: Bool) {
+            guard let snapshot = bodyTextViewport else { return }
+            if consume { bodyTextViewport = nil }
+            guard let pdfView, pdfView.document === snapshot.document,
+                  state?.currentPageIndex == snapshot.pageIndex,
+                  let scroll = pdfView.firstDocumentScrollView() else { return }
+            if abs(pdfView.scaleFactor - snapshot.scale) > 0.0001 {
+                pdfView.scaleFactor = snapshot.scale
+            }
+            pdfView.layoutSubtreeIfNeeded()
+            let clip = scroll.contentView
+            var proposed = clip.bounds
+            proposed.origin = snapshot.origin
+            clip.setBoundsOrigin(clip.constrainBoundsRect(proposed).origin)
+            scroll.reflectScrolledClipView(clip)
+        }
+
         func captureViewportState() {
             let scrollView = pdfView.flatMap {
                 firstScrollView(in: $0) ?? $0.enclosingScrollView
@@ -818,7 +1195,7 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         private func captureViewportState(scrollView: NSScrollView?) {
-            guard let pdfView else { return }
+            guard let pdfView, pdfView.compactSpread == nil else { return }
             let progress: PDFScrollProgress?
             if
                 let scrollView,
@@ -833,7 +1210,8 @@ struct PDFKitViewer: NSViewRepresentable {
                 progress = nil
             }
             state?.recordPDFViewport(
-                autoScales: pdfView.autoScales,
+                autoScales: pdfView.viewportContext == .comparison
+                    ? pdfView.comparisonAutomaticallyFitsPage : pdfView.autoScales,
                 scaleFactor: pdfView.scaleFactor,
                 scrollProgress: progress,
                 context: viewportContext
@@ -841,10 +1219,15 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         func scheduleViewportRestoration(_ viewport: PDFViewerViewportState) {
+            guard pdfView?.compactSpread == nil, !viewport.usesCompactSpreads else { return }
+            // Whole-document percentages from another pane geometry would
+            // override comparison's page-preserving automatic fit.
+            if viewportContext == .comparison, viewport.autoScales { return }
             guard
                 let currentPageIndex = state?.currentPageIndex,
                 viewport.scrollProgress(forPageIndex: currentPageIndex) != nil
             else { return }
+            cancelSearchNavigation()
             let generation = UUID()
             viewportRestoreGeneration = generation
             DispatchQueue.main.async { [weak self] in
@@ -877,10 +1260,16 @@ struct PDFKitViewer: NSViewRepresentable {
                 documentFrame: documentView.frame,
                 viewportSize: scrollView.contentView.bounds.size
             )
+            if let scrollSyncCoordinator, let scrollSyncID {
+                scrollSyncCoordinator.beginProgrammaticUpdate(id: scrollSyncID)
+            }
             isApplyingState = true
             scrollView.contentView.setBoundsOrigin(origin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
             isApplyingState = false
+            if let scrollSyncCoordinator, let scrollSyncID {
+                scrollSyncCoordinator.endProgrammaticUpdate(id: scrollSyncID)
+            }
         }
 
         private func removeScrollActivityObservation() {
@@ -999,9 +1388,11 @@ struct PDFKitViewer: NSViewRepresentable {
             {
                 return false
             }
+            let displayedPage = viewportContext == .comparison
+                ? PDFScrollSyncCoordinator.readingPage(in: pdfView) : pdfView.currentPage
             return lastAppliedPageIndex != requestedIndex
                 || lastAppliedPage !== requestedPage
-                || pdfView.currentPage !== requestedPage
+                || displayedPage !== requestedPage
         }
 
         /// Identity-only compatibility seam used by document-replacement
@@ -1022,14 +1413,27 @@ struct PDFKitViewer: NSViewRepresentable {
             guard
                 !isApplyingState,
                 self.pdfView?.isApplyingPageFitScale != true,
+                !(self.pdfView?.viewportContext == .comparison && self.pdfView?.pageFitUpdateScheduled == true),
                 let pdfView = notification.object as? PDFView,
                 let document = pdfView.document,
-                let page = pdfView.currentPage
+                let page = viewportContext == .comparison
+                    ? PDFScrollSyncCoordinator.readingPage(in: pdfView) : pdfView.currentPage
             else { return }
 
             let index = document.index(for: page)
             guard index != NSNotFound else { return }
 
+            if let spread = (pdfView as? InteractivePDFView)?.compactSpread {
+                // A native PDF link may navigate this row. Delegate its target,
+                // then restore the row instead of reassigning its page identity.
+                if !spread.contains(pageIndex: index) {
+                    spread.navigate(to: index)
+                    isApplyingState = true
+                    if let anchor = document.page(at: spread.pageIndex) { pdfView.go(to: anchor) }
+                    isApplyingState = false
+                }
+                return
+            }
             if usesPagedTwoPageMode {
                 pdfView.visiblePages.forEach { state?.primeWidgetValues(on: $0) }
                 // `currentPage` may be the left page even after an explicit
@@ -1062,7 +1466,8 @@ struct PDFKitViewer: NSViewRepresentable {
         }
 
         private var usesPagedTwoPageMode: Bool {
-            viewportContext == .normal
+            if pdfView?.compactSpread != nil { return true }
+            return viewportContext == .normal
                 && state?.pageColumns == 2
                 && (state?.twoPageDisplayMode == .paged || pdfView?.pageNavigationMode == .horizontalPaging)
         }
@@ -1087,13 +1492,27 @@ struct PDFKitViewer: NSViewRepresentable {
             if let interactive = pdfView as? InteractivePDFView {
                 interactive.regionSelection.cancel()
             }
+            if let spread = (pdfView as? InteractivePDFView)?.compactSpread,
+               pdfView.currentSelection == nil,
+               state?.currentSelection?.pages.contains(where: { spread.contains(page: $0) }) != true {
+                return
+            }
+            if let interactive = pdfView as? InteractivePDFView,
+               interactive.consumeNativeSelectionChange() { return }
             state?.currentSelection = pdfView.currentSelection
         }
 
         @objc private func scaleChanged(_ notification: Notification) {
             guard !isApplyingState, notification.object as? PDFView === pdfView else { return }
             guard pdfView?.isHandlingModifiedZoom != true else { return }
+            if let pdfView, let spread = pdfView.compactSpread {
+                let factor = pdfView.scaleFactor / max(0.0001, spread.scaleFactor)
+                if abs(factor - 1) > 0.001 { spread.zoom(by: factor) }
+                return
+            }
             if let pdfView, !pdfView.isApplyingPageFitScale, !pdfView.pageFitUpdateScheduled {
+                bodyTextViewport = nil
+                cancelSearchNavigation()
                 pdfView.endPageFitForManualZoom()
             }
             captureViewportState()
@@ -1101,14 +1520,41 @@ struct PDFKitViewer: NSViewRepresentable {
     }
 }
 
+final class PDFComparisonClipFrameObservation {
+    private let token: NSObjectProtocol
+
+    init(_ token: NSObjectProtocol) {
+        self.token = token
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(token)
+    }
+}
+
 @MainActor
 final class InteractivePDFView: PDFView, NSMenuItemValidation {
     weak var workspaceState: PDFWorkspaceState?
+    var compactSpread: PDFCompactSpreadContext?
+    let readingDisplayFilter = PDFReadingDisplayFilterController()
     lazy var regionSelection = PDFRegionSelectionController(owner: self)
+    lazy var searchScroll = PDFSearchScrollController(owner: self)
     var activePageFitMode: PDFPageFitMode?
     var isApplyingPageFitScale = false
     var pageFitUpdateScheduled = false
     var revealPageAfterFitting = false
+    var comparisonAutomaticallyFitsPage = true
+    var pendingComparisonPageIndex: Int?
+    var comparisonFitViewportSize: CGSize?
+    var comparisonClipFrameObservation: PDFComparisonClipFrameObservation?
+    weak var observedComparisonClip: NSClipView?
+    var observedComparisonClipFrameSize: CGSize?
+    var comparisonReflowDestination: PDFDestination?
+    weak var comparisonReadingAnchorPage: PDFPage?
+    weak var comparisonReadingAnchorClip: NSClipView?
+    var comparisonReadingAnchorBounds: CGRect?
+    var onComparisonViewportReflowCompleted: (() -> Void)?
+    var onComparisonSynchronizedScroll: (() -> Void)?
     var pageNavigationMode: PDFPageNavigationMode = .defaultValue {
         didSet {
             if oldValue != pageNavigationMode {
@@ -1123,14 +1569,64 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     var wheelZoomModifier: PDFWheelZoomModifier = .defaultValue
     /// Comparison views are intentionally read-only even when their source tab
     /// is currently in Editing mode.
-    var viewportContext: PDFViewerViewportContext = .normal
+    var viewportContext: PDFViewerViewportContext = .normal {
+        didSet {
+            if viewportContext != .comparison {
+                comparisonClipFrameObservation = nil
+                observedComparisonClip = nil
+                observedComparisonClipFrameSize = nil
+            }
+        }
+    }
+    var comparisonContentFixed = false {
+        didSet {
+            if comparisonContentFixed, !oldValue {
+                arrowKeyRepeater.stop()
+                resetPageTurnGesture()
+                finishViewportScrollGesture()
+            }
+        }
+    }
+    var isComparisonContentFixed: Bool {
+        viewportContext == .comparison && comparisonContentFixed
+    }
+    var comparisonAllowsProgrammaticScale = false
+    override var scaleFactor: CGFloat {
+        get { super.scaleFactor }
+        set {
+            guard !isComparisonContentFixed || comparisonAllowsProgrammaticScale || isApplyingPageFitScale else { return }
+            super.scaleFactor = newValue
+        }
+    }
+    override func zoomIn(_ sender: Any?) {
+        guard !isComparisonContentFixed else { return }
+        if let compactSpread { compactSpread.zoom(by: 1.2); return }
+        super.zoomIn(sender)
+    }
+
+    override func zoomOut(_ sender: Any?) {
+        guard !isComparisonContentFixed else { return }
+        if let compactSpread { compactSpread.zoom(by: 1 / 1.2); return }
+        super.zoomOut(sender)
+    }
+
+    override func magnify(with event: NSEvent) {
+        guard !isComparisonContentFixed else { return }
+        if let compactSpread { compactSpread.zoom(by: max(0.1, 1 + event.magnification)); return }
+        super.magnify(with: event)
+    }
+
+    override func smartMagnify(with event: NSEvent) {
+        guard !isComparisonContentFixed else { return }
+        if let compactSpread { compactSpread.zoom(by: 1.5); return }
+        super.smartMagnify(with: event)
+    }
 
     private(set) var activeTool: WorkspaceTool = .select
     fileprivate var currentInkSettings = InkSettings()
     fileprivate var inkPage: PDFPage?
     var isDrawingInkStroke: Bool { inkPage != nil }
-    fileprivate var inkPoints: [CGPoint] = []
-    fileprivate var inkPressures: [CGFloat] = []
+    fileprivate var inkInput: PDFInkInputBuffer?
     fileprivate var inkUsesPressure = false
 
     private let inkOverlay = PDFInkPreviewView(frame: .zero)
@@ -1138,11 +1634,21 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     private var modifiedScrollEndWorkItem: DispatchWorkItem?
     private weak var cachedDocumentScrollView: NSScrollView?
     var onModifiedScrollGestureEnded: (() -> Void)?
+    var onSearchAssistedScrollEnded: (() -> Void)?
     /// A Widget consumes a complete mouse sequence in a normal PDFView. In a
     /// comparison viewport we swallow that sequence so PDFKit cannot create a
     /// field editor after the protected mouse-down.
     private var suppressingProtectedWidgetMouseSequence = false
     private var ownsRegionMouseSequence = false
+    private var nativeSelectionPreviewID: UUID?
+    private weak var nativeSelectionWorkspace: PDFWorkspaceState?
+    private weak var nativeSelectionDocument: PDFDocument?
+    private var nativeSelectionRevision: UUID?
+    private var nativeSelectionGestureActive = false
+    private var nativeSelectionGestureID: UUID?
+    private var handlingNativeSelectionEvent = false
+    private var eraserGesture: PDFEraserGesture?
+    private var previousEraserPoint: CGPoint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1158,7 +1664,9 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if window == nil { finishNativeSelectionPreview() }
         arrowKeyRepeater.stop()
+        searchScroll.cancelMotion()
         relinquishNativeFileDropDestination()
     }
 
@@ -1181,6 +1689,7 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
 
     override func resignFirstResponder() -> Bool {
         arrowKeyRepeater.stop()
+        if !handlingNativeSelectionEvent { finishNativeSelectionPreview() }
         return super.resignFirstResponder()
     }
 
@@ -1196,12 +1705,14 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
             ? .select
             : state.activeTool
         if activeTool != effectiveTool {
+            finishEraserGesture()
             activeTool = effectiveTool
             if activeTool != .pen {
                 cancelInkStroke()
             }
             window?.invalidateCursorRects(for: self)
         }
+        if nativeSelectionGestureActive { _ = validateNativeSelectionPreview() }
         // Comparison panes are strictly read-only and may show four PDFViews
         // at once. Do not allocate editor panels or annotation scanners there;
         // selection, links and scrolling remain native PDFKit behavior.
@@ -1212,11 +1723,43 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         }
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        if viewportContext == .comparison, newSize != frame.size,
+           newSize.width > 1, newSize.height > 1 {
+            // Capture before PDFKit changes its clip geometry and emits page
+            // notifications. Those notifications describe layout, not reading.
+            prepareComparisonViewportReflow()
+        }
+        super.setFrameSize(newSize)
+        if viewportContext == .comparison { schedulePageFitUpdate() }
+    }
+
     override func layout() {
         super.layout()
+        readingDisplayFilter.refreshTarget()
         inkOverlay.frame = bounds
+        if inkPage != nil { inkOverlay.needsDisplay = true }
         schedulePageFitUpdate()
         regionSelection.refreshOverlay()
+        searchScroll.refreshLayout()
+    }
+
+    /// PDFKit decides the pointer again while moving between text and scanned
+    /// image areas, so a cursor rectangle alone cannot keep Select as an I-beam.
+    override func setCursorFor(_ area: PDFAreaOfInterest) {
+        if usesTextSelectionCursor(for: area) {
+            NSCursor.iBeam.set()
+        } else {
+            super.setCursorFor(area)
+        }
+    }
+
+    func usesTextSelectionCursor(for area: PDFAreaOfInterest) -> Bool {
+        let interactive: PDFAreaOfInterest = [.linkArea, .controlArea, .textFieldArea, .iconArea, .popupArea]
+        return activeTool == .select && area.contains(.pageArea)
+            && workspaceState?.document != nil
+            && area.intersection(interactive).isEmpty
+            && workspaceState?.allows(.copyAndPaste) == true
     }
 
     override func resetCursorRects() {
@@ -1232,13 +1775,20 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     }
 
     override func mouseDown(with event: NSEvent) {
+        finishEraserGesture()
+        finishNativeSelectionPreview()
         // Recover if the preceding mouse-up was lost when focus changed.
         ownsRegionMouseSequence = false
         // Events inside the floating panel never reach PDFView. Therefore an
         // event that does arrive here is an outside click and closes the prior
         // transaction before a new tool interprets the same pointer action.
+        compactSpread?.commitOtherInlineDraft()
         commitInlineTextEditorBeforePointerAction()
+        guard workspaceState?.pendingInlineTextEdit == nil else { return }
         let point = convert(event.locationInWindow, from: nil)
+        if let compactSpread, let page = page(for: point, nearest: false) {
+            compactSpread.activate(page: page)
+        }
 
         suppressingProtectedWidgetMouseSequence = blockedNativeFormWidget(at: point) != nil
         if suppressingProtectedWidgetMouseSequence {
@@ -1264,7 +1814,7 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
                 ownsRegionMouseSequence = true
                 return
             }
-            super.mouseDown(with: event)
+            nativeSelectionMouseDown(with: event, at: point)
             return
         }
 
@@ -1274,21 +1824,38 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         switch activeTool {
         case .select:
             clearAnnotationEditingSelection()
+            if event.clickCount == 2, let state = workspaceState, state.mode == .study,
+               let page = page(for: point, nearest: false), let document,
+               let annotation = page.annotation(at: convert(point, to: page)),
+               annotation.shouldDisplay,
+               let note = state.studyNotes(on: document.index(for: page))
+                .first(where: { $0.annotation === annotation }) {
+                regionSelection.cancel()
+                state.editStudyNote(note)
+                return
+            }
             if regionSelection.begin(with: event) {
                 ownsRegionMouseSequence = true
                 return
             }
-            super.mouseDown(with: event)
+            nativeSelectionMouseDown(with: event, at: point)
         case .text:
             handleTextClick(event)
         case .pen:
             beginInkStroke(event)
         case .eraser:
-            handleEraserClick(event)
+            beginEraserGesture(event)
         }
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if nativeSelectionGestureActive, !validateNativeSelectionPreview() { return }
+        handlingNativeSelectionEvent = nativeSelectionGestureActive
+        defer { handlingNativeSelectionEvent = false }
+        if eraserGesture != nil {
+            updateEraserGesture(event)
+            return
+        }
         if suppressingProtectedWidgetMouseSequence {
             return
         }
@@ -1309,13 +1876,29 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     }
 
     override func mouseUp(with event: NSEvent) {
+        let ownsNativeGesture = nativeSelectionGestureActive
+        defer {
+            handlingNativeSelectionEvent = false
+            if ownsNativeGesture {
+                finishNativeSelectionPreview()
+            }
+        }
+        if ownsNativeGesture, !validateNativeSelectionPreview() { return }
+        handlingNativeSelectionEvent = ownsNativeGesture
+        if eraserGesture != nil {
+            updateEraserGesture(event)
+            finishEraserGesture()
+            return
+        }
         if suppressingProtectedWidgetMouseSequence {
             suppressingProtectedWidgetMouseSequence = false
             return
         }
         if ownsRegionMouseSequence {
             ownsRegionMouseSequence = false
-            if regionSelection.isDragging { regionSelection.end(with: event) }
+            if regionSelection.isDragging {
+                regionSelection.end(with: event)
+            }
             return
         }
         guard viewportContext == .normal else {
@@ -1327,11 +1910,17 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
             super.mouseUp(with: event)
             return
         }
-        appendInkPoint(from: event)
+        appendInkPoint(from: event, finishing: true)
         commitInkStroke()
     }
 
     override func keyDown(with event: NSEvent) {
+        if nativeSelectionGestureActive { finishNativeSelectionPreview() }
+        if suppressesFixedComparisonNavigation(event) { return }
+        if event.keyCode == 53, isDrawingInkStroke {
+            cancelInkStroke()
+            return
+        }
         if event.keyCode == 53, regionSelection.isActive {
             regionSelection.cancel()
             return
@@ -1346,6 +1935,7 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
             regionSelection.cancel()
         }
         if handlePageNavigationKey(event) { return }
+        if compactSpread?.keyDown(with: event) == true { return }
         if suppressesNativeFormWidgetTraversal(keyCode: event.keyCode) {
             // PDFKit uses Tab/Shift-Tab to enter and cycle AcroForm controls.
             // A comparison panel has no editable field destination, so consume
@@ -1362,8 +1952,116 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     }
 
     override func clearSelection() {
+        if nativeSelectionGestureActive, !handlingNativeSelectionEvent {
+            invalidateNativeSelectionPreview()
+        }
         regionSelection.cancel()
         super.clearSelection()
+    }
+
+    private func nativeSelectionMouseDown(with event: NSEvent, at point: CGPoint) {
+        if let page = page(for: point, nearest: false) {
+            let pagePoint = convert(point, to: page)
+            let hitsControl = page.annotations.contains {
+                let type = $0.type?.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                return (type == "Link" || type == "Widget") && $0.bounds.contains(pagePoint)
+            }
+            if !hitsControl { beginNativeSelectionPreview() }
+        }
+        handlingNativeSelectionEvent = nativeSelectionGestureActive
+        defer { handlingNativeSelectionEvent = false }
+        super.mouseDown(with: event)
+    }
+
+    /// PDFKit continues drawing its native selection. Only its model bridge is
+    /// deferred, so changing characters does not rebuild the SwiftUI workspace.
+    func beginNativeSelectionPreview() {
+        finishNativeSelectionPreview()
+        guard let state = workspaceState, let document,
+              state.document === document, activeTool == .select,
+              state.allows(.copyAndPaste) else { return }
+        nativeSelectionWorkspace = state
+        nativeSelectionDocument = document
+        nativeSelectionRevision = state.revision
+        nativeSelectionPreviewID = state.beginSelectionPreview()
+        nativeSelectionGestureActive = true
+        nativeSelectionGestureID = UUID()
+    }
+
+    private func validateNativeSelectionPreview() -> Bool {
+        guard nativeSelectionGestureActive else { return false }
+        guard let id = nativeSelectionPreviewID, let state = nativeSelectionWorkspace,
+              workspaceState === state, document === nativeSelectionDocument,
+              state.document === document, state.revision == nativeSelectionRevision,
+              activeTool == .select, (viewportContext == .comparison || state.activeTool == .select),
+              state.allows(.copyAndPaste),
+              state.ownsSelectionPreview(id) else {
+            invalidateNativeSelectionPreview()
+            return false
+        }
+        return true
+    }
+
+    private func invalidateNativeSelectionPreview() {
+        if let id = nativeSelectionPreviewID { nativeSelectionWorkspace?.cancelSelectionPreview(id) }
+        nativeSelectionPreviewID = nil
+        // Keep owning this mouse sequence until release. Late PDFKit events
+        // must not replace a search hit or selection from another document.
+    }
+
+    @discardableResult
+    func consumeNativeSelectionChange() -> Bool {
+        guard nativeSelectionGestureActive else { return false }
+        if validateNativeSelectionPreview(), let id = nativeSelectionPreviewID {
+            _ = nativeSelectionWorkspace?.updateSelectionPreview(currentSelection, id: id)
+        }
+        return true
+    }
+
+    func finishNativeSelectionPreview() {
+        guard nativeSelectionGestureActive else { return }
+        if validateNativeSelectionPreview(), let id = nativeSelectionPreviewID {
+            _ = nativeSelectionWorkspace?.updateSelectionPreview(currentSelection, id: id)
+            _ = nativeSelectionWorkspace?.commitSelectionPreview(id)
+        }
+        nativeSelectionPreviewID = nil
+        nativeSelectionWorkspace = nil
+        nativeSelectionDocument = nil
+        nativeSelectionRevision = nil
+        nativeSelectionGestureActive = false
+        nativeSelectionGestureID = nil
+    }
+
+    func scheduleNativeSelectionCommit(allowsDirectEditing: Bool = false) {
+        guard let id = nativeSelectionGestureID else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.nativeSelectionGestureID == id else { return }
+            let selectionIsCurrent = self.validateNativeSelectionPreview()
+            self.finishNativeSelectionPreview()
+            if selectionIsCurrent, allowsDirectEditing { self.beginEditingSelectedBodyText() }
+        }
+    }
+
+    /// Enter TextKit only after the selection gesture has finished. This keeps
+    /// PDFium snapshots and editor layout out of the pointer-move hot path.
+    /// Mapping must cover the complete selection; an unsupported selection
+    /// remains available for ordinary copying instead of editing one run.
+    @discardableResult
+    func beginEditingSelectedBodyText() -> Bool {
+        guard viewportContext == .normal, activeTool == .select,
+              let state = workspaceState, state.activeTool == .select,
+              state.allowsInlineTextEditing, state.document === document,
+              state.pendingInlineTextEdit == nil, !regionSelection.isDragging,
+              !nativeSelectionGestureActive,
+              let selection = state.currentSelection,
+              state.requestBodyTextEdit(selection: selection, preservesSelectionTool: true)
+        else { return false }
+        regionSelection.cancel()
+        super.clearSelection()
+        state.currentSelection = nil
+        configureInlineTextEditingOverlay()
+        focusInlineTextEditorSelection()
+        return true
     }
 
     override func copy(_ sender: Any?) {
@@ -1387,6 +2085,23 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         return true
     }
 
+    /// A fixed pane retains selection/copy but consumes movement and zoom input.
+    func suppressesFixedComparisonNavigation(_ event: NSEvent) -> Bool {
+        guard isComparisonContentFixed else { return false }
+        switch event.type {
+        case .scrollWheel, .magnify, .smartMagnify:
+            return true
+        case .keyDown:
+            if [49, 115, 116, 119, 121, 123, 124, 125, 126].contains(event.keyCode) {
+                return true
+            }
+            return event.modifierFlags.contains(.command)
+                && ["+", "=", "-", "0"].contains(event.charactersIgnoringModifiers ?? "")
+        default:
+            return false
+        }
+    }
+
     /// Small deterministic seam for the keyboard half of comparison read-only
     /// enforcement. Hardware-layout modifiers do not change the Tab key code,
     /// so this covers both forward and Shift-Tab widget traversal.
@@ -1403,10 +2118,9 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     }
 
     func cancelInkStroke() {
-        let hadPreview = inkPage != nil || !inkPoints.isEmpty
+        let hadPreview = inkPage != nil || inkInput != nil
         inkPage = nil
-        inkPoints.removeAll(keepingCapacity: true)
-        inkPressures.removeAll(keepingCapacity: true)
+        inkInput = nil
         inkUsesPressure = false
         inkOverlay.isHidden = true
         if hadPreview {
@@ -1419,6 +2133,7 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     /// ordinary scrolling, form widgets, annotations, selection and pinch.
     @discardableResult
     func handleViewportScroll(_ event: NSEvent) -> Bool {
+        guard !isComparisonContentFixed else { return true }
         let input = PDFViewportScrollInput(
             deltaX: event.scrollingDeltaX,
             deltaY: event.scrollingDeltaY,
@@ -1716,7 +2431,8 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         let pagePoint = convert(viewPoint, to: page)
         let hitAnnotation = page.annotation(at: pagePoint)
         let editableAnnotation: PDFAnnotation?
-        if hitAnnotation?.type?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == "FreeText" {
+        if hitAnnotation?.shouldDisplay == true,
+           hitAnnotation?.type?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == "FreeText" {
             editableAnnotation = hitAnnotation
         } else {
             editableAnnotation = nil
@@ -1743,47 +2459,15 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
             // the established review sheet, where adoption remains explicit.
             let canUseInlinePath = editableAnnotation == nil || appOwnedFreeText != nil
 
-            // When the click falls inside one single-page PDFSelection, offer
-            // an honest visual overlay replacement. The source content stream
-            // is not deleted and remains searchable/copyable.
-            var replacementText: String?
-            var replacementBounds: CGRect?
-            var replacementWasTruncated = false
-            if
-                appOwnedFreeText == nil,
-                let selection = state.currentSelection,
-                selection.pages.count == 1,
-                selection.pages.first === page
-            {
-                let selectionBounds = selection.bounds(for: page)
-                if selectionBounds.contains(pagePoint) {
-                    let fragments = selection.selectionsByLine().lazy.compactMap { line -> String? in
-                        guard line.pages.contains(where: { $0 === page }) else { return nil }
-                        return line.string
-                    }
-                    let limited = InlineTextDraftLimiter.limit(fragments: fragments)
-                    replacementText = limited.text
-                    replacementWasTruncated = limited.wasTruncated
-                    replacementBounds = selectionBounds
-                }
+            if editableAnnotation == nil {
+                _ = state.requestBodyTextEdit(pageIndex: pageIndex, point: pagePoint)
+                configureInlineTextEditingOverlay()
+                focusInlineTextEditor(at: viewPoint)
+                return
             }
-
             if canUseInlinePath, state.requestInlineTextEdit(
-                pageIndex: pageIndex,
-                point: pagePoint,
-                annotation: appOwnedFreeText,
-                visualReplacementText: replacementText,
-                visualReplacementBounds: replacementBounds
+                pageIndex: pageIndex, point: pagePoint, annotation: appOwnedFreeText
             ) {
-                if replacementWasTruncated {
-                    state.statusMessage = [
-                        L10n.string("inline_text.visual_replacement_warning"),
-                        L10n.format(
-                            "inline_text.length_limit",
-                            InlineTextDraftLimiter.maximumCharacterCount
-                        ),
-                    ].joined(separator: " ")
-                }
                 configureInlineTextEditingOverlay()
                 return
             }
@@ -1830,9 +2514,12 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
 
         window?.makeFirstResponder(self)
         inkPage = page
-        inkPoints = []
-        inkPressures = []
-        inkUsesPressure = currentInkSettings.pressureEnabled && (event.subtype == .tabletPoint || event.type == .tabletPoint)
+        // SwiftUI may reconfigure this view during a drag (for example after a
+        // preset shortcut). One stroke must retain one coherent appearance.
+        inkInput = PDFInkInputBuffer(settings: state.inkSettings)
+        inkUsesPressure = state.inkSettings.pressureEnabled
+            && state.inkSettings.drawingOptions.shape == .freehand
+            && (event.subtype == .tabletPoint || event.type == .tabletPoint)
         appendInkPoint(from: event, acceptingDuplicate: true)
     }
 
@@ -1841,44 +2528,52 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         appendInkPoint(from: event)
     }
 
-    private func appendInkPoint(from event: NSEvent, acceptingDuplicate: Bool = false) {
-        guard let page = inkPage else { return }
-        if !inkUsesPressure, currentInkSettings.pressureEnabled,
+    private func appendInkPoint(from event: NSEvent, acceptingDuplicate: Bool = false, finishing: Bool = false) {
+        guard let page = inkPage, let settings = inkInput?.settings else { return }
+        var invalidated = CGRect.null
+        if !inkUsesPressure, settings.pressureEnabled, settings.drawingOptions.shape == .freehand,
            event.subtype == .tabletPoint || event.type == .tabletPoint {
             inkUsesPressure = true
             let pressure = CGFloat(event.pressure)
-            inkPressures = inkPressures.map { _ in pressure.isFinite ? min(1, max(0, pressure)) : 1 }
+            invalidated = inkInput?.promoteToPressure(pressure.isFinite ? pressure : 1) ?? .null
         }
         let viewPoint = convert(event.locationInWindow, from: nil)
         let pagePoint = convert(viewPoint, to: page)
         let pageBounds = page.bounds(for: displayBox)
-        let tolerance = max(2, currentInkSettings.width)
+        let tolerance = max(2, settings.width)
         guard pageBounds.insetBy(dx: -tolerance, dy: -tolerance).contains(pagePoint) else { return }
 
-        if !acceptingDuplicate, let previous = inkPoints.last {
+        if !acceptingDuplicate, let previous = inkInput?.points.last {
             let distance = hypot(pagePoint.x - previous.x, pagePoint.y - previous.y)
-            guard distance >= 0.35 else { return }
+            // Sample in screen points so zooming out does not flood capture
+            // with invisible motion. Always keep the actual release endpoint.
+            let minimum = finishing ? 0.000_001 : 0.35 / max(0.01, scaleFactor)
+            if distance < minimum {
+                invalidateInkPreview(invalidated, on: page)
+                return
+            }
         }
 
-        if inkPoints.count >= PressureInkAnnotation.maximumPoints {
-            let indexes = Array(stride(from: 0, to: inkPoints.count, by: 2))
-            inkPoints = indexes.map { inkPoints[$0] }
-            inkPressures = indexes.map { inkPressures[$0] }
-        }
-        inkPoints.append(pagePoint)
         let raw = CGFloat(event.pressure)
-        inkPressures.append(inkUsesPressure && raw.isFinite ? min(1, max(0, raw)) : 1)
+        let pressure = inkUsesPressure && raw.isFinite ? min(1, max(0, raw)) : 1
+        invalidated = invalidated.union(inkInput?.append(pagePoint, pressure: pressure) ?? .null)
         inkOverlay.isHidden = false
-        inkOverlay.needsDisplay = true
+        invalidateInkPreview(invalidated, on: page)
+    }
+
+    private func invalidateInkPreview(_ pageRect: CGRect, on page: PDFPage) {
+        guard !pageRect.isNull, !pageRect.isInfinite else { return }
+        let rect = inkOverlay.convert(convert(pageRect, from: page), from: self)
+        inkOverlay.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2))
     }
 
     private func commitInkStroke() {
-        guard let page = inkPage else {
+        guard let page = inkPage, let input = inkInput else {
             cancelInkStroke()
             return
         }
-        let points = inkPoints
-        let committed = commitInkStroke(points, on: page, pressures: inkUsesPressure ? inkPressures : nil)
+        let committed = commitInkStroke(input.points, on: page,
+            pressures: inkUsesPressure ? input.pressures : nil, settings: input.settings)
         cancelInkStroke()
         if committed {
             needsDisplay = true
@@ -1892,7 +2587,8 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
     /// become unavailable. The page identity check also prevents a pending
     /// stroke from being attached to a PDF that has since been replaced.
     @discardableResult
-    func commitInkStroke(_ capturedPoints: [CGPoint], on page: PDFPage, pressures: [CGFloat]? = nil) -> Bool {
+    func commitInkStroke(_ capturedPoints: [CGPoint], on page: PDFPage, pressures: [CGFloat]? = nil,
+                         settings: InkSettings? = nil) -> Bool {
         guard
             viewportContext == .normal,
             let state = workspaceState,
@@ -1903,19 +2599,23 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
             let first = capturedPoints.first
         else { return false }
 
-        if let pressures {
+        let settings = settings ?? currentInkSettings
+        if pressures != nil || settings.pdfInkColor.alphaComponent < 1 || settings.style != .ink
+            || settings.drawingOptions.requiresCustomAppearance {
+            let pressures = pressures ?? Array(repeating: CGFloat(1), count: capturedPoints.count)
             guard let annotation = PressureInkAnnotation(points: capturedPoints, pressures: pressures,
-                width: currentInkSettings.width, color: currentInkSettings.pdfInkColor) else { return false }
+                width: settings.width, color: settings.pdfInkColor, style: settings.style,
+                options: settings.drawingOptions) else { return false }
             page.addAnnotation(annotation)
-            state.registerAddedAnnotation(annotation, on: page, message: L10n.string("펜 주석을 추가했습니다."))
+            state.registerAddedAnnotation(annotation, on: page, message: L10n.string("펜 주석을 추가했습니다."), actionLocalization: .init(key: "펜 주석을 추가했습니다."))
             return true
         }
         var points = capturedPoints
         if points.count == 1 {
-            points.append(CGPoint(x: first.x + max(0.2, currentInkSettings.width * 0.08), y: first.y))
+            points.append(CGPoint(x: first.x + max(0.2, settings.width * 0.08), y: first.y))
         }
 
-        let lineWidth = max(0.2, currentInkSettings.width)
+        let lineWidth = max(0.2, settings.width)
         let padding = max(2, lineWidth * 1.25)
         let minX = points.map(\.x).min() ?? first.x
         let maxX = points.map(\.x).max() ?? first.x
@@ -1938,7 +2638,7 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
 
         let annotation = PDFAnnotation(bounds: bounds, forType: .ink, withProperties: nil)
         PDFAnnotationPrivacy.clearImplicitAuthor(on: annotation)
-        annotation.color = currentInkSettings.pdfInkColor
+        annotation.color = settings.pdfInkColor
         annotation.modificationDate = Date()
         annotation.setValue("HwattakPDF-Ink-\(UUID().uuidString)", forAnnotationKey: .name)
         let border = PDFBorder()
@@ -1950,29 +2650,47 @@ final class InteractivePDFView: PDFView, NSMenuItemValidation {
         state.registerAddedAnnotation(
             annotation,
             on: page,
-            message: L10n.string("펜 주석을 추가했습니다.")
+            message: L10n.string("펜 주석을 추가했습니다."), actionLocalization: .init(key: "펜 주석을 추가했습니다.")
         )
         return true
     }
 
-    private func handleEraserClick(_ event: NSEvent) {
+    private func beginEraserGesture(_ event: NSEvent) {
         let viewPoint = convert(event.locationInWindow, from: nil)
-        guard let page = page(for: viewPoint, nearest: false) else {
-            super.mouseDown(with: event)
+        guard viewportContext == .normal, let state = workspaceState,
+              let page = page(for: viewPoint, nearest: false),
+              let gesture = PDFEraserGesture(workspace: state, page: page) else { return }
+        window?.makeFirstResponder(self)
+        eraserGesture = gesture
+        previousEraserPoint = convert(viewPoint, to: page)
+        updateEraserGesture(event)
+    }
+
+    private func updateEraserGesture(_ event: NSEvent) {
+        guard let gesture = eraserGesture, let state = workspaceState,
+              viewportContext == .normal, state.activeTool == .eraser else {
+            finishEraserGesture()
             return
         }
-
-        window?.makeFirstResponder(self)
-        let pagePoint = convert(viewPoint, to: page)
-        guard let state = workspaceState else { return }
-        let annotation = page.annotations.reversed().first { annotation in
-            annotation.bounds.contains(pagePoint)
-                && state.allowsEraserRemoval(of: annotation)
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        guard page(for: viewPoint, nearest: false) === gesture.page else {
+            previousEraserPoint = nil
+            return
         }
-        guard let annotation else { return }
-        if state.removeAnnotationWithEraser(annotation, from: page) {
+        let point = convert(viewPoint, to: gesture.page)
+        let mode = event.modifierFlags.contains(.option) ? state.eraserMode.alternate : state.eraserMode
+        if gesture.erase(from: previousEraserPoint ?? point, to: point,
+                         radius: state.eraserSize / 2, mode: mode) {
             needsDisplay = true
         }
+        previousEraserPoint = point
+    }
+
+    func finishEraserGesture() {
+        let gesture = eraserGesture
+        eraserGesture = nil
+        previousEraserPoint = nil
+        gesture?.finish()
     }
 }
 
@@ -1988,61 +2706,20 @@ private final class PDFInkPreviewView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard
-            let owner,
-            let page = owner.inkPage,
-            let first = owner.inkPoints.first
-        else { return }
-
-        if owner.inkUsesPressure, owner.inkPressures.count == owner.inkPoints.count {
-            owner.currentInkSettings.pdfInkColor.setStroke()
-            if owner.inkPoints.count == 1 {
-                let center = convert(owner.convert(first, from: page), from: owner)
-                let width = owner.currentInkSettings.width * owner.scaleFactor * (0.2 + 0.8 * owner.inkPressures[0])
-                owner.currentInkSettings.pdfInkColor.setFill()
-                NSBezierPath(ovalIn: CGRect(x: center.x - width / 2, y: center.y - width / 2,
-                    width: width, height: width)).fill()
-            }
-            for index in 1..<owner.inkPoints.count {
-                let path = NSBezierPath()
-                path.move(to: convert(owner.convert(owner.inkPoints[index - 1], from: page), from: owner))
-                path.line(to: convert(owner.convert(owner.inkPoints[index], from: page), from: owner))
-                let pressure = (owner.inkPressures[index - 1] + owner.inkPressures[index]) / 2
-                path.lineWidth = owner.currentInkSettings.width * owner.scaleFactor * (0.2 + 0.8 * pressure)
-                path.lineCapStyle = .round
-                path.stroke()
-            }
-            return
-        }
-        let path = NSBezierPath()
-        let firstInView = owner.convert(first, from: page)
-        path.move(to: convert(firstInView, from: owner))
-        for point in owner.inkPoints.dropFirst() {
-            let pointInView = owner.convert(point, from: page)
-            path.line(to: convert(pointInView, from: owner))
-        }
-
-        let previewWidth = max(1, owner.currentInkSettings.width * owner.scaleFactor)
-        let color = owner.currentInkSettings.pdfInkColor
-        NSGraphicsContext.saveGraphicsState()
-        color.setStroke()
-        color.setFill()
-        path.lineWidth = previewWidth
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-        if owner.inkPoints.count == 1 {
-            let center = convert(firstInView, from: owner)
-            NSBezierPath(
-                ovalIn: CGRect(
-                    x: center.x - previewWidth / 2,
-                    y: center.y - previewWidth / 2,
-                    width: previewWidth,
-                    height: previewWidth
-                )
-            ).fill()
-        } else {
-            path.stroke()
-        }
-        NSGraphicsContext.restoreGraphicsState()
+        guard let owner, let page = owner.inkPage,
+              let context = NSGraphicsContext.current?.cgContext,
+              let input = owner.inkInput, input.geometry != nil else { return }
+        // Three PDFKit conversions describe the entire affine page-to-overlay
+        // mapping, including crop origin, page rotation, scrolling and zoom.
+        // Long strokes no longer call PDFView.convert once per sample/frame.
+        let origin = convert(owner.convert(CGPoint.zero, from: page), from: owner)
+        let x = convert(owner.convert(CGPoint(x: 1, y: 0), from: page), from: owner)
+        let y = convert(owner.convert(CGPoint(x: 0, y: 1), from: page), from: owner)
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.concatenate(CGAffineTransform(a: x.x - origin.x, b: x.y - origin.y,
+            c: y.x - origin.x, d: y.y - origin.y, tx: origin.x, ty: origin.y))
+        PDFInkStrokeRenderer.draw(strokes: input.strokes(intersecting: context.boundingBoxOfClipPath), color: input.settings.pdfInkColor,
+            style: input.settings.style, options: input.settings.drawingOptions, in: context)
     }
 }

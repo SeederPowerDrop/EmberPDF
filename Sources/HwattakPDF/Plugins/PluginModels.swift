@@ -2,26 +2,27 @@
 
 import Foundation
 
-/// Hard ceilings for the first HwattakPDF plug-in API.
+/// Shared limits for EmberPDF's versioned plug-in API.
 ///
-/// V1 plug-ins are declarative manifests, not executable bundles. Keeping every
-/// value bounded lets the host validate and retain a complete registry without
-/// creating an unbounded memory or CPU surface at launch.
+/// Both declarative actions and executable extensions use bounded packages and
+/// reviewed manifests. Their code is loaded only through an isolated worker.
 enum HwattakPluginLimits {
-    /// Schema 1 remains readable so existing declarative text plug-ins keep
-    /// working. Schema 2 adds only host-owned companion panels; plug-ins still
-    /// cannot ship or execute code.
+    /// Earlier declarative and panel-scoped formats remain readable. Schema 6
+    /// adds developer code whose lifetime follows the app window.
     static let legacyManifestSchemaVersion = 1
-    static let manifestSchemaVersion = 3
+    static let manifestSchemaVersion = 6
     static let supportedManifestSchemaVersions: Set<Int> = [
         legacyManifestSchemaVersion,
         2,
+        3,
+        4,
+        5,
         manifestSchemaVersion
     ]
     static let installationRecordSchemaVersion = 1
     static let maximumInstalledPluginCount = 32
     static let maximumActionsPerPlugin = 24
-    static let maximumPackageFileCount = 5
+    static let maximumPackageFileCount = 6
     static let maximumPackageBytes = 2 * 1_024 * 1_024
     static let maximumManifestBytes = 128 * 1_024
     static let maximumAuxiliaryFileBytes = 1 * 1_024 * 1_024
@@ -38,12 +39,23 @@ enum HwattakPluginLimits {
 }
 
 enum PluginCapability: String, CaseIterable, Codable, Hashable, Identifiable {
+    case backgroundExecution
+    case pluginStorage
+    case appearanceWrite
+    case notesWrite
+    case fileReadWrite
+    case pageImage
+    case fileExport
+    case openDocumentsRead
+    case hoverText
+    case localTranslation
     case annotationWrite
     case toolControl
     case workspaceNavigation
     case documentMetadata
     case selectedText
     case currentPageText
+    case documentTextRead
     case clipboardWrite
     case externalURL
     case translationService
@@ -54,6 +66,16 @@ enum PluginCapability: String, CaseIterable, Codable, Hashable, Identifiable {
 
     var title: String {
         switch self {
+        case .backgroundExecution: L10n.string("plugins.permission.background_execution", defaultValue: "앱을 사용하는 동안 동작")
+        case .pluginStorage: L10n.string("plugins.permission.storage", defaultValue: "플러그인 전용 로컬 설정 저장")
+        case .appearanceWrite: L10n.string("plugins.permission.appearance", defaultValue: "읽기 색상 변경")
+        case .notesWrite: L10n.string("plugins.permission.notes", defaultValue: "로컬 노트 읽기·쓰기")
+        case .fileReadWrite: L10n.string("plugins.permission.files", defaultValue: "직접 선택한 Markdown 파일 열기·저장")
+        case .pageImage: L10n.string("plugins.permission.page_image", defaultValue: "현재 PDF 페이지를 이미지로 읽기")
+        case .fileExport: L10n.string("plugins.permission.export", defaultValue: "직접 선택한 위치에 이미지 저장·드래그")
+        case .openDocumentsRead: L10n.string("plugins.permission.open_documents", defaultValue: "열린 PDF들의 본문 검색")
+        case .hoverText: L10n.string("plugins.permission.hover", defaultValue: "PDF에서 커서 아래 단어 읽기")
+        case .localTranslation: L10n.string("plugins.permission.local_translation", defaultValue: "macOS 기기 내 번역 사용")
         case .annotationWrite: L10n.string("plugins.permission.annotation_write")
         case .toolControl: L10n.string("plugins.permission.tool_control")
         case .workspaceNavigation: L10n.string("plugins.permission.workspace_navigation")
@@ -72,10 +94,12 @@ enum PluginCapability: String, CaseIterable, Codable, Hashable, Identifiable {
                 "plugins.permission.current_page_text",
                 defaultValue: "현재 페이지의 텍스트 읽기"
             )
+        case .documentTextRead:
+            L10n.string("plugins.permission.document_text", defaultValue: "문서 전체의 텍스트 읽기")
         case .clipboardWrite:
             L10n.string(
                 "plugins.permission.clipboard",
-                defaultValue: "클립보드에 텍스트 쓰기"
+                defaultValue: "클립보드에 텍스트·이미지 쓰기"
             )
         case .externalURL:
             L10n.string(
@@ -102,6 +126,16 @@ enum PluginCapability: String, CaseIterable, Codable, Hashable, Identifiable {
 }
 
 enum PluginActionOutput: String, Codable, Equatable {
+    case scriptPanel
+    case appearancePanel, notesPanel, pageClipPanel, relatedDocumentsPanel, hoverTranslationPanel
+
+    var isCommunityPanel: Bool {
+        switch self {
+        case .appearancePanel, .notesPanel, .pageClipPanel, .relatedDocumentsPanel, .hoverTranslationPanel: true
+        default: false
+        }
+    }
+
     case documentCommand
     /// Shows bounded, host-rendered text in a standard dialog.
     case showText
@@ -118,12 +152,20 @@ enum PluginActionOutput: String, Codable, Equatable {
 }
 
 enum PluginPanelKind: String, Equatable {
+    case script
+    case appearance, notes, pageClip, relatedDocuments, hoverTranslation
     case translation
     case youtube
     case browser
 
     var systemImage: String {
         switch self {
+        case .script: "puzzlepiece.extension"
+        case .appearance: "paintpalette"
+        case .notes: "note.text"
+        case .pageClip: "crop"
+        case .relatedDocuments: "doc.text.magnifyingglass"
+        case .hoverTranslation: "character.cursor.ibeam"
         case .translation: "character.bubble"
         case .youtube: "play.rectangle"
         case .browser: "globe"
@@ -146,6 +188,9 @@ struct PluginPanelRequest: Identifiable, Equatable {
     let sourceText: String?
     /// Host-only export guard. Never included in a translation provider request.
     let sourceDocumentURL: URL?
+    /// Host-only immutable page geometry and appearance for translated-page viewing.
+    /// The translation engines receive text blocks only.
+    let pageLayout: PageTranslationLayout?
     let includesSelectedText: Bool
     let includesCurrentPageText: Bool
 
@@ -161,6 +206,7 @@ struct PluginPanelRequest: Identifiable, Equatable {
         initialURL: URL? = nil,
         sourceText: String? = nil,
         sourceDocumentURL: URL? = nil,
+        pageLayout: PageTranslationLayout? = nil,
         includesSelectedText: Bool = false,
         includesCurrentPageText: Bool = false
     ) {
@@ -175,6 +221,7 @@ struct PluginPanelRequest: Identifiable, Equatable {
         self.initialURL = initialURL
         self.sourceText = sourceText
         self.sourceDocumentURL = sourceDocumentURL
+        self.pageLayout = pageLayout
         self.includesSelectedText = includesSelectedText
         self.includesCurrentPageText = includesCurrentPageText
     }
@@ -187,6 +234,25 @@ struct PluginActionManifest: Codable, Equatable, Identifiable {
     let output: PluginActionOutput
     let template: String
     var command: PluginDocumentCommand? = nil
+    /// Schema 5 executes only the approved main.js bytes in a separate helper.
+    var scriptSHA256: String? = nil
+    var scriptCapabilities: [PluginCapability]? = nil
+}
+
+/// A developer-owned extension that remains available for the app window's
+/// lifetime, independently of whether its own panel is currently visible.
+struct PluginRuntimeManifest: Codable, Equatable {
+    let apiVersion: Int
+    let entry: String
+    let sha256: String
+    let activation: String
+    let capabilities: [PluginCapability]
+
+    static let supportedCapabilities: Set<PluginCapability> = [
+        .backgroundExecution, .documentMetadata, .selectedText, .currentPageText, .documentTextRead,
+        .openDocumentsRead, .workspaceNavigation, .notesWrite, .fileReadWrite,
+        .appearanceWrite, .pluginStorage, .annotationWrite, .toolControl
+    ]
 }
 
 struct PluginManifest: Codable, Equatable {
@@ -199,14 +265,16 @@ struct PluginManifest: Codable, Equatable {
     let minimumHostVersion: String?
     let capabilities: [PluginCapability]
     let actions: [PluginActionManifest]
+    var runtime: PluginRuntimeManifest? = nil
 }
 
-/// The three privileged panel manifests are immutable app resources, so their
+/// The privileged panel manifests are immutable app resources, so their
 /// human-facing copy can use the host's existing ten-language catalog without
 /// adding executable localization files to an untrusted package format.
 enum BundledPluginPresentation {
     private enum OfficialPluginKind {
         case translation
+        case pageTranslator
         case youtube
         case browser
     }
@@ -216,6 +284,11 @@ enum BundledPluginPresentation {
         case .translation:
             L10n.string(
                 "plugins.bundled.translation.name",
+                defaultValue: manifest.displayName
+            )
+        case .pageTranslator:
+            L10n.string(
+                "plugins.bundled.page_translation.name",
                 defaultValue: manifest.displayName
             )
         case .youtube:
@@ -238,6 +311,11 @@ enum BundledPluginPresentation {
         case .translation:
             L10n.string(
                 "plugins.bundled.translation.description",
+                defaultValue: manifest.description
+            )
+        case .pageTranslator:
+            L10n.string(
+                "plugins.bundled.page_translation.description",
                 defaultValue: manifest.description
             )
         case .youtube:
@@ -287,6 +365,8 @@ enum BundledPluginPresentation {
             "plugins.bundled.translation.selection.\(suffix)"
         case (.translation, "translate-current-page"):
             "plugins.bundled.translation.page.\(suffix)"
+        case (.pageTranslator, "translate-current-page"):
+            "plugins.bundled.page_translation.page.\(suffix)"
         case (.youtube, "open-youtube-study"):
             "plugins.bundled.youtube.open.\(suffix)"
         case (.browser, "open-web-browser"):
@@ -303,6 +383,25 @@ enum BundledPluginPresentation {
     private static func officialPluginKind(
         for manifest: PluginManifest
     ) -> OfficialPluginKind? {
+        if manifest.identifier == "dev.hwattakpdf.plugins.page-translator" {
+            let expectedCapabilities: Set<PluginCapability> = [
+                .currentPageText, .clipboardWrite, .translationService
+            ]
+            guard manifest.schemaVersion == 2,
+                  manifest.version == "1.0.0",
+                  manifest.minimumHostVersion == "0.9.0",
+                  manifest.author == "EmberPDF",
+                  manifest.capabilities.count == expectedCapabilities.count,
+                  Set(manifest.capabilities) == expectedCapabilities,
+                  manifest.actions.count == 1,
+                  actionShape(
+                    manifest.actions[0],
+                    id: "translate-current-page",
+                    output: .translatePanel,
+                    template: "{{page.text}}"
+                  ) else { return nil }
+            return .pageTranslator
+        }
         guard
             manifest.schemaVersion == 2,
             manifest.version == "1.0.0",
@@ -415,7 +514,7 @@ struct PluginSemanticVersion: Comparable, Equatable, CustomStringConvertible {
 enum PluginHost {
     static var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.8.0"
+            ?? "0.9.0"
     }
 }
 
@@ -529,6 +628,12 @@ extension PluginActionManifest {
             result.insert(.currentPageText)
         }
         switch output {
+        case .scriptPanel: result.formUnion(scriptCapabilities ?? [])
+        case .appearancePanel: result.insert(.appearanceWrite)
+        case .notesPanel: result.formUnion([.notesWrite, .fileReadWrite, .documentMetadata, .selectedText])
+        case .pageClipPanel: result.formUnion([.pageImage, .clipboardWrite, .fileExport])
+        case .relatedDocumentsPanel: result.formUnion([.openDocumentsRead, .currentPageText, .workspaceNavigation])
+        case .hoverTranslationPanel: result.formUnion([.hoverText, .localTranslation])
         case .documentCommand:
             if let command { result.insert(command.capability) }
         case .showText:
@@ -551,7 +656,7 @@ extension PluginActionManifest {
 
     var needsOpenDocument: Bool {
         switch output {
-        case .documentCommand, .translatePanel, .youtubePanel, .browserPanel:
+        case .documentCommand, .translatePanel, .youtubePanel, .browserPanel, .scriptPanel, .appearancePanel, .notesPanel, .pageClipPanel, .relatedDocumentsPanel, .hoverTranslationPanel:
             return true
         case .showText, .copyText, .openURL:
             return !requiredCapabilities.isDisjoint(
@@ -561,7 +666,7 @@ extension PluginActionManifest {
     }
 
     var needsSelection: Bool {
-        requiredCapabilities.contains(.selectedText) || command?.needsSelection == true
+        (output != .notesPanel && output != .scriptPanel && requiredCapabilities.contains(.selectedText)) || command?.needsSelection == true
     }
 
     var needsCurrentPageText: Bool {

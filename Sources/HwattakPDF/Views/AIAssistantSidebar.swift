@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import AppKit
 import SwiftUI
 
 /// 현재 PDF의 제한된 텍스트 문맥을 외부 AI 공급자와 대화하는 보조 panel이다.
 ///
-/// 중요한 개인정보 경계는 UI에도 드러난다. 요청마다 전송할 system/history/question/
-/// PDF context를 미리 보여 주고 사용자가 동의해야 네트워크 Task를 시작한다. 웹과
+/// 전송 확인은 기본으로 표시하며, 사용자가 끄면 선택한 공급자·범위로 바로 요청한다.
+/// 모델은 요청을 시작할 때 설정과 전송할 내용을 고정한다. 웹과
 /// MCP는 별도 opt-in이며, MCP tool call은 서버 URL과 arguments를 다시 승인해야 한다.
 /// 모델 답변은 곧바로 PDF를 수정하지 않고 검토 가능한 자유 텍스트 초안만 만든다.
 @MainActor
@@ -29,6 +30,10 @@ struct AIAssistantSidebar: View {
     @State private var quickControlsVisible = true
     @State private var showingPageSelectionPopover = false
     @State private var pageSelectionDraft: Set<Int> = []
+    @AppStorage(AIAssistantPreferences.showsTransmissionNoticeKey)
+    private var showsTransmissionNotice = true
+    @AppStorage(AIAssistantPreferences.requiresTransmissionConfirmationKey)
+    private var requiresTransmissionConfirmation = true
 
     init(
         viewModel: AIAssistantSessionModel,
@@ -48,7 +53,7 @@ struct AIAssistantSidebar: View {
         self.onClose = onClose
     }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     private var configuration: AIProviderConfiguration {
         providerSettings.selectedConfiguration
@@ -57,6 +62,7 @@ struct AIAssistantSidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            AIAssistantConversationBar(viewModel: viewModel, theme: theme)
             if quickControlsVisible {
                 Rectangle().fill(theme.border).frame(height: 1)
                 controls
@@ -111,6 +117,7 @@ struct AIAssistantSidebar: View {
             )
         }
         .onAppear {
+            workspace.enableAIConversationHistoryPersistence()
             providerSettings.refreshAPIKeyAvailability()
             viewModel.normalizeScope(for: workspace)
         }
@@ -128,7 +135,10 @@ struct AIAssistantSidebar: View {
                 presentPageSelection()
             }
         }
-        .onChange(of: providerSettings.selectedProvider) { _, _ in
+        .onChange(of: AIAPIKeyScope(configuration: providerSettings.selectedConfiguration)) { _, _ in
+            // Re-saving a protected credential can replace its configuration
+            // identity. Pending requests and MCP approvals belong to the old
+            // identity just as they do when switching providers.
             viewModel.providerDidChange()
         }
         .onChange(of: webSearchAvailable) { _, isAvailable in
@@ -142,9 +152,6 @@ struct AIAssistantSidebar: View {
             withAnimation(.easeInOut(duration: 0.16)) {
                 quickControlsVisible = newCount == 0
             }
-        }
-        .onChange(of: workspace.documentURL) { _, _ in
-            viewModel.documentDidChange()
         }
     }
 
@@ -207,6 +214,34 @@ struct AIAssistantSidebar: View {
                     : L10n.string("ai.controls.show", defaultValue: "AI 도구 보기")
             )
             .accessibilityIdentifier("ai-toggle-quick-controls")
+
+            Menu {
+                Toggle(
+                    L10n.string("ai.external_notice.show", defaultValue: "전송 안내 문구 표시"),
+                    isOn: $showsTransmissionNotice
+                )
+                Toggle(
+                    L10n.string("ai.confirmation.show", defaultValue: "전송 전 확인창 표시"),
+                    isOn: $requiresTransmissionConfirmation
+                )
+                .help(L10n.string("ai.confirmation.setting_help", defaultValue: "끄면 선택한 공급자와 전송 범위로 바로 보냅니다."))
+                Divider()
+                Button(L10n.string("ai.clear", defaultValue: "대화 지우기"), role: .destructive) {
+                    viewModel.clearConversation()
+                }
+                .disabled(viewModel.messages.isEmpty && viewModel.relatedPDFResults.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(L10n.string("ai.display_options", defaultValue: "AI 옵션"))
+            .accessibilityLabel(L10n.string("ai.display_options", defaultValue: "AI 옵션"))
+            .accessibilityIdentifier("ai-display-options")
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
@@ -422,6 +457,7 @@ struct AIAssistantSidebar: View {
                         AIAssistantMessageCard(
                             message: message,
                             theme: theme,
+                            onDelete: { viewModel.deleteMessage(id: message.id) },
                             onOpenLocalCitation: { citation in
                                 workspace.setCurrentPage(citation.pageIndex)
                             },
@@ -498,9 +534,12 @@ struct AIAssistantSidebar: View {
             Text(L10n.string("ai.empty.title", defaultValue: "PDF에 대해 물어보세요"))
                 .font(.headline)
             Text(
-                L10n.string(
+                requiresTransmissionConfirmation ? L10n.string(
                     "ai.empty.message",
                     defaultValue: "전송할 범위를 직접 고르고 미리보기를 확인한 뒤에만 외부 AI로 보냅니다. 관련 PDF 검색은 Mac 안에서만 처리됩니다."
+                ) : L10n.string(
+                    "ai.empty.message.direct",
+                    defaultValue: "질문과 함께 보낼 범위를 고르면 선택한 AI 공급자로 바로 보냅니다. 관련 PDF 검색은 Mac 안에서만 처리됩니다."
                 )
             )
             .font(.caption)
@@ -604,19 +643,20 @@ struct AIAssistantSidebar: View {
                         workspace: workspace,
                         documentCollection: documentCollection,
                         configuration: configuration,
-                        hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind)
+                        hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind),
+                        requiresTransmissionConfirmation: requiresTransmissionConfirmation
                     )
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(theme.cream)
+                        .foregroundStyle(theme.accentForeground)
                         .frame(width: 34, height: 34)
                         .background(theme.accent, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSendCustomPrompt)
                 .help(sendButtonHelp)
-                .accessibilityLabel(L10n.string("ai.send", defaultValue: "검토 후 AI로 보내기"))
+                .accessibilityLabel(sendButtonTitle)
                 .accessibilityHint(sendButtonHelp)
             }
 
@@ -633,23 +673,36 @@ struct AIAssistantSidebar: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack(spacing: 5) {
-                Image(systemName: "hand.raised.fill")
-                Text(
-                    L10n.string(
-                        "ai.external_notice.short",
-                        defaultValue: "전송 전 내용과 공급자를 한 번 더 확인합니다."
+            if showsTransmissionNotice {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Image(systemName: "hand.raised.fill")
+                    Text(
+                        requiresTransmissionConfirmation ? L10n.string(
+                            "ai.external_notice.short",
+                            defaultValue: "전송 전 내용과 공급자를 한 번 더 확인합니다."
+                        ) : L10n.string(
+                            "ai.external_notice.direct",
+                            defaultValue: "선택한 공급자와 전송 범위로 바로 보냅니다."
+                        )
                     )
-                )
-                Spacer(minLength: 0)
-                Button(L10n.string("ai.clear", defaultValue: "대화 지우기")) {
-                    viewModel.clearConversation()
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button {
+                        showsTransmissionNotice = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 18, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.string("ai.external_notice.hide", defaultValue: "안내 문구 숨기기"))
+                    .accessibilityLabel(L10n.string("ai.external_notice.hide", defaultValue: "안내 문구 숨기기"))
+                    .accessibilityIdentifier("ai-hide-transmission-notice")
                 }
-                .buttonStyle(.link)
-                .disabled(viewModel.messages.isEmpty && viewModel.relatedPDFResults.isEmpty)
+                .font(.caption2)
+                .foregroundStyle(theme.secondaryText)
             }
-            .font(.caption2)
-            .foregroundStyle(theme.secondaryText)
         }
         .padding(9)
         .background(theme.panel)
@@ -662,7 +715,8 @@ struct AIAssistantSidebar: View {
                 workspace: workspace,
                 documentCollection: documentCollection,
                 configuration: configuration,
-                hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind)
+                hasAPIKey: providerSettings.hasAPIKey(for: configuration.kind),
+                requiresTransmissionConfirmation: requiresTransmissionConfirmation
             )
         } label: {
             VStack(spacing: 2) {
@@ -771,7 +825,13 @@ struct AIAssistantSidebar: View {
 
     private var sendButtonHelp: String {
         guard hasValidSelectedPageSelection else { return selectedPagesRequiredHelp }
-        return L10n.string("ai.send", defaultValue: "검토 후 AI로 보내기")
+        return sendButtonTitle
+    }
+
+    private var sendButtonTitle: String {
+        requiresTransmissionConfirmation
+            ? L10n.string("ai.send", defaultValue: "검토 후 AI로 보내기")
+            : L10n.string("ai.send.direct", defaultValue: "AI로 보내기")
     }
 
     private func presentPageSelection() {
@@ -852,7 +912,7 @@ private struct AISelectedPagesPopover: View {
     @State private var rangeDraft = ""
     @State private var rangeError: String?
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var selectedIndices: [Int] {
         AIPageSelectionSpecification.sanitized(
             selection,
@@ -1086,7 +1146,7 @@ private struct AISelectedPagesPopover: View {
                 }
             }
             .frame(height: 30)
-            .foregroundStyle(isSelected ? theme.cream : theme.primaryText)
+            .foregroundStyle(isSelected ? theme.accentForeground : theme.primaryText)
             .background(
                 isSelected ? theme.accent : theme.panel,
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -1182,6 +1242,7 @@ private struct AIDraftApplicationRequest: Identifiable {
 private struct AIAssistantMessageCard: View {
     let message: AIAssistantMessage
     let theme: HwattakPDFTheme
+    let onDelete: () -> Void
     let onOpenLocalCitation: (AILocalContextCitation) -> Void
     let onApplyDraft: () -> Void
 
@@ -1199,8 +1260,38 @@ private struct AIAssistantMessageCard: View {
             .font(.caption2.weight(.semibold))
             .foregroundStyle(theme.secondaryText)
 
-            AIAssistantMarkdownText(message.text, theme: theme)
-                .textSelection(.enabled)
+            if message.role == .assistant {
+                AIAssistantRichText(source: message.text, images: message.images, theme: theme)
+            } else {
+                Text(verbatim: message.text)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message.text, forType: .string)
+                } label: {
+                    Label(L10n.string("ai.message.copy", defaultValue: "복사"), systemImage: "doc.on.doc")
+                }
+                .disabled(message.text.isEmpty)
+                .accessibilityIdentifier("ai-message-copy-\(message.id.uuidString)")
+                Menu {
+                    Button(L10n.string("ai.message.delete", defaultValue: "메시지 삭제"), role: .destructive, action: onDelete)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel(L10n.string("ai.message.options", defaultValue: "메시지 옵션"))
+                Spacer(minLength: 0)
+            }
+            .font(.caption2)
+            .buttonStyle(.borderless)
+            .foregroundStyle(theme.secondaryText)
 
             if !citedLocalCitations.isEmpty {
                 Divider()
@@ -1299,53 +1390,6 @@ private struct AIAssistantMessageCard: View {
         message.localCitations.filter {
             message.text.contains("[\($0.citationID)]")
         }
-    }
-}
-
-private struct AIAssistantMarkdownText: View {
-    private let value: String
-    private let theme: HwattakPDFTheme
-
-    init(_ text: String, theme: HwattakPDFTheme) {
-        value = text
-        self.theme = theme
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ForEach(
-                Array(AIAssistantDisplayFormatter.blocks(from: value).enumerated()),
-                id: \.offset
-            ) { _, block in
-                switch block {
-                case let .markdown(source):
-                    Text(AIAssistantMarkdownFormatter.attributedString(from: source))
-                        .font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                case let .displayMath(expression):
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(expression)
-                            .font(.system(size: 16, weight: .medium, design: .serif))
-                            .monospacedDigit()
-                            .fixedSize(horizontal: true, vertical: false)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 7)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        theme.dropHighlight.opacity(0.7),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(theme.border, lineWidth: 1)
-                    }
-                    .accessibilityLabel(expression)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1535,7 +1579,7 @@ private struct AITransmissionConsentSheet: View {
                     Text(
                         L10n.string(
                             "ai.consent.message",
-                            defaultValue: "아래 PDF 내용은 선택한 AI 공급자의 서버로 전송됩니다. HwattakPDF는 API 키를 요청 내용에 포함하지 않습니다."
+                            defaultValue: "아래 PDF 내용은 선택한 AI 공급자의 서버로 전송됩니다. EmberPDF는 API 키를 요청 내용에 포함하지 않습니다."
                         )
                     )
                     .font(.callout)

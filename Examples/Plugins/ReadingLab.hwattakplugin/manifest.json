@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 5,
+  "identifier": "org.emberpdf.examples.reading-lab",
+  "displayName": "Reading Lab · 독서 실험실",
+  "version": "1.0.0",
+  "author": "EmberPDF SDK Examples",
+  "description": "An example community script: calculates word frequencies, reacts to page changes, builds its own panel, and saves a thought to a note. 개발자 코드가 직접 분석·화면·명령·노트를 연결하는 SDK 예제입니다.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "documentMetadata",
+    "currentPageText",
+    "notesWrite",
+    "pluginStorage"
+  ],
+  "actions": [
+    {
+      "id": "open-lab",
+      "title": "Reading Lab 열기",
+      "output": "scriptPanel",
+      "template": "",
+      "scriptCapabilities": [
+        "documentMetadata",
+        "currentPageText",
+        "notesWrite",
+        "pluginStorage"
+      ],
+      "scriptSHA256": "0ba421b6cdc3dbe47d6e566db1cfe8477fa292f646f0f6bdbdd1af3c3c16103a"
+    }
+  ]
+}

@@ -66,12 +66,71 @@ struct PDFComparisonConfiguration: Equatable {
     var layout: PDFComparisonLayout = .sideBySide
     var syncEnabled = true
     var lockedDocumentIDs: Set<UUID> = []
+    /// A nested arrangement. Nil retains the pre-existing flat split and weights.
+    var splitTree: PDFComparisonSplit? = nil
     private(set) var sideBySidePanelWeights: [UUID: Double] = [:]
     private(set) var stackedPanelWeights: [UUID: Double] = [:]
 
     var canBeginComparison: Bool {
         selectedDocumentIDs.count >= Self.minimumDocumentCount
             && selectedDocumentIDs.count <= Self.maximumDocumentCount
+    }
+
+    /// An existing comparison may keep its last panel while the user chooses
+    /// another PDF. Starting a new comparison still requires two documents.
+    var canContinueComparison: Bool {
+        !selectedDocumentIDs.isEmpty
+            && selectedDocumentIDs.count <= Self.maximumDocumentCount
+    }
+
+    /// Adds a panel without rebuilding the arrangement already on screen.
+    @discardableResult
+    mutating func addDocument(_ id: UUID) -> Bool {
+        guard !isSelected(id), selectedDocumentIDs.count < Self.maximumDocumentCount else {
+            return false
+        }
+        let existingTree = effectiveSplitTree
+        selectedDocumentIDs.append(id)
+        lockedDocumentIDs.remove(id)
+        normalizePanelWeights()
+        splitTree = existingTree?.normalized(selectedDocumentIDs: selectedDocumentIDs, fallbackAxis: layout)
+        return true
+    }
+
+    /// Removes only the comparison membership. Closing the underlying tab is
+    /// deliberately outside this model; remaining branches retain their sizes.
+    @discardableResult
+    mutating func removeDocument(_ id: UUID) -> Bool {
+        guard let index = selectionIndex(for: id) else { return false }
+        let existingTree = effectiveSplitTree
+        selectedDocumentIDs.remove(at: index)
+        lockedDocumentIDs.remove(id)
+        normalizePanelWeights()
+        splitTree = existingTree?.normalized(selectedDocumentIDs: selectedDocumentIDs, fallbackAxis: layout)
+        return true
+    }
+
+    /// Replaces one pane in place, preserving the split geometry and its
+    /// width/height presets. The new PDF starts unlocked for normal navigation.
+    @discardableResult
+    mutating func replaceDocument(_ id: UUID, with replacementID: UUID) -> Bool {
+        guard let index = selectionIndex(for: id), !isSelected(replacementID) else {
+            return false
+        }
+        let existingTree = effectiveSplitTree
+        selectedDocumentIDs[index] = replacementID
+        lockedDocumentIDs.remove(id)
+        lockedDocumentIDs.remove(replacementID)
+        if let weight = sideBySidePanelWeights.removeValue(forKey: id) {
+            sideBySidePanelWeights[replacementID] = weight
+        }
+        if let weight = stackedPanelWeights.removeValue(forKey: id) {
+            stackedPanelWeights[replacementID] = weight
+        }
+        normalizePanelWeights()
+        splitTree = existingTree?.replacingDocument(id, with: replacementID)
+            .normalized(selectedDocumentIDs: selectedDocumentIDs, fallbackAxis: layout)
+        return true
     }
 
     func selectionIndex(for id: UUID) -> Int? {
@@ -94,13 +153,16 @@ struct PDFComparisonConfiguration: Equatable {
             selectedDocumentIDs.append(id)
         }
         normalizePanelWeights()
+        normalizeSplitTree()
     }
 
     mutating func moveSelection(_ id: UUID, by offset: Int) {
         guard let source = selectionIndex(for: id) else { return }
         let destination = source + offset
         guard selectedDocumentIDs.indices.contains(destination) else { return }
+        let oldOrder = selectedDocumentIDs
         selectedDocumentIDs.swapAt(source, destination)
+        reorderSplitTree(from: oldOrder)
     }
 
     /// Moves a selected document immediately before another selected document.
@@ -112,9 +174,11 @@ struct PDFComparisonConfiguration: Equatable {
             let source = selectionIndex(for: id),
             selectionIndex(for: targetID) != nil
         else { return }
+        let oldOrder = selectedDocumentIDs
         selectedDocumentIDs.remove(at: source)
         guard let target = selectionIndex(for: targetID) else { return }
         selectedDocumentIDs.insert(id, at: target)
+        reorderSplitTree(from: oldOrder)
     }
 
     /// Moves a selected document immediately after another selected document.
@@ -124,9 +188,11 @@ struct PDFComparisonConfiguration: Equatable {
             let source = selectionIndex(for: id),
             selectionIndex(for: targetID) != nil
         else { return }
+        let oldOrder = selectedDocumentIDs
         selectedDocumentIDs.remove(at: source)
         guard let target = selectionIndex(for: targetID) else { return }
         selectedDocumentIDs.insert(id, at: target + 1)
+        reorderSplitTree(from: oldOrder)
     }
 
     mutating func toggleLock(_ id: UUID) {
@@ -149,6 +215,7 @@ struct PDFComparisonConfiguration: Equatable {
         }
         lockedDocumentIDs.formIntersection(Set(selectedDocumentIDs))
         normalizePanelWeights()
+        normalizeSplitTree()
     }
 
     /// Returns normalized panel fractions for the requested split direction.
@@ -368,11 +435,22 @@ struct ComparisonDocument: Identifiable {
     let id: UUID
     let title: String
     let workspace: PDFWorkspaceState
+    let workspaceID: UUID?
+    let workspaceTitle: String?
+    /// One-based position in its workspace, including any home tabs.
+    let tabIndex: Int?
+    let groupTitle: String?
 
-    init(id: UUID, title: String? = nil, workspace: PDFWorkspaceState) {
+    init(id: UUID, title: String? = nil, workspace: PDFWorkspaceState,
+         workspaceID: UUID? = nil, workspaceTitle: String? = nil,
+         tabIndex: Int? = nil, groupTitle: String? = nil) {
         self.id = id
         self.workspace = workspace
         self.title = title ?? workspace.displayName
+        self.workspaceID = workspaceID
+        self.workspaceTitle = workspaceTitle
+        self.tabIndex = tabIndex
+        self.groupTitle = groupTitle
     }
 
     var pageCount: Int { workspace.pageCount }

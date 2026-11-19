@@ -258,22 +258,58 @@ final class AIProviderSettingsStore: ObservableObject {
 
     func saveAPIKey(_ apiKey: String, for provider: AIProviderKind) throws {
         let configuration = configuration(for: provider)
-        let configurationID = configuration.id
-        let keyScope = AIAPIKeyScope(configuration: configuration)
         do {
-            try configurationStore.saveSnapshot(
-                AIProviderConfigurationSnapshot(
-                    configurations: configurations,
-                    selectedProvider: selectedProvider
-                )
-            )
-            try keyStore.saveAPIKey(apiKey, for: keyScope)
-            apiKeyAvailability[configurationID] = true
+            try saveAPIKeyWithFreshIdentity(apiKey, configuration: configuration)
             lastErrorDescription = nil
         } catch {
             lastErrorDescription = error.localizedDescription
             throw error
         }
+    }
+
+    private func saveAPIKeyWithFreshIdentity(
+        _ apiKey: String,
+        configuration: AIProviderConfiguration
+    ) throws {
+        // Updating a legacy item can succeed while retaining an ACL that denies
+        // this app's reads. Always store an explicitly entered key under a fresh
+        // identity, leaving the old item's permissions untouched.
+        var replacement = configuration
+        replacement.id = UUID()
+        let replacementScope = AIAPIKeyScope(configuration: replacement)
+        var updatedConfigurations = configurations
+        if let index = updatedConfigurations.firstIndex(where: { $0.kind == configuration.kind }) {
+            updatedConfigurations[index] = replacement
+        } else {
+            updatedConfigurations.append(replacement)
+        }
+
+        do {
+            try keyStore.saveAPIKey(apiKey, for: replacementScope)
+            try configurationStore.saveSnapshot(
+                AIProviderConfigurationSnapshot(
+                    configurations: updatedConfigurations,
+                    selectedProvider: selectedProvider
+                )
+            )
+        } catch {
+            // Until both writes succeed, retain the old identity and key. A
+            // failed cleanup must not hide the original save/persistence error.
+            try? keyStore.deleteAPIKey(for: replacementScope)
+            throw error
+        }
+
+        // Publish only after the durable snapshot points at the new key. Avoid
+        // the ordinary observer's second persistence write and availability scan.
+        isLoading = true
+        configurations = updatedConfigurations
+        isLoading = false
+        apiKeyAvailability.removeValue(forKey: configuration.id)
+        apiKeyAvailability[replacement.id] = true
+
+        // System key operations are noninteractive. Leave an inaccessible old
+        // copy in place when macOS will not authorize its removal silently.
+        try? keyStore.deleteAPIKey(for: AIAPIKeyScope(configuration: configuration))
     }
 
     func deleteAPIKey(for provider: AIProviderKind) throws {

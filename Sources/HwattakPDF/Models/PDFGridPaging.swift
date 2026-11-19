@@ -3,10 +3,12 @@
 import CoreGraphics
 import Foundation
 
-/// 다중 페이지 개요에서 사용자가 선택한 주 스크롤 방향이다.
+/// 다중 페이지 개요의 페이지 이동 설정. 모든 방향 모드는 키보드에만
+/// 적용하며 휠·트랙패드는 기존 세로 스크롤 동작을 유지한다.
 enum PDFGridPagingDirection: String, CaseIterable, Identifiable {
     case vertical
     case horizontal
+    case allDirections
 
     var id: String { rawValue }
 
@@ -14,6 +16,7 @@ enum PDFGridPagingDirection: String, CaseIterable, Identifiable {
         switch self {
         case .vertical: L10n.string("direction.vertical")
         case .horizontal: L10n.string("direction.horizontal")
+        case .allDirections: L10n.string("pdf.navigation.all_directions", defaultValue: "상하좌우 다 사용하기")
         }
     }
 
@@ -21,6 +24,26 @@ enum PDFGridPagingDirection: String, CaseIterable, Identifiable {
         switch self {
         case .vertical: "arrow.up.and.down"
         case .horizontal: "arrow.left.and.right"
+        case .allDirections: "arrow.up.and.down.and.arrow.left.and.right"
+        }
+    }
+
+    /// Header controls retain their native arrow handling; this policy is only
+    /// called by the focused page surface. Legacy modes keep their strict
+    /// four-page pager behavior, while the opt-in mode turns any visible group.
+    func keyboardPageStep(keyCode: UInt16, requestedPageCount: Int) -> Int? {
+        guard (3...12).contains(requestedPageCount),
+              requestedPageCount == PDFGridPageGroup.pageCountPerGroup || self == .allDirections
+        else { return nil }
+
+        switch keyCode {
+        case 116: return -1 // Page Up
+        case 121: return 1  // Page Down
+        case 123 where self != .vertical: return -1 // Left
+        case 124 where self != .vertical: return 1  // Right
+        case 126 where self != .horizontal: return -1 // Up
+        case 125 where self != .horizontal: return 1  // Down
+        default: return nil
         }
     }
 }

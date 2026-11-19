@@ -1,6 +1,10 @@
-# HwattakPDF 중간 마일스톤·릴리스 체크리스트
+# EmberPDF 중간 마일스톤·릴리스 체크리스트
+
+> **사용 안내 · 2026-11-12:** 아래 build 27 표기와 체크박스는 과거 검사 양식입니다. 현재 검증 범위는 [품질 검사 기록](QUALITY_REPORT.md)을 확인하세요.
 
 이 목록은 “버튼이 보인다”가 아니라 데이터 손실 없이 실제 작업을 끝낼 수 있는지 확인하기 위한 것입니다. 모든 항목을 매 PR마다 실행할 필요는 없지만, 공개 릴리스 전에는 영향 영역을 골라 결과와 사용한 fixture 특성을 기록합니다.
+
+현재 후보는 **0.9.0 (build 27)**입니다. 실행형 SDK와 권한 경계의 결과는 [확장 플랫폼 기록](EXTENSIONS-2026-10-06.md)에 남깁니다. 아래 체크박스는 체크리스트이며, 이전 빌드의 통과를 새 후보의 완료로 간주하지 않습니다.
 
 ## 자동 검증
 
@@ -78,7 +82,7 @@
 - [ ] PNG 여러 장 내보내기가 기존 폴더·파일을 덮어쓰지 않고, 중간 페이지 실패 때 일부 결과를 남기지 않음
 - [ ] OCR 사본 목적지가 원본·symlink·hardlink이거나 작업 중 원본 alias로 바뀌면 원본 bytes를 유지한 채 실패함
 - [ ] sibling 임시 파일 교체 경로에서 저장 중 앱 종료/실패 뒤 목적지에 부분 PDF가 남지 않음
-- [ ] 파일 단위 샌드박스 권한의 직접 쓰기 fallback에서는 강제 종료·공간 부족 시 원본이 손상될 수 있음을 릴리스 한계와 원본 백업 안내에 포함하고, 실제 File Provider 위치별 결과 기록
+- [ ] 파일 단위 쓰기 권한만 있을 때 일반 저장이 기존 PDF·미저장 편집을 보존하고 별도 저장을 안내하는지 실제 앱과 File Provider 위치별로 확인
 
 ## 서명·Keychain
 
@@ -99,15 +103,34 @@
 - [ ] 비활성화 뒤 메뉴에서 action이 사라지고 재실행 뒤 유지되며, 다시 활성화하면 돌아옴. 삭제 확인 뒤 package와 disabled identifier가 제거됨
 - [ ] BOM, 64단계 초과 nesting, escape 후 같은 것을 포함한 중복·알 수 없는 JSON key, 알 수 없는 token·output·capability, capability 누락/미사용·중복, 제어·bidi 방향 위장 문자, 예약된 `com.vibepdf.`/`com.hwattakpdf.` identifier를 거부함
 - [ ] symlink·하위 디렉터리·추가 파일·가짜 PNG와 file metadata/실제 byte 수 불일치를 거부함
-- [ ] 검증 실패 항목도 차지하는 32 visible package slot·각 24 action, 5 file·2 MiB source payload, 별도 32 KiB 설치 기록, 128 KiB manifest, 16 KiB template, 16,000자/64 KiB 렌더 결과와 4 KiB URL의 경계값·초과값 확인
+- [ ] 검증 실패 항목도 차지하는 32 visible package slot·각 24 action, 6 file·2 MiB source payload, 별도 32 KiB 설치 기록, 128 KiB manifest, 16 KiB template, 16,000자/64 KiB 렌더 결과와 4 KiB URL의 경계값·초과값 확인
 - [ ] 설치된 manifest만 바꾸면 digest 불일치로 action registry에서 제외되며, SHA-256이 게시자 인증·서명으로 표시되지 않음
 - [ ] 32 visible slot·각 24 action fixture에서 launch·새로 고침·action latency와 RSS를 기록하고, 유휴 플러그인이 worker·timer·네트워크·지속 CPU/GPU 작업을 만들지 않음을 Instruments로 확인
 
+### schema 4·5 확장 플랫폼
+
+- [ ] Research Trail을 설치하고 PDF가 없는 창에서도 명령을 제공하며, 패널 닫힘·탭/워크스페이스 변경 후 기록과 명령이 유지됨
+- [ ] 서로 다른 확장이 동시에 동작하고 창 간 명령이 잘못 전달되지 않음
+- [ ] backgroundExecution 철회·비활성화·안전 모드·업데이트·제거·창 종료 시 worker와 명령·UI가 회수됨
+- [ ] 진행 중 문서 API의 오래된 응답이 새 문서에 적용되지 않고 CONTEXT_CHANGED를 처리함
+- [ ] documentTextRead·commands.execute의 페이지/선택/복사/편집/읽기 전용 문맥 권한이 적용됨
+- [ ] [Reading Lab](../Examples/Plugins/ReadingLab.hwattakplugin/README.md)을 설치하고 자체 JS 분석·명령·페이지 이벤트·UI·전용 저장소가 동작함
+- [ ] helper가 `Contents/Helpers/EmberPluginWorker`에 포함되고 arm64·코드 서명·정확한 sandbox 상속 entitlement 2개를 ZIP에서 다시 확인함
+- [ ] `main.js`만 변조하거나 manifest/code digest가 다르면 설치·로드·실행이 차단됨
+- [ ] 개별 권한 철회, 승인 archive 손상, 업데이트 전후 철회 유지, 미검토 digest와 안전 모드에서 action·진행 중 요청이 차단됨
+- [ ] 외부 확인/파일 선택 창이 열린 동안 권한을 철회해도 후속 전송·파일 read/write가 실행되지 않음
+- [ ] JS 무한루프·Promise 무한 작업·과도한 RPC·큰 메시지를 처리하고 실행기를 종료한 뒤 PDF 편집과 미저장 노트가 보존됨
+- [ ] 탭 전환·패널 닫기·비활성화·업데이트·제거 시 worker와 등록 명령·이벤트·미완료 작업을 정리함
+- [ ] script storage는 플러그인 ID별로 분리되고 제거 시 삭제되며 다른 앱 경로·Keychain·PDF 객체를 반환하지 않음
+- [ ] 노트에 raw HTML·외부 이미지·링크를 넣어도 자동 네트워크/실행이 없고, 외부 수정 충돌·symlink·hardlink 대상 저장을 검사함
+- [ ] 페이지 클립에서 복사 제한·stale revision·잘못된 영역·과도한 크기를 거부하며 실제 드래그 요청 시점에도 권한을 다시 검사함
+- [ ] 커서 번역은 사용자가 켠 현재 PDF 창에서만 동작하고 패널 폐기 시 local monitor와 언어 작업을 중지함
+
 ### schema 2 기본 웹 패널 수동 확인
 
-> 0.9.0의 웹 패널은 번역·웹 브라우저 2종이며, 문서 명령 플러그인 3종을 포함해 기본 검토본은 총 5종이다. 아래 YouTube 항목은 비활성 실험 기능의 향후 배포 조건이며 현재 ZIP의 출고 조건이 아니다.
+> build 27은 기존 번역 도우미·페이지 번역·웹 브라우저·문서 명령 3종에 호스트 패널 5종과 Reading Lab과 Research Trail 실행형 예제를 더해 기본 검토본 13종을 포함한다. 아래 YouTube 항목은 비활성 실험 기능의 향후 배포 조건이며 현재 ZIP의 출고 조건이 아니다.
 
-- [ ] 플러그인 관리의 기본 목록에서 번역·웹 브라우저 검토본만 보이고, 설치 화면에 action별 데이터 출처·외부 연결·분리 권한이 표시됨. 앱 업데이트로 bundled digest가 바뀐 기존 설치본은 격리하되 새 검토본을 `업데이트`로 복구할 수 있음
+- [ ] 플러그인 관리의 기본 목록에서 배포용 검토본만 보이고 YouTube 소스 전용 예제는 보이지 않으며, 설치 화면에 action별 데이터 출처·외부 연결·분리 권한이 표시됨. 앱 업데이트로 bundled digest가 바뀐 기존 설치본은 격리하되 새 검토본을 `업데이트`로 복구할 수 있음
 - [ ] Google 번역은 선택문/현재 페이지와 문자·byte 수·host를 확인하기 전 요청이 0회이고 승인 뒤에만 전송함. ChatGPT·Claude는 승인 전 클립보드 쓰기와 WebView 생성이 0회이며, 승인 뒤 prompt 복사와 사용자의 붙여넣기·보내기 사이를 구분해 안내함
 - [ ] YouTube 검색과 direct watch/share/shorts/live URL이 동작하고 유효 ID는 `youtube-nocookie.com` embed로 바뀜. 플레이어가 최소 200×200이고 HwattakPDF overlay가 player controls를 가리지 않으며 자동 재생하지 않음
 - [ ] 사용자가 누른 YouTube 로고·채널·관련 링크는 검증과 확인 뒤 시스템 브라우저로 열리고, script popup·비YouTube popup·download는 계속 차단됨
@@ -145,6 +168,10 @@
 - [ ] Office 결과가 페이지 이미지 기반이며 문단·표·도형을 편집 가능한 객체로 복원하지 않는다는 설명이 메뉴·README·개발노트에 일치
 
 ## 대용량·메모리
+
+2026-10-10 사용자 지정 검사 범위: `~/Documents/PDF 파일 테스트용`에서 **큰 파일 위주 최대 30개**를 선택한다. 폴더 전체를 검사하지 않는다. 100개 탭 등 상한을 넘는 시나리오는 합성 fixture로 확인한다. [당일 실문서 검증 기록](PERFORMANCE-2026-10-10.md).
+
+2026-10-04 실문서 검증: [40개 PDF·4개 워크스페이스 자동 검사와 12개 PDF·3개 워크스페이스 화면 검사](PERFORMANCE-2026-10-04.md). 아래의 100개 탭·장시간 측정·순간 peak RSS 항목까지 완료한 결과는 아닙니다.
 
 - [ ] 50~200MB 문서 20개 이상 열기 동안 UI 응답성과 peak RSS 기록
 - [ ] 100개 탭에서 resident 예산과 clean 탭 LRU 휴면 확인

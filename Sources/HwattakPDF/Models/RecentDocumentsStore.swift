@@ -2,12 +2,39 @@
 
 import Combine
 import Foundation
+import OSLog
+
+/// Keep the native error identifiers needed to distinguish a revoked file
+/// grant from a rejected running-code identity. Never log file paths or PDF
+/// contents; localized details remain in the app's warning to its owner.
+private enum RecentDocumentsDiagnostics {
+    static let logger = Logger(subsystem: "com.vibepdf.mac", category: "RecentDocuments")
+
+    static func record(_ error: Error, operation: String) {
+        var native: NSError? = error as NSError
+        for _ in 0..<4 {
+            guard let current = native else { break }
+            logger.error("\(operation, privacy: .public): domain=\(current.domain, privacy: .public) code=\(current.code, privacy: .public)")
+            native = current.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+    }
+}
 
 struct RecentDocument: Identifiable, Equatable {
     let id: UUID
     let displayName: String
     let locationDescription: String
     let lastOpenedAt: Date
+}
+
+/// Presentation for restoring access through an explicit user file choice.
+/// The suggested URL is a location hint, never an authorization to open it.
+struct RecentDocumentRecoveryRequest: Identifiable {
+    let id = UUID()
+    let recentID: UUID
+    let displayName: String
+    let suggestedURL: URL?
+    let reason: String
 }
 
 enum RecentDocumentsError: LocalizedError {
@@ -161,7 +188,7 @@ final class RecentDocumentsStore: ObservableObject {
     }
 
     @discardableResult
-    func record(url: URL) throws -> RecentDocument {
+    func record(url: URL, replacing replacedID: UUID? = nil) throws -> RecentDocument {
         do {
             guard url.isFileURL else { throw RecentDocumentsError.invalidFileURL }
             var isDirectory: ObjCBool = false
@@ -175,23 +202,38 @@ final class RecentDocumentsStore: ObservableObject {
             do {
                 bookmark = try bookmarkCoder.makeBookmark(for: url)
             } catch {
+                RecentDocumentsDiagnostics.record(error, operation: "create-bookmark")
                 throw RecentDocumentsError.bookmarkCreationFailed(error.localizedDescription)
             }
 
             let canonicalPath = canonicalFileKey(for: url)
             let existing = storedDocuments.first(where: { $0.canonicalPath == canonicalPath })
+            let replaced = replacedID.flatMap { id in
+                storedDocuments.first(where: { $0.id == id })
+            }
             let record = StoredDocument(
-                id: existing?.id ?? UUID(),
+                id: existing?.id ?? replaced?.id ?? UUID(),
                 bookmark: bookmark,
                 canonicalPath: canonicalPath,
                 displayName: url.lastPathComponent,
                 locationDescription: locationDescription(for: url),
                 lastOpenedAt: now()
             )
-            storedDocuments.removeAll { $0.canonicalPath == canonicalPath }
+            // Replace and deduplicate before applying the seven-item bound.
+            // Appending first could evict an unrelated oldest entry when a
+            // moved recent document is reconnected from a full history list.
+            let previousDocuments = storedDocuments
+            storedDocuments.removeAll {
+                $0.canonicalPath == canonicalPath || $0.id == replacedID
+            }
             storedDocuments.insert(record, at: 0)
             storedDocuments = Array(storedDocuments.prefix(maximumCount))
-            try persistAndPublish()
+            do {
+                try persistAndPublish()
+            } catch {
+                storedDocuments = previousDocuments
+                throw error
+            }
             lastError = nil
             return record.presentation
         } catch let error as RecentDocumentsError {
@@ -221,6 +263,14 @@ final class RecentDocumentsStore: ObservableObject {
         lastError = nil
     }
 
+    /// Use only to match an already-loaded tab or prefill a file chooser.
+    /// A persisted path cannot replace a security-scoped bookmark or user grant.
+    func fileURLHint(id: UUID) -> URL? {
+        guard let path = storedDocuments.first(where: { $0.id == id })?.canonicalPath,
+              path.hasPrefix("/"), !path.contains("\0") else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
     func resolve(id: UUID) throws -> RecentDocumentAccess {
         do {
             guard let index = storedDocuments.firstIndex(where: { $0.id == id }) else {
@@ -231,6 +281,7 @@ final class RecentDocumentsStore: ObservableObject {
             do {
                 resolution = try bookmarkCoder.resolveBookmark(storedDocuments[index].bookmark)
             } catch {
+                RecentDocumentsDiagnostics.record(error, operation: "resolve-bookmark")
                 throw RecentDocumentsError.bookmarkResolutionFailed(error.localizedDescription)
             }
 
@@ -255,6 +306,7 @@ final class RecentDocumentsStore: ObservableObject {
                     try persistAndPublish()
                     lastError = nil
                 } catch {
+                    RecentDocumentsDiagnostics.record(error, operation: "refresh-bookmark")
                     // The stale bookmark already resolved to a valid, scoped
                     // file. Refreshing persistence is maintenance and must not
                     // prevent this open from succeeding.
@@ -304,6 +356,7 @@ final class RecentDocumentsStore: ObservableObject {
             persistence.data = try JSONEncoder().encode(storedDocuments)
             documents = storedDocuments.map(\.presentation)
         } catch {
+            RecentDocumentsDiagnostics.record(error, operation: "persist-history")
             throw RecentDocumentsError.persistenceFailed(error.localizedDescription)
         }
     }

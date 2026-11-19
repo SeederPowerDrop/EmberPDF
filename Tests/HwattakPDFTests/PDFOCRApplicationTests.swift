@@ -224,13 +224,46 @@ final class PDFOCRApplicationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HwattakPDF-OCRApplyTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("document.pdf")
-        XCTAssertTrue(try makeDocument(pageCount: pageCount).write(to: url))
+        try AtomicPDFWriter.write(makeDocument(pageCount: pageCount), to: url)
+        XCTAssertTrue(try listedReciprocalNotes(at: url, expectedPages: pageCount))
         let workspace = PDFWorkspaceState(ocrRecognizer: recognizer ?? { url, fingerprint, configuration, _ in
             try Self.checkpoint(url: url, fingerprint: fingerprint, configuration: configuration)
         })
         XCTAssertTrue(workspace.open(url: url))
         workspace.setMode(.editing)
         return (directory, url, workspace)
+    }
+
+    /// Inspect the immutable file without warming the workspace's PDFPage or
+    /// annotation wrappers before its normal guarded open.
+    private func listedReciprocalNotes(at url: URL, expectedPages: Int) throws -> Bool {
+        let document = try XCTUnwrap(CGPDFDocument(url as CFURL))
+        guard document.numberOfPages == expectedPages, expectedPages > 0 else { return false }
+        for index in 1...expectedPages {
+            let page = try XCTUnwrap(document.page(at: index)?.dictionary)
+            var array: CGPDFArrayRef?
+            guard CGPDFDictionaryGetArray(page, "Annots", &array), let array,
+                  CGPDFArrayGetCount(array) <= 8 else { return false }
+            var annotations: [CGPDFDictionaryRef] = []
+            for offset in 0..<CGPDFArrayGetCount(array) {
+                var annotation: CGPDFDictionaryRef?
+                guard CGPDFArrayGetDictionary(array, offset, &annotation), let annotation else { return false }
+                annotations.append(annotation)
+            }
+            func subtype(_ dictionary: CGPDFDictionaryRef) -> String? {
+                var name: UnsafePointer<CChar>?
+                return CGPDFDictionaryGetName(dictionary, "Subtype", &name) ? name.map { String(cString: $0) } : nil
+            }
+            let notes = annotations.filter { subtype($0) == "Text" }
+            let popups = annotations.filter { subtype($0) == "Popup" }
+            guard notes.count == 1, popups.count == 1 else { return false }
+            var popup: CGPDFDictionaryRef?, parent: CGPDFDictionaryRef?
+            guard CGPDFDictionaryGetDictionary(notes[0], "Popup", &popup), let popup,
+                  CGPDFDictionaryGetDictionary(popups[0], "Parent", &parent), let parent,
+                  pdfReferenceIdentity(popup) == pdfReferenceIdentity(popups[0]),
+                  pdfReferenceIdentity(parent) == pdfReferenceIdentity(notes[0]) else { return false }
+        }
+        return true
     }
 
     private func makeDocument(pageCount: Int = 1) throws -> PDFDocument {

@@ -177,6 +177,9 @@ struct WorkspaceSessionArchive: Codable, Equatable {
         /// Geometry used by the saved clip position. Older archives contain
         /// vertical positions; this does not override the user's global mode.
         var pdfPageNavigationMode: String? = nil
+        /// Compact spreads use a different document geometry from PDFKit's
+        /// native columns. Missing in older archives means native geometry.
+        var pdfUsesCompactSpreads: Bool? = nil
         /// Absent in older archives; their existing automatic/manual zoom
         /// state remains authoritative until a fit direction is selected.
         var pdfPageFitMode: String? = nil
@@ -241,6 +244,13 @@ struct WorkspaceSessionArchive: Codable, Equatable {
         var lockedDocumentIDs: [UUID]
         var sideBySideWeights: [PanelWeight]
         var stackedWeights: [PanelWeight]
+        /// Optional for archives written before mixed-direction comparison layouts.
+        var splitTree: PDFComparisonSplit? = nil
+
+        private enum CodingKeys: String, CodingKey {
+            case windowID, workspaceID, isComparing, selectedDocumentIDs, layout, syncEnabled
+            case lockedDocumentIDs, sideBySideWeights, stackedWeights, splitTree
+        }
 
         struct PanelWeight: Codable, Equatable {
             var documentID: UUID
@@ -277,16 +287,39 @@ struct WorkspaceSessionArchive: Codable, Equatable {
             return ComparisonRecord(
                 windowID: windowID,
                 workspaceID: workspaceID,
-                isComparing: isComparing
-                    && orderedSelection.count >= 2,
+                isComparing: isComparing,
                 selectedDocumentIDs: orderedSelection,
                 layout: normalizedLayout,
                 syncEnabled: syncEnabled,
                 lockedDocumentIDs: normalizedLocks,
                 sideBySideWeights: normalizedWeights(sideBySideWeights),
-                stackedWeights: normalizedWeights(stackedWeights)
+                stackedWeights: normalizedWeights(stackedWeights),
+                splitTree: splitTree?.normalized(
+                    selectedDocumentIDs: orderedSelection,
+                    fallbackAxis: PDFComparisonLayout(rawValue: normalizedLayout) ?? .sideBySide
+                )
             )
         }
+    }
+}
+
+
+// A malformed optional layout must not prevent all unrelated PDF tabs from
+// reopening. Decoding is bounded by PDFComparisonSplit; legacy fields retain
+// their original validation and the layout safely falls back to a flat split.
+extension WorkspaceSessionArchive.ComparisonRecord {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        windowID = try values.decodeIfPresent(UUID.self, forKey: .windowID)
+        workspaceID = try values.decode(UUID.self, forKey: .workspaceID)
+        isComparing = try values.decode(Bool.self, forKey: .isComparing)
+        selectedDocumentIDs = try values.decode([UUID].self, forKey: .selectedDocumentIDs)
+        layout = try values.decode(String.self, forKey: .layout)
+        syncEnabled = try values.decode(Bool.self, forKey: .syncEnabled)
+        lockedDocumentIDs = try values.decode([UUID].self, forKey: .lockedDocumentIDs)
+        sideBySideWeights = try values.decode([PanelWeight].self, forKey: .sideBySideWeights)
+        stackedWeights = try values.decode([PanelWeight].self, forKey: .stackedWeights)
+        splitTree = (try? values.decodeIfPresent(PDFComparisonSplit.self, forKey: .splitTree)) ?? nil
     }
 }
 
@@ -535,7 +568,8 @@ final class WorkspaceSessionStore {
                         },
                         capturedPageIndex: tabRecord.pdfCapturedPageIndex,
                         navigationMode: tabRecord.pdfPageNavigationMode
-                            .flatMap(PDFPageNavigationMode.init(rawValue:)) ?? .verticalScroll
+                            .flatMap(PDFPageNavigationMode.init(rawValue:)) ?? .verticalScroll,
+                        usesCompactSpreads: tabRecord.pdfUsesCompactSpreads ?? false
                     )
                     workspace.restorePDFViewport(
                         autoScales: tabRecord.comparisonPDFAutoScales,
@@ -644,15 +678,15 @@ final class WorkspaceSessionStore {
             legacyDetachedWorkspaceIDs: archive.detachedWorkspaceIDs,
             restoredWorkspaces: restoredWorkspaces
         )
-        let workspaceByID = Dictionary(
-            uniqueKeysWithValues: restoredWorkspaces.map { ($0.id, $0) }
+        let tabIDsByWorkspace = Dictionary(
+            uniqueKeysWithValues: restoredWorkspaces.map { ($0.id, Set($0.tabs.map(\.id))) }
         )
         let comparisons: [WorkspaceSessionArchive.ComparisonRecord]? =
             archive.comparisonRecords?.compactMap { record -> WorkspaceSessionArchive.ComparisonRecord? in
-            guard let descriptor = workspaceByID[record.workspaceID] else { return nil }
-            return record.normalized(
-                validDocumentIDs: Set(descriptor.tabs.map(\.id))
-            )
+            guard let validIDs = Self.comparisonDocumentIDs(
+                for: record, tabIDsByWorkspace: tabIDsByWorkspace, topology: topology
+            ) else { return nil }
+            return record.normalized(validDocumentIDs: validIDs)
         }
         lastRestoredWindowTopology = topology
         lastRestoredComparisonRecords = comparisons
@@ -735,6 +769,23 @@ final class WorkspaceSessionStore {
                     archive.workspaces.append(record)
                 }
             }
+            // A detached window may flush before the main window's debounce
+            // records a tear-out. Its live tab IDs are authoritative: remove
+            // stale copies from the preserved main archive, otherwise restore
+            // keeps the first copy and can reopen the PDF in the wrong window.
+            let detachedTabIDs = Set(records.flatMap { $0.tabs.map(\.id) })
+            for index in archive.workspaces.indices
+            where !currentDetachedIDs.contains(archive.workspaces[index].id) {
+                archive.workspaces[index].tabs.removeAll { detachedTabIDs.contains($0.id) }
+                if let activeTabID = archive.workspaces[index].activeTabID,
+                   detachedTabIDs.contains(activeTabID) {
+                    archive.workspaces[index].activeTabID = archive.workspaces[index].tabs.first?.id
+                }
+                for groupIndex in archive.workspaces[index].groups.indices {
+                    archive.workspaces[index].groups[groupIndex].tabIDs.removeAll { detachedTabIDs.contains($0) }
+                }
+                archive.workspaces[index].groups.removeAll { $0.tabIDs.isEmpty }
+            }
             archive.detachedWorkspaceIDs = records.map(\.id)
             archive.windowTopology = WorkspaceSessionArchive.WindowTopologyRecord(
                 mainWorkspaceIDs: archive.windowTopology?.mainWorkspaceIDs
@@ -750,7 +801,8 @@ final class WorkspaceSessionStore {
             if let comparisonRecords = appSnapshot.comparisonRecords {
                 archive.comparisonRecords = normalizedComparisonRecords(
                     comparisonRecords,
-                    workspaceRecords: archive.workspaces
+                    workspaceRecords: archive.workspaces,
+                    topology: archive.windowTopology
                 )
             }
             try write(archive)
@@ -792,24 +844,25 @@ final class WorkspaceSessionStore {
             preservedTopology = nil
         }
 
+        let topology = preservedTopology ?? WorkspaceSessionArchive.WindowTopologyRecord(
+            mainWorkspaceIDs: currentMainIDs,
+            detachedWindows: detachedWindows.map {
+                WorkspaceSessionArchive.WindowTopologyRecord.DetachedWindowRecord(
+                    windowID: $0.windowID,
+                    workspaceIDs: $0.workspace.workspaces.map(\.id),
+                    activeWorkspaceID: $0.workspace.activeWorkspaceID
+                )
+            }
+        )
         return WorkspaceSessionArchive(
             activeWorkspaceID: workspace.activeWorkspaceID,
             workspaces: records,
             detachedWorkspaceIDs: preservedTopology == nil
                 ? detachedIDs
                 : lastArchive?.detachedWorkspaceIDs ?? detachedIDs,
-            windowTopology: preservedTopology ?? WorkspaceSessionArchive.WindowTopologyRecord(
-                mainWorkspaceIDs: currentMainIDs,
-                detachedWindows: detachedWindows.map {
-                    WorkspaceSessionArchive.WindowTopologyRecord.DetachedWindowRecord(
-                        windowID: $0.windowID,
-                        workspaceIDs: $0.workspace.workspaces.map(\.id),
-                        activeWorkspaceID: $0.workspace.activeWorkspaceID
-                    )
-                }
-            ),
+            windowTopology: topology,
             comparisonRecords: comparisonRecords.map {
-                normalizedComparisonRecords($0, workspaceRecords: records)
+                normalizedComparisonRecords($0, workspaceRecords: records, topology: topology)
             } ?? lastArchive?.comparisonRecords
         )
     }
@@ -878,6 +931,7 @@ final class WorkspaceSessionStore {
                         gridLayoutMode: session.workspace.gridLayoutMode.rawValue,
                         twoPageDisplayMode: session.workspace.twoPageDisplayMode.rawValue,
                         pdfPageNavigationMode: session.workspace.pdfViewportState.navigationMode.rawValue,
+                        pdfUsesCompactSpreads: session.workspace.pdfViewportState.usesCompactSpreads,
                         pdfPageFitMode: session.workspace.pageFitMode?.rawValue,
                         pdfAutoScales: session.workspace.pdfViewportState.autoScales,
                         pdfScaleFactor: session.workspace.pdfViewportState.scaleFactor.map(Double.init),
@@ -917,7 +971,8 @@ final class WorkspaceSessionStore {
 
     private func normalizedComparisonRecords(
         _ records: [WorkspaceSessionArchive.ComparisonRecord],
-        workspaceRecords: [WorkspaceSessionArchive.WorkspaceRecord]
+        workspaceRecords: [WorkspaceSessionArchive.WorkspaceRecord],
+        topology: WorkspaceSessionArchive.WindowTopologyRecord?
     ) -> [WorkspaceSessionArchive.ComparisonRecord] {
         let validTabIDsByWorkspace = Dictionary(
             uniqueKeysWithValues: workspaceRecords.map { record in
@@ -932,11 +987,42 @@ final class WorkspaceSessionStore {
             )
             guard
                 seenScopes.insert(scope).inserted,
-                let validTabIDs = validTabIDsByWorkspace[record.workspaceID]
+                let validTabIDs = Self.comparisonDocumentIDs(
+                    for: record, tabIDsByWorkspace: validTabIDsByWorkspace, topology: topology
+                )
             else {
                 return nil
             }
             return record.normalized(validDocumentIDs: validTabIDs)
+        }
+    }
+
+    /// A comparison belongs to the workspace where it was started, but its
+    /// documents can come from any workspace in the same app window. Detached
+    /// windows retain independent document ownership and comparison state.
+    private static func comparisonDocumentIDs(
+        for record: WorkspaceSessionArchive.ComparisonRecord,
+        tabIDsByWorkspace: [UUID: Set<UUID>],
+        topology: WorkspaceSessionArchive.WindowTopologyRecord?
+    ) -> Set<UUID>? {
+        guard tabIDsByWorkspace[record.workspaceID] != nil else { return nil }
+        let workspaceIDs: [UUID]
+        if let topology {
+            if let windowID = record.windowID {
+                guard let window = topology.detachedWindows.first(where: { $0.windowID == windowID })
+                else { return nil }
+                workspaceIDs = window.workspaceIDs
+            } else {
+                workspaceIDs = topology.mainWorkspaceIDs
+            }
+            guard workspaceIDs.contains(record.workspaceID) else { return nil }
+        } else {
+            // Before window topology was recorded, every restored workspace
+            // was presented in the main window.
+            workspaceIDs = Array(tabIDsByWorkspace.keys)
+        }
+        return workspaceIDs.reduce(into: Set<UUID>()) { result, id in
+            result.formUnion(tabIDsByWorkspace[id] ?? [])
         }
     }
 

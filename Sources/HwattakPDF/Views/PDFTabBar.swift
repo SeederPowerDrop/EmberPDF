@@ -70,6 +70,8 @@ struct PDFTabBar: View {
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draggedTabID: UUID?
+    var galleryAction: (() -> Void)? = nil
+    var isGalleryPresented: Bool = false
     // drop target/intent는 포인터가 떠 있는 동안만 필요한 transient UI 상태다.
     @State private var tabDropTargetID: UUID?
     @State private var tabDropIntent: PDFTabDropIntent?
@@ -86,11 +88,10 @@ struct PDFTabBar: View {
     @State private var workspaceCreationTabID: UUID?
     @State private var workspaceNameDraft = ""
     @State private var workspacePendingDeletionID: UUID?
+    @State private var isResolvingDocumentClose = false
     @State private var lastActiveTabByGroup: [UUID: UUID] = [:]
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     private var activeGroup: PDFTabGroup? {
         guard let activeTabID = workspace.activeTabID else { return nil }
@@ -145,10 +146,10 @@ struct PDFTabBar: View {
         .overlay {
             if isFileDropTargeted {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(theme.steel.opacity(0.26))
+                    .fill(theme.dropHighlight)
                     .overlay {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(theme.chromeText, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                            .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                     }
                     .padding(5)
                     .allowsHitTesting(false)
@@ -249,8 +250,8 @@ struct PDFTabBar: View {
         HStack(spacing: 6) {
             workspaceMenu
             tabOverviewMenu
-            if isComparing {
-                comparisonButton
+            if galleryAction != nil {
+                galleryButton
             }
             chromeDivider
 
@@ -324,7 +325,7 @@ struct PDFTabBar: View {
         }
         .frame(height: 38)
         .overlay(alignment: .top) {
-            Rectangle().fill(theme.chromeText.opacity(0.12)).frame(height: 1)
+            Rectangle().fill(theme.border).frame(height: 1)
         }
     }
 
@@ -348,27 +349,39 @@ struct PDFTabBar: View {
     }
 
     private var addTabButton: some View {
-        Button(action: choosePDFsForNewTabs) {
+        Button {
+            workspace.newTab()
+        } label: {
             Image(systemName: "plus")
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(TabChromeButtonStyle(theme: theme))
-        .help("PDF를 새 탭으로 열기")
-        .accessibilityLabel("PDF를 새 탭으로 열기")
+        .help(L10n.string("menu.new_tab") + " (⌘T)")
+        .accessibilityLabel(L10n.string("menu.new_tab"))
+        .accessibilityIdentifier("new-home-tab")
     }
 
-    private var comparisonButton: some View {
-        Button(action: comparisonAction) {
-            Image(systemName: isComparing ? "xmark" : "rectangle.on.rectangle.angled")
+    private var canShowGallery: Bool {
+        !isComparing && workspace.allTabs.contains { $0.workspace.hasOpenDocument }
+    }
+
+    private var galleryButton: some View {
+        Button { galleryAction?() } label: {
+            Image(systemName: "square.grid.2x2")
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: 28, height: 28)
+                .background(
+                    isGalleryPresented ? theme.selectionFill : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
         }
         .buttonStyle(TabChromeButtonStyle(theme: theme))
-        .help(isComparing ? L10n.string("PDF 비교 닫기") : L10n.string("열린 PDF 비교"))
-        .accessibilityLabel(isComparing ? L10n.string("PDF 비교 닫기") : L10n.string("열린 PDF 비교"))
-        .disabled(!isComparing && !canCompare)
-        .opacity(!isComparing && !canCompare ? 0.45 : 1)
+        .help(L10n.string(isGalleryPresented ? "gallery.close" : "gallery.open"))
+        .accessibilityLabel(L10n.string(isGalleryPresented ? "gallery.close" : "gallery.open"))
+        .accessibilityIdentifier("document-gallery-toggle")
+        .disabled(!isGalleryPresented && !canShowGallery)
+        .opacity(!isGalleryPresented && !canShowGallery ? 0.45 : 1)
     }
 
     @ViewBuilder
@@ -631,7 +644,7 @@ struct PDFTabBar: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "square.stack.3d.up")
-                    .foregroundStyle(theme.chromeSecondaryText)
+                    .foregroundStyle(theme.accent)
                 Text(workspace.activeWorkspaceDescriptor?.title ?? L10n.string("workspace.menu_title"))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -701,6 +714,7 @@ struct PDFTabBar: View {
     }
 
     private func deletePendingWorkspace() {
+        guard !isResolvingDocumentClose else { return }
         guard workspace.workspaces.count > 1 else {
             workspacePendingDeletionID = nil
             return
@@ -708,10 +722,19 @@ struct PDFTabBar: View {
         let workspaceID = workspacePendingDeletionID ?? workspace.activeWorkspaceID
         workspacePendingDeletionID = nil
         let sessions = workspace.sessions(inWorkspace: workspaceID)
-        guard UnsavedChangesGuard.confirmAndClose(workspaces: sessions.map(\.workspace)) else {
-            return
+        let identities = Set(sessions.map { ObjectIdentifier($0.workspace) })
+        isResolvingDocumentClose = true
+        Task { @MainActor in
+            defer { isResolvingDocumentClose = false }
+            guard await UnsavedChangesGuard.confirmAndCloseAsync(
+                workspaces: sessions.map(\.workspace),
+                validateBeforeClosing: {
+                    workspace.workspaces.count > 1
+                        && Set(workspace.sessions(inWorkspace: workspaceID).map { ObjectIdentifier($0.workspace) }) == identities
+                }
+            ) else { return }
+            _ = workspace.deleteWorkspace(workspaceID, discardingChanges: true)
         }
-        _ = workspace.deleteWorkspace(workspaceID, discardingChanges: true)
     }
 
     private func clearTabDragState() {
@@ -724,13 +747,24 @@ struct PDFTabBar: View {
 
     private var tabOverviewMenu: some View {
         Menu {
+            if let galleryAction {
+                Button(action: galleryAction) {
+                    Label(
+                        L10n.string(isGalleryPresented ? "gallery.close" : "gallery.open"),
+                        systemImage: "square.grid.2x2"
+                    )
+                }
+                .disabled(!isGalleryPresented && !canShowGallery)
+            }
             Button(action: comparisonAction) {
-                Label(
-                    L10n.string(isComparing ? "PDF 비교 닫기" : "열린 PDF 비교"),
-                    systemImage: "rectangle.on.rectangle.angled"
-                )
+                Label {
+                    Text(L10n.string(isComparing ? "comparison.entry.close" : "comparison.entry.open"))
+                } icon: {
+                    TogetherViewIcon(size: 16)
+                }
             }
             .disabled(!isComparing && !canCompare)
+            .accessibilityIdentifier("together-view-menu")
             Button {
                 showingResourceMonitor = true
             } label: {
@@ -861,29 +895,35 @@ struct PDFTabBar: View {
 
     private func closeTab(_ id: UUID) {
         guard let session = workspace.tabs.first(where: { $0.id == id }) else { return }
-        guard UnsavedChangesGuard.confirmAndClose(workspace: session.workspace) else { return }
-        _ = workspace.closeTab(id)
+        closeSessions([session])
     }
 
     private func closeOtherTabs(keeping id: UUID) {
-        guard closeSessions(workspace.tabs.filter { $0.id != id }) else { return }
-        workspace.selectTab(id)
+        closeSessions(workspace.tabs.filter { $0.id != id }) { workspace.selectTab(id) }
     }
 
     private func closeTabsToRight(of id: UUID) {
         guard let index = workspace.tabs.firstIndex(where: { $0.id == id }) else { return }
-        guard closeSessions(Array(workspace.tabs.dropFirst(index + 1))) else { return }
-        workspace.selectTab(id)
+        closeSessions(Array(workspace.tabs.dropFirst(index + 1))) { workspace.selectTab(id) }
     }
 
-    @discardableResult
-    private func closeSessions(_ sessions: [PDFTabSession]) -> Bool {
-        guard !sessions.isEmpty else { return true }
-        guard UnsavedChangesGuard.confirmAndClose(workspaces: sessions.map(\.workspace)) else {
-            return false
+    private func closeSessions(_ sessions: [PDFTabSession], completion: (() -> Void)? = nil) {
+        guard !isResolvingDocumentClose else { return }
+        guard !sessions.isEmpty else { completion?(); return }
+        isResolvingDocumentClose = true
+        Task { @MainActor in
+            defer { isResolvingDocumentClose = false }
+            guard await UnsavedChangesGuard.confirmAndCloseAsync(
+                workspaces: sessions.map(\.workspace),
+                validateBeforeClosing: {
+                    sessions.allSatisfy { target in
+                        workspace.tabs.contains { $0.id == target.id && $0.workspace === target.workspace }
+                    }
+                }
+            ) else { return }
+            sessions.forEach { _ = workspace.closeTab($0.id) }
+            completion?()
         }
-        sessions.forEach { _ = workspace.closeTab($0.id) }
-        return true
     }
 
     private func acceptFinderDrop(providers: [NSItemProvider]) -> Bool {
@@ -921,16 +961,18 @@ private struct TabChromeControlSurface: ViewModifier {
     let theme: HwattakPDFTheme
     var isPressed = false
     @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
             .foregroundStyle(theme.chromeText)
             .background(
-                theme.chromeText.opacity(isPressed ? 0.12 : (isHovering ? 0.07 : 0)),
+                isPressed ? theme.selectionFill : (isHovering ? theme.hoverFill : Color.clear),
                 in: RoundedRectangle(cornerRadius: 5, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             .onHover { isHovering = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
     }
 }
 
@@ -1167,6 +1209,7 @@ private struct PDFTabItem: View {
     let showResources: () -> Void
 
     @State private var isHovering = false
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
@@ -1247,6 +1290,13 @@ private struct PDFTabItem: View {
             )
             .accessibilityAddTraits(isActive ? .isSelected : [])
             .focusable()
+            .focused($isFocused)
+            .focusEffectDisabled()
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(isFocused ? theme.focusRing : Color.clear, lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            }
             .onKeyPress(.return) {
                 select()
                 return .handled
@@ -1261,10 +1311,10 @@ private struct PDFTabItem: View {
         HStack(spacing: 7) {
             Image(systemName: document.hasOpenDocument ? "doc" : "doc.badge.plus")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(theme.chromeSecondaryText)
+                .foregroundStyle(isActive ? theme.accent : theme.chromeSecondaryText)
 
             Text(document.hasOpenDocument ? document.displayName : L10n.string("tab.new"))
-                .font(.system(size: 11, weight: isActive ? .medium : .regular))
+                .font(.system(size: 12, weight: isActive ? .medium : .regular))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 164, alignment: .leading)
@@ -1296,17 +1346,17 @@ private struct PDFTabItem: View {
         .padding(.trailing, 6)
         .frame(width: pdfTabWidth, height: 32)
         .background(
-            isActive ? theme.chromeRaised : theme.chromeText.opacity(isHovering ? 0.05 : 0),
+            isActive ? theme.selectionFill : (isHovering ? theme.hoverFill : Color.clear),
             in: RoundedRectangle(cornerRadius: 5, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .stroke(isActive ? theme.border.opacity(0.6) : Color.clear, lineWidth: 0.5)
+                .stroke(isActive ? theme.selectionBorder : Color.clear, lineWidth: 1)
         }
         .overlay(alignment: .bottom) {
             if isActive {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(theme.chromeText.opacity(0.35))
+                    .fill(theme.accent)
                     .frame(height: 1.5)
                     .padding(.horizontal, 12)
             }
@@ -1326,7 +1376,7 @@ private struct PDFTabItem: View {
             switch dropIntent {
             case .createOrJoinGroup:
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(theme.steel.opacity(0.88))
+                    .fill(theme.chromeRaised)
                     .overlay {
                         HStack(spacing: 5) {
                             Image(systemName: "square.stack.3d.up.fill")
@@ -1334,16 +1384,16 @@ private struct PDFTabItem: View {
                                 .lineLimit(1)
                         }
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(theme.cream)
+                        .foregroundStyle(theme.accent)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(theme.cream.opacity(0.92), lineWidth: 2)
+                            .stroke(theme.accent, lineWidth: 1.5)
                     }
             case .before:
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.ribbon)
+                        .fill(theme.accent)
                         .frame(width: 4)
                     Spacer(minLength: 0)
                 }
@@ -1352,7 +1402,7 @@ private struct PDFTabItem: View {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.ribbon)
+                        .fill(theme.accent)
                         .frame(width: 4)
                 }
                 .padding(.vertical, 3)
@@ -1446,7 +1496,7 @@ private struct PDFTabGroupHeader: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.chromeSecondaryText)
+                    .foregroundStyle(isActive ? theme.accent : theme.chromeSecondaryText)
 
                 Text(group.title)
                     .font(.system(size: 11, weight: .medium))
@@ -1460,7 +1510,7 @@ private struct PDFTabGroupHeader: View {
                     .padding(.horizontal, 5)
                     .frame(minHeight: 18)
                     .background(
-                        theme.chromeText.opacity(0.06),
+                        theme.hoverFill,
                         in: Capsule()
                     )
 
@@ -1472,17 +1522,17 @@ private struct PDFTabGroupHeader: View {
             .padding(.horizontal, 9)
             .frame(width: pdfTabGroupHeaderWidth, height: 32)
             .background(
-                isActive ? theme.chromeRaised : theme.chromeText.opacity(isHovering ? 0.05 : 0),
+                isActive ? theme.selectionFill : (isHovering ? theme.hoverFill : Color.clear),
                 in: RoundedRectangle(cornerRadius: 5, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(isActive ? theme.border.opacity(0.6) : Color.clear, lineWidth: 0.5)
+                    .stroke(isActive ? theme.selectionBorder : Color.clear, lineWidth: 1)
             }
             .overlay(alignment: .bottom) {
                 if isActive {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(theme.chromeText.opacity(0.35))
+                        .fill(theme.accent)
                         .frame(height: 1.5)
                         .padding(.horizontal, 12)
                 }
@@ -1545,7 +1595,7 @@ private struct PDFTabGroupHeader: View {
             switch dropIntent {
             case .createOrJoinGroup:
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(theme.steel.opacity(0.88))
+                    .fill(theme.chromeRaised)
                     .overlay {
                         HStack(spacing: 5) {
                             Image(systemName: "folder.badge.plus")
@@ -1553,16 +1603,16 @@ private struct PDFTabGroupHeader: View {
                                 .lineLimit(1)
                         }
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(theme.cream)
+                        .foregroundStyle(theme.accent)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(theme.cream.opacity(0.92), lineWidth: 2)
+                            .stroke(theme.accent, lineWidth: 1.5)
                     }
             case .before:
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.ribbon)
+                        .fill(theme.accent)
                         .frame(width: 4)
                     Spacer(minLength: 0)
                 }
@@ -1571,7 +1621,7 @@ private struct PDFTabGroupHeader: View {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.ribbon)
+                        .fill(theme.accent)
                         .frame(width: 4)
                 }
                 .padding(.vertical, 3)

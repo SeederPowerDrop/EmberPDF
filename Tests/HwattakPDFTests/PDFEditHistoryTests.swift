@@ -422,6 +422,9 @@ final class PDFEditHistoryTests: XCTestCase {
         let imageURL = fixture.directory.appendingPathComponent("insert.png")
         try writePNG(solidImage(), to: imageURL)
         workspace.insertImage(url: imageURL)
+        let imageRequest = try XCTUnwrap(workspace.pendingImageInsertion)
+        let preparedImages = try ImageInsertionPreparation.prepare(urls: imageRequest.urls, option: .original)
+        XCTAssertTrue(workspace.approveImageInsertion(imageRequest, images: preparedImages))
         XCTAssertEqual(page.annotations.count, 3)
 
         workspace.undo()
@@ -911,7 +914,10 @@ final class PDFEditHistoryTests: XCTestCase {
 
     @MainActor
     func testMergeSettlesWidgetEditAndReprimesInsertedPageIndexes() throws {
-        let fixture = try makeIndexedFormWorkspace()
+        // This test exercises index/undo bookkeeping with independently named
+        // fields. Ambiguous shared names with different values are deliberately
+        // refused by the page-structure preservation tests.
+        let fixture = try makeIndexedFormWorkspace(sharedFieldName: false)
         addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
         let workspace = fixture.workspace
         let firstPage = fixture.pages[0]
@@ -985,7 +991,7 @@ final class PDFEditHistoryTests: XCTestCase {
     }
 
     @MainActor
-    private func makeIndexedFormWorkspace() throws -> (
+    private func makeIndexedFormWorkspace(sharedFieldName: Bool = true) throws -> (
         directory: URL,
         workspace: PDFWorkspaceState,
         pages: [PDFPage],
@@ -1006,7 +1012,7 @@ final class PDFEditHistoryTests: XCTestCase {
                 withProperties: nil
             )
             widget.widgetFieldType = .text
-            widget.fieldName = "shared-field"
+            widget.fieldName = sharedFieldName ? "shared-field" : "field-\(index)"
             widget.widgetStringValue = "before-\(index)"
             page.addAnnotation(widget)
             document.insert(page, at: document.pageCount)
@@ -1019,9 +1025,9 @@ final class PDFEditHistoryTests: XCTestCase {
         let pages = try (0..<2).map { index in
             try XCTUnwrap(workspace.document?.page(at: index))
         }
-        let widgets = try pages.map { page in
+        let widgets = try pages.enumerated().map { index, page in
             try XCTUnwrap(
-                page.annotations.first(where: { $0.fieldName == "shared-field" })
+                page.annotations.first(where: { $0.fieldName == (sharedFieldName ? "shared-field" : "field-\(index)") })
             )
         }
         return (directory, workspace, pages, widgets)

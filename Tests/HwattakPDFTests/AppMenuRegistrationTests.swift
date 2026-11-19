@@ -21,11 +21,11 @@ final class AppMenuRegistrationTests: XCTestCase {
             "The main and tear-out branches must still publish their active workspace."
         )
         XCTAssertEqual(
-            source.components(separatedBy: "WindowGroup(\"HwattakPDF\", for: UUID.self)").count - 1,
+            source.components(separatedBy: "WindowGroup(\"EmberPDF\", for: UUID.self)").count - 1,
             1
         )
         XCTAssertEqual(
-            source.components(separatedBy: "WindowGroup(\"HwattakPDF\", id: \"main\", for: MainWorkspaceWindowID.self)").count - 1,
+            source.components(separatedBy: "WindowGroup(\"EmberPDF\", id: \"main\", for: MainWorkspaceWindowID.self)").count - 1,
             1,
             "The primary workspace must participate in external file routing."
         )
@@ -67,6 +67,13 @@ final class AppMenuRegistrationTests: XCTestCase {
 
         XCTAssertTrue(source.contains("CommandGroup(after: .sidebar)"))
         XCTAssertTrue(source.contains("@FocusedValue(\\.workspacePresentationCommands)"))
+        XCTAssertTrue(source.contains("@FocusedValue(\\.documentGalleryCommands)"))
+        XCTAssertTrue(source.contains("L10n.string(\"gallery.open\")"))
+        XCTAssertEqual(
+            source.components(separatedBy: "keyboardShortcut(\"g\", modifiers: [.command, .shift])").count - 1,
+            1,
+            "The current window's gallery needs one unambiguous menu shortcut."
+        )
         XCTAssertTrue(source.contains("private var viewCommandWorkspace"))
         XCTAssertTrue(source.contains("toolbar.mode_tools.show"))
         XCTAssertTrue(source.contains("view.focus.enter"))
@@ -190,6 +197,13 @@ final class AppMenuRegistrationTests: XCTestCase {
         )
 
         XCTAssertTrue(source.contains("private var exportCommandWorkspace"))
+        let exportStart = try XCTUnwrap(source.range(of: "private var exportCommandWorkspace"))
+        let exportEnd = try XCTUnwrap(source.range(of: "\n    }", range: exportStart.upperBound..<source.endIndex))
+        XCTAssertTrue(
+            source[exportStart.lowerBound..<exportEnd.lowerBound]
+                .contains("guard galleryCommands?.isPresented != true else { return nil }"),
+            "Gallery commands must not export or save the covered document."
+        )
         XCTAssertTrue(source.contains("let activeWorkspace = exportCommandWorkspace,"))
         XCTAssertTrue(
             source.contains(
@@ -229,6 +243,10 @@ final class AppMenuRegistrationTests: XCTestCase {
         XCTAssertTrue(source.contains("fileCommandWorkspace.beginOpeningViewableFilesInTabs"))
         XCTAssertTrue(source.contains("fileCommandWorkspace?.selectAdjacentTab"))
         XCTAssertTrue(source.contains("window.performClose(nil)"))
+        XCTAssertTrue(
+            source.contains("if let galleryCommands, galleryCommands.isPresented {\n                galleryCommands.toggle()"),
+            "Command-W in the gallery should close the gallery before closing its current PDF."
+        )
         XCTAssertFalse(
             source.contains("focusedWorkspace ?? fallbackWorkspace"),
             "Settings, About, Help, and sheets must never fall back to the hidden main PDF model."

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import Combine
 import PDFKit
 import XCTest
 @testable import HwattakPDF
@@ -119,10 +120,19 @@ final class PDFDocumentSearchTests: XCTestCase {
         let first = try XCTUnwrap(workspace.activeSearchSelection)
         XCTAssertTrue(workspace.currentSelection === first)
 
+        workspace.recordPDFViewport(
+            autoScales: false,
+            scaleFactor: 1.5,
+            scrollProgress: PDFScrollProgress(horizontal: 0.2, vertical: 0.8)
+        )
+        XCTAssertNotNil(workspace.pdfViewportState(for: .normal).scrollProgress)
         workspace.showNextSearchResult()
         let second = try XCTUnwrap(workspace.activeSearchSelection)
         XCTAssertFalse(second === first)
         XCTAssertTrue(workspace.currentSelection === second)
+        XCTAssertNil(workspace.pdfViewportState(for: .normal).scrollProgress)
+        XCTAssertEqual(workspace.pdfViewportState(for: .normal).scaleFactor, 1.5)
+        XCTAssertFalse(workspace.pdfViewportState(for: .normal).autoScales)
 
         workspace.clearSearch()
         XCTAssertNil(workspace.activeSearchSelection)
@@ -207,6 +217,9 @@ final class PDFDocumentSearchTests: XCTestCase {
         let coordinator = PDFKitViewer.Coordinator(state: workspace)
         coordinator.attach(to: pdfView)
         defer { coordinator.detach() }
+        // A real activation, rather than the initial subscription replay,
+        // explicitly takes selection ownership from a mounted reader.
+        workspace.activeSearchSelection = first
         coordinator.applySearchSelection(first, to: pdfView)
 
         XCTAssertTrue(workspace.currentSelection === first)
@@ -231,6 +244,161 @@ final class PDFDocumentSearchTests: XCTestCase {
 
         XCTAssertTrue(workspace.currentSelection === ordinarySelection)
         XCTAssertTrue(pdfView.currentSelection === ordinarySelection)
+    }
+
+    @MainActor
+    func testRepeatedSearchRenderingPreservesCommittedNativeDragInNormalAndComparisonViews() async throws {
+        for context in [PDFViewerViewportContext.normal, .comparison] {
+            let fixture = try makeTextPDF(pages: ["prefix needle middle needle suffix"])
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let workspace = PDFWorkspaceState()
+            XCTAssertTrue(workspace.open(url: fixture.url))
+            let view = InteractivePDFView(frame: NSRect(x: 0, y: 0, width: 420, height: 560))
+            view.viewportContext = context
+            view.document = workspace.document
+            view.configure(with: workspace)
+            let coordinator = PDFKitViewer.Coordinator(state: workspace, viewportContext: context)
+            coordinator.attach(to: view)
+            defer { coordinator.detach() }
+            workspace.searchText = "needle"
+            workspace.performSearch()
+            await waitForSearchToFinish(workspace)
+            let hit = try XCTUnwrap(workspace.activeSearchSelection)
+            coordinator.applySearchSelection(hit, to: view)
+
+            let page = try XCTUnwrap(workspace.document?.page(at: 0))
+            let manual = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: page.numberOfCharacters)))
+            view.beginNativeSelectionPreview()
+            view.setCurrentSelection(manual, animate: false)
+            NotificationCenter.default.post(name: .PDFViewSelectionChanged, object: view)
+            view.finishNativeSelectionPreview()
+            XCTAssertTrue(workspace.currentSelection === manual)
+            for _ in 0..<4 {
+                // This is the search boundary called by updateNSView for tool,
+                // locale and toolbar changes while the query remains active.
+                coordinator.applySearchSelection(hit, to: view)
+                XCTAssertTrue(workspace.currentSelection === manual)
+                XCTAssertTrue(view.currentSelection === manual)
+            }
+            XCTAssertTrue(workspace.activeSearchSelection === hit)
+            workspace.clearSearch()
+            coordinator.applySearchSelection(nil, to: view)
+            XCTAssertTrue(workspace.currentSelection === manual)
+            XCTAssertTrue(view.currentSelection === manual)
+            XCTAssertFalse(workspace.isDirty)
+        }
+    }
+
+    @MainActor
+    func testNormalAndComparisonRemountDoNotReplayOldSearchOverManualSelection() async throws {
+        for context in [PDFViewerViewportContext.normal, .comparison] {
+            let fixture = try makeTextPDF(pages: ["prefix needle middle needle suffix"])
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let workspace = PDFWorkspaceState()
+            XCTAssertTrue(workspace.open(url: fixture.url))
+            workspace.searchText = "needle"
+            workspace.performSearch()
+            await waitForSearchToFinish(workspace)
+            let hit = try XCTUnwrap(workspace.activeSearchSelection)
+            let view = InteractivePDFView(frame: NSRect(x: 0, y: 0, width: 420, height: 560))
+            view.viewportContext = context
+            view.document = workspace.document
+            view.configure(with: workspace)
+            let first = PDFKitViewer.Coordinator(state: workspace, viewportContext: context)
+            first.attach(to: view)
+            first.applySearchSelection(hit, to: view)
+            let page = try XCTUnwrap(workspace.document?.page(at: 0))
+            let manual = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 6)))
+            view.setCurrentSelection(manual, animate: false)
+            NotificationCenter.default.post(name: .PDFViewSelectionChanged, object: view)
+            XCTAssertTrue(workspace.currentSelection === manual)
+            first.detach()
+
+            let remounted = PDFKitViewer.Coordinator(state: workspace, viewportContext: context)
+            remounted.attach(to: view)
+            defer { remounted.detach() }
+            XCTAssertTrue(workspace.currentSelection === manual,
+                          "Combine's initial replay is presentation state, not a new search command.")
+            remounted.applySearchSelection(hit, to: view)
+            XCTAssertTrue(workspace.currentSelection === manual)
+            XCTAssertTrue(view.currentSelection === manual)
+            XCTAssertFalse(workspace.isDirty)
+        }
+    }
+
+    @MainActor
+    func testExplicitSameAndDifferentSearchActivationsReclaimNativeSelectionAfterDrag() async throws {
+        let fixture = try makeTextPDF(pages: ["prefix needle middle needle suffix"])
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        let view = InteractivePDFView(frame: NSRect(x: 0, y: 0, width: 420, height: 560))
+        view.document = workspace.document
+        view.configure(with: workspace)
+        let coordinator = PDFKitViewer.Coordinator(state: workspace)
+        coordinator.attach(to: view)
+        defer { coordinator.detach() }
+        workspace.searchText = "needle"
+        workspace.performSearch()
+        await waitForSearchToFinish(workspace)
+        let first = try XCTUnwrap(workspace.activeSearchSelection)
+        coordinator.applySearchSelection(first, to: view)
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        let manual = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 6)))
+
+        // A real publisher emission must reassert even the identical hit object.
+        view.setCurrentSelection(manual, animate: false)
+        NotificationCenter.default.post(name: .PDFViewSelectionChanged, object: view)
+        workspace.activeSearchSelection = first
+        coordinator.applySearchSelection(first, to: view)
+        XCTAssertTrue(workspace.currentSelection === first)
+        XCTAssertTrue(view.currentSelection === first)
+
+        // Clicking the same navigator row builds a fresh exact PDFSelection.
+        view.setCurrentSelection(manual, animate: false)
+        NotificationCenter.default.post(name: .PDFViewSelectionChanged, object: view)
+        workspace.selectSearchResult(at: 0)
+        let sameOccurrence = try XCTUnwrap(workspace.activeSearchSelection)
+        coordinator.applySearchSelection(sameOccurrence, to: view)
+        XCTAssertTrue(workspace.currentSelection === sameOccurrence)
+        XCTAssertTrue(view.currentSelection === sameOccurrence)
+        XCTAssertEqual(sameOccurrence.bounds(for: page), first.bounds(for: page))
+
+        view.setCurrentSelection(manual, animate: false)
+        NotificationCenter.default.post(name: .PDFViewSelectionChanged, object: view)
+        workspace.showNextSearchResult()
+        let second = try XCTUnwrap(workspace.activeSearchSelection)
+        coordinator.applySearchSelection(second, to: view)
+        XCTAssertTrue(workspace.currentSelection === second)
+        XCTAssertTrue(view.currentSelection === second)
+        XCTAssertNotEqual(second.bounds(for: page), first.bounds(for: page))
+        workspace.clearSearch()
+        coordinator.applySearchSelection(nil, to: view)
+        XCTAssertNil(workspace.currentSelection)
+        XCTAssertNil(view.currentSelection)
+        XCTAssertFalse(workspace.isDirty)
+    }
+
+    @MainActor
+    func testSearchRenderingDoesNotReviveSelectionClearedForAnEditor() async throws {
+        let fixture = try makeTextPDF(pages: ["prefix needle suffix"])
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.searchText = "needle"
+        workspace.performSearch()
+        await waitForSearchToFinish(workspace)
+        let hit = try XCTUnwrap(workspace.activeSearchSelection)
+        workspace.currentSelection = nil
+        let view = InteractivePDFView(frame: NSRect(x: 0, y: 0, width: 420, height: 560))
+        view.document = workspace.document
+        let coordinator = PDFKitViewer.Coordinator(state: workspace)
+        coordinator.attach(to: view)
+        defer { coordinator.detach() }
+        coordinator.applySearchSelection(hit, to: view)
+        XCTAssertNil(workspace.currentSelection)
+        XCTAssertNil(view.currentSelection)
+        XCTAssertTrue(workspace.activeSearchSelection === hit)
     }
 
     @MainActor
@@ -453,6 +621,286 @@ final class PDFDocumentSearchTests: XCTestCase {
         XCTAssertEqual(overflowWorkspace.searchNavigatorResults.count, 4)
         XCTAssertEqual(overflowWorkspace.searchProgress.completedPages, 2)
         XCTAssertTrue(overflowWorkspace.searchResultsWereTruncated)
+    }
+
+    func testSearchPageOrderStartsAtAnchorAndWrapsWithoutDuplicates() {
+        XCTAssertEqual(Array(PDFSearchPageOrder(pageCount: 5, startingAt: 3)), [3, 4, 0, 1, 2])
+        XCTAssertEqual(Array(PDFSearchPageOrder(pageCount: 3, startingAt: 99)), [2, 0, 1])
+        XCTAssertEqual(Array(PDFSearchPageOrder(pageCount: 3, startingAt: -10)), [0, 1, 2])
+        XCTAssertTrue(Array(PDFSearchPageOrder(pageCount: 0, startingAt: 0)).isEmpty)
+        XCTAssertTrue(Array(PDFSearchPageOrder(pageCount: Int.min, startingAt: 0)).isEmpty)
+    }
+
+    @MainActor
+    func testSearchCapturesViewedPageAndKeepsAnchorWhileNavigating() async throws {
+        let fixture = try makeTextPDF(pages: ["needle zero", "needle one", "needle two", "needle three"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.setCurrentPage(2)
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        XCTAssertEqual(workspace.searchAnchorPageIndex, 2)
+        // A manual page change while the async scan starts cannot change its order.
+        workspace.setCurrentPage(0)
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.pageIndex), [2, 3, 0, 1])
+        XCTAssertEqual(workspace.currentPageIndex, 2)
+        XCTAssertEqual(workspace.searchProgress.completedPages, 4)
+        XCTAssertEqual(workspace.searchAnchorPageIndex, 2)
+        workspace.submitSearch()
+        XCTAssertEqual(workspace.currentPageIndex, 3)
+        workspace.submitSearch(backwards: true)
+        XCTAssertEqual(workspace.currentPageIndex, 2)
+        workspace.submitSearch(backwards: true)
+        XCTAssertEqual(workspace.currentPageIndex, 1)
+        XCTAssertFalse(workspace.isSearching)
+    }
+
+    @MainActor
+    func testSubmittingCancelledQueryWithPartialResultsSearchesThroughLastPage() async throws {
+        let fixture = try makeTextPDF(pages: ["needle first", "middle", "needle last"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+
+        let firstBatch = expectation(description: "First page search result published")
+        let observation = workspace.$searchProgress.first { $0.completedPages == 1 }.sink { _ in
+            firstBatch.fulfill()
+        }
+        defer { observation.cancel() }
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        await fulfillment(of: [firstBatch], timeout: 2)
+        workspace.prepareForDeactivation()
+        XCTAssertEqual(workspace.searchProgress.phase, .cancelled)
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.pageIndex), [0])
+
+        workspace.submitSearch()
+        XCTAssertTrue(workspace.isSearching)
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchProgress.phase, .completed)
+        XCTAssertEqual(workspace.searchProgress.completedPages, 3)
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.pageIndex), [0, 2])
+        XCTAssertFalse(workspace.isDirty)
+    }
+
+    @MainActor
+    func testEnterBeforeFirstPublicationQueuesNextWithoutRestartingSearch() async throws {
+        let fixture = try makeTextPDF(pages: ["needle zero", "needle one", "needle two"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.setCurrentPage(1)
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        XCTAssertTrue(workspace.isSearching)
+        XCTAssertTrue(workspace.searchNavigatorResults.isEmpty)
+        workspace.submitSearch()
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.pageIndex), [1, 2, 0])
+        XCTAssertEqual(workspace.searchResultIndex, 1)
+        XCTAssertEqual(workspace.currentPageIndex, 2)
+        XCTAssertEqual(workspace.searchAnchorPageIndex, 1)
+    }
+
+    @MainActor
+    func testNextAtPartialEndWaitsForActualNextAndRowsCanOverridePendingNavigation() async throws {
+        let fixture = try makeTextPDF(pages: ["needle zero", "needle one", "needle two"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        var configuration = PDFSearchEngine.Configuration.standard
+        configuration.publicationPageBatch = 99
+        let workspace = PDFWorkspaceState(searchEngineConfiguration: configuration)
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        var requestedNext = false
+        var firstID: UUID?
+        let observation = workspace.$searchProgress.sink { progress in
+            guard progress.completedPages == 1, !requestedNext,
+                  workspace.searchNavigatorResults.count == 1 else { return }
+            requestedNext = true
+            firstID = workspace.searchNavigatorResults.first?.id
+            XCTAssertTrue(workspace.isSearching)
+            workspace.submitSearch()
+            // There is only one published hit. Next must not wrap back to it
+            // or restart the scan while the next page is still outstanding.
+            XCTAssertEqual(workspace.searchResultIndex, 0)
+        }
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        await waitForSearchToFinish(workspace)
+        withExtendedLifetime(observation) {}
+        XCTAssertTrue(requestedNext, "The anchor page must publish before the rest of a large batch.")
+        XCTAssertEqual(workspace.searchNavigatorResults.first?.id, firstID)
+        XCTAssertEqual(workspace.searchResultIndex, 1)
+        XCTAssertEqual(workspace.currentPageIndex, 1)
+
+        // A second run queues a backward wrap before anything is published.
+        // A concrete row click during publication supersedes that request.
+        workspace.clearSearch()
+        workspace.setCurrentPage(0)
+        var clicked = false
+        let clickObservation = workspace.$searchProgress.sink { progress in
+            guard progress.completedPages == 1, !clicked,
+                  let result = workspace.searchNavigatorResults.first else { return }
+            clicked = true
+            workspace.selectSearchResult(id: result.id)
+        }
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        workspace.submitSearch(backwards: true)
+        await waitForSearchToFinish(workspace)
+        withExtendedLifetime(clickObservation) {}
+        XCTAssertTrue(clicked)
+        XCTAssertEqual(workspace.searchResultIndex, 0)
+        XCTAssertEqual(workspace.currentPageIndex, 0)
+    }
+
+    @MainActor
+    func testPendingBackwardNavigationResolvesAtCompletionAndNewQueryResetsAnchor() async throws {
+        let fixture = try makeTextPDF(pages: ["needle zero other", "needle one other", "needle two other"])
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.setCurrentPage(1)
+        workspace.searchText = "needle"
+        workspace.submitSearch()
+        workspace.submitSearch(backwards: true)
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchResultIndex, 2)
+        XCTAssertEqual(workspace.currentPageIndex, 0)
+        workspace.setCurrentPage(2)
+        workspace.searchText = "other"
+        workspace.submitSearch()
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchAnchorPageIndex, 2)
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.pageIndex), [2, 0, 1])
+        XCTAssertEqual(workspace.searchResultIndex, 0)
+    }
+
+
+    @MainActor
+    func testLocalizationPreservesCompletedResultsNavigationAndSelectionOwnership() async throws {
+        let previous = UserDefaults.standard.string(forKey: AppPreferences.languageDefaultsKey)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: AppPreferences.languageDefaultsKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppPreferences.languageDefaultsKey) }
+        }
+        UserDefaults.standard.set(AppLanguage.english.rawValue, forKey: AppPreferences.languageDefaultsKey)
+        let fixture = try makeTextPDF(pages: ["needle one needle two needle three", "needle four needle five"])
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState()
+        defer { workspace.closeDiscardingChanges() }
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.searchText = "needle"; workspace.performSearch()
+        await waitForSearchToFinish(workspace)
+        XCTAssertEqual(workspace.searchNavigatorResults.count, 5)
+        workspace.selectSearchResult(at: 3)
+        let ids = workspace.searchNavigatorResults.map(\.id)
+        let progress = workspace.searchProgress, document = workspace.document
+        let selection = try XCTUnwrap(workspace.activeSearchSelection)
+        let revision = workspace.revision
+        // The editor may own selection now. Localization must not revive the
+        // search-owned selection or start scanning this unchanged PDF again.
+        workspace.currentSelection = nil
+        var completionEmissions = 0
+        let observation = workspace.$searchCompletedQuery.sink { if $0 == "needle" { completionEmissions += 1 } }
+        defer { observation.cancel() }
+        UserDefaults.standard.set(AppLanguage.japanese.rawValue, forKey: AppPreferences.languageDefaultsKey)
+        workspace.refreshLocalization()
+        for _ in 0..<12 { await Task.yield() }
+        XCTAssertEqual(workspace.searchNavigatorResults.map(\.id), ids)
+        XCTAssertEqual(workspace.searchProgress, progress)
+        XCTAssertEqual(workspace.searchCompletedQuery, "needle")
+        XCTAssertTrue(workspace.searchHasCompletedCurrentQuery)
+        XCTAssertEqual(workspace.searchResultIndex, 3)
+        XCTAssertEqual(workspace.currentPageIndex, 1)
+        XCTAssertTrue(workspace.activeSearchSelection === selection)
+        XCTAssertNil(workspace.currentSelection)
+        XCTAssertTrue(workspace.document === document)
+        XCTAssertNotEqual(workspace.revision, revision)
+        XCTAssertFalse(workspace.isSearchBusy)
+        XCTAssertEqual(completionEmissions, 1)
+        XCTAssertEqual(workspace.statusMessage, L10n.format("status.search_results", 5))
+        XCTAssertFalse(workspace.isDirty); XCTAssertFalse(workspace.canUndo)
+        workspace.showNextSearchResult()
+        XCTAssertEqual(workspace.searchResultIndex, 4)
+        XCTAssertEqual(workspace.activeSearchSelection?.string?.lowercased(), "needle")
+    }
+
+    @MainActor
+    func testLocalizationPreservesCompletedNoMatchesAndRelocalizesSummary() async throws {
+        let previous = UserDefaults.standard.string(forKey: AppPreferences.languageDefaultsKey)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: AppPreferences.languageDefaultsKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppPreferences.languageDefaultsKey) }
+        }
+        let fixture = try makeTextPDF(pages: ["searchable first page", "searchable second page"])
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState(); defer { workspace.closeDiscardingChanges() }
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.searchText = "absent"; workspace.performSearch()
+        await waitForSearchToFinish(workspace)
+        XCTAssertTrue(workspace.searchHasCompletedCurrentQuery)
+        let progress = workspace.searchProgress
+        UserDefaults.standard.set(AppLanguage.japanese.rawValue, forKey: AppPreferences.languageDefaultsKey)
+        workspace.refreshLocalization()
+        XCTAssertEqual(workspace.searchText, "absent")
+        XCTAssertEqual(workspace.searchCompletedQuery, "absent")
+        XCTAssertTrue(workspace.searchHasCompletedCurrentQuery)
+        XCTAssertEqual(workspace.searchProgress, progress)
+        XCTAssertTrue(workspace.searchNavigatorResults.isEmpty)
+        XCTAssertFalse(workspace.searchRequiresOCR)
+        XCTAssertEqual(workspace.statusMessage, L10n.string("status.search_no_results"))
+        XCTAssertFalse(workspace.isSearchBusy)
+    }
+
+    @MainActor
+    func testLocalizationPreservesCompletedOCRNeedWithoutInventingMatches() async throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("scan-localization.pdf"), document = PDFDocument()
+        for index in 0..<2 {
+            let image = NSImage(size: CGSize(width: 240, height: 320), flipped: false) { rect in
+                (index == 0 ? NSColor.white : NSColor.lightGray).setFill(); rect.fill(); return true
+            }
+            document.insert(try XCTUnwrap(PDFPage(image: image)), at: index)
+        }
+        XCTAssertTrue(document.write(to: url))
+        let workspace = PDFWorkspaceState(); defer { workspace.closeDiscardingChanges() }
+        XCTAssertTrue(workspace.open(url: url))
+        workspace.searchText = "unavailable"; workspace.performSearch()
+        await waitForSearchToFinish(workspace)
+        XCTAssertTrue(workspace.searchRequiresOCR)
+        let progress = workspace.searchProgress
+        workspace.refreshLocalization()
+        XCTAssertTrue(workspace.searchHasCompletedCurrentQuery)
+        XCTAssertEqual(workspace.searchCompletedQuery, "unavailable")
+        XCTAssertEqual(workspace.searchProgress, progress)
+        XCTAssertTrue(workspace.searchNavigatorResults.isEmpty)
+        XCTAssertEqual(workspace.searchUnsearchablePageCount, 2)
+        XCTAssertTrue(workspace.searchRequiresOCR)
+        XCTAssertNil(workspace.activeSearchSelection)
+        XCTAssertFalse(workspace.isSearchBusy)
+    }
+
+    @MainActor
+    func testLocalizationDoesNotPromoteCancelledSearchToCompletedResults() async throws {
+        let fixture = try makeTextPDF(pages: ["needle first", "needle second"])
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = PDFWorkspaceState(); defer { workspace.closeDiscardingChanges() }
+        XCTAssertTrue(workspace.open(url: fixture.url))
+        workspace.searchText = "needle"; workspace.performSearch(); workspace.cancelSearch()
+        XCTAssertEqual(workspace.searchProgress.phase, .cancelled)
+        workspace.refreshLocalization()
+        try? await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertEqual(workspace.searchText, "needle")
+        XCTAssertNil(workspace.searchCompletedQuery)
+        XCTAssertFalse(workspace.searchHasCompletedCurrentQuery)
+        XCTAssertTrue(workspace.searchNavigatorResults.isEmpty)
+        XCTAssertEqual(workspace.searchProgress.phase, .idle)
+        XCTAssertFalse(workspace.isSearchBusy); XCTAssertFalse(workspace.searchRequiresOCR)
+        XCTAssertEqual(workspace.statusMessage, L10n.format("status.opened_pages", 2))
     }
 
     @MainActor

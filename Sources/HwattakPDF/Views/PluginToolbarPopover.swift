@@ -7,14 +7,22 @@ import SwiftUI
 struct PluginToolbarPopover: View {
     @ObservedObject var manager: PluginManager
     @ObservedObject var workspace: PDFWorkspaceState
+    @ObservedObject private var runtimeRegistry = PluginRuntimeCommandRegistry.shared
+    @Environment(\.pluginCommandScope) private var commandScope
+    @Environment(\.dismiss) private var dismiss
     let runAction: (PluginActionManifest, InstalledPlugin) -> Void
     let managePlugins: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var query = ""
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
+    @EmberTheme private var theme
+
+    private var runtimeCommands: [PluginScriptCommand] {
+        runtimeRegistry.commands(in: commandScope).filter {
+            query.isEmpty || $0.title.localizedStandardContains(query)
+                || ($0.ownerName?.localizedStandardContains(query) ?? false)
+        }
     }
 
     private struct PluginSection: Identifiable {
@@ -43,14 +51,14 @@ struct PluginToolbarPopover: View {
             Label(L10n.string("menu.plugins"), systemImage: "puzzlepiece.extension")
                 .font(.headline)
 
-            if manager.enabledActionCount > 0 {
+            if manager.enabledActionCount > 0 || !runtimeRegistry.commands(in: commandScope).isEmpty {
                 TextField(L10n.string("plugins.palette.search"), text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("plugin-toolbar-search")
                     .onSubmit(runFirstAvailableAction)
             }
 
-            if sections.isEmpty {
+            if sections.isEmpty && runtimeCommands.isEmpty {
                 Text(L10n.string(
                     manager.enabledActionCount == 0
                         ? "plugins.menu.no_actions" : "plugins.search.empty.title"
@@ -60,6 +68,20 @@ struct PluginToolbarPopover: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        ForEach(runtimeCommands) { command in
+                            Button {
+                                runtimeRegistry.run(command.id, scope: commandScope)
+                                dismiss()
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(command.title).font(.system(size: 13, weight: .medium))
+                                    if let name = command.ownerName { Text(name).font(.caption).foregroundStyle(theme.secondaryText) }
+                                }.padding(9).frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(theme.card, in: RoundedRectangle(cornerRadius: 7))
+                                    .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .accessibilityIdentifier("plugin-runtime-command-\(command.id)")
+                        }
                         ForEach(sections) { section in
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(BundledPluginPresentation.displayName(for: section.plugin.manifest))
@@ -102,6 +124,7 @@ struct PluginToolbarPopover: View {
         let title = BundledPluginPresentation.actionTitle(action, in: plugin.manifest)
         let detail = BundledPluginPresentation.actionDescription(action, in: plugin.manifest)
         let isAvailable = PluginCommandAvailability.isAvailable(action, workspace: workspace)
+            && manager.isAuthorized(pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest, actionID: action.id)
         return Button {
             runAction(action, plugin)
         } label: {
@@ -137,15 +160,26 @@ struct PluginToolbarPopover: View {
         for section in sections {
             if let action = section.actions.first(where: {
                 PluginCommandAvailability.isAvailable($0, workspace: workspace)
+                    && manager.isAuthorized(pluginIdentifier: section.plugin.id, manifestDigest: section.plugin.manifestDigest, actionID: $0.id)
             }) {
                 runAction(action, section.plugin)
                 return
             }
         }
+        if let command = runtimeCommands.first {
+            runtimeRegistry.run(command.id, scope: commandScope)
+            dismiss()
+        }
     }
 
     private func systemImage(for output: PluginActionOutput) -> String {
         switch output {
+        case .scriptPanel: "puzzlepiece.extension"
+        case .appearancePanel: "paintpalette"
+        case .notesPanel: "note.text"
+        case .pageClipPanel: "crop"
+        case .relatedDocumentsPanel: "doc.text.magnifyingglass"
+        case .hoverTranslationPanel: "character.cursor.ibeam"
         case .showText: "doc.plaintext"
         case .copyText: "clipboard"
         case .openURL: "arrow.up.right.square"

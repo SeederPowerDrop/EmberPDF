@@ -11,7 +11,7 @@ enum HelpTutorialContent {
     static let sceneID = "help-tutorial"
 
     static var windowTitle: String {
-        L10n.string("help.title", defaultValue: "HwattakPDF 사용법")
+        L10n.string("help.title", defaultValue: "EmberPDF 사용법")
     }
 
     static var topics: [HelpTutorialTopic] {
@@ -110,7 +110,7 @@ enum HelpTutorialContent {
                     entry(
                         "plugin_install",
                         titleDefault: "설치와 관리",
-                        detailDefault: "메뉴 막대의 플러그인 > 플러그인 관리…를 여세요. 앱에 포함된 번역·웹 브라우저는 ‘HwattakPDF 기본 플러그인’에서 검토 및 설치할 수 있고, v1 .hwattakplugin 폴더도 직접 선택할 수 있습니다. 설치 전 이름, 제작자, 버전, 작업별 외부 연결과 요청 권한을 확인하세요.",
+                        detailDefault: "메뉴 막대의 플러그인 > 플러그인 관리…를 여세요. 앱에 포함된 번역·웹 브라우저는 ‘EmberPDF 기본 플러그인’에서 검토 및 설치할 수 있고, v1 .hwattakplugin 폴더도 직접 선택할 수 있습니다. 설치 전 이름, 제작자, 버전, 작업별 외부 연결과 요청 권한을 확인하세요.",
                         icon: "square.and.arrow.down"
                     ),
                     entry(
@@ -347,7 +347,7 @@ struct HelpTutorialView: View {
     @State private var selectedTopicID = "start"
     @State private var query = ""
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var visibleTopics: [HelpTutorialTopic] {
         HelpTutorialContent.topics(matching: query)
     }

@@ -33,6 +33,13 @@ enum BoundedImageLoadingError: LocalizedError {
 /// `NSImage(contentsOf:)` to materialize an arbitrary pixel buffer on the main
 /// actor before the app can inspect it.
 struct BoundedImageLoader {
+    struct InsertionImage {
+        let image: NSImage
+        let originalJPEG: PDFOriginalJPEG?
+        let sourcePixelSize: CGSize
+        let sourceFileBytes: Int
+    }
+
     static let maximumFileBytes = 64 * 1_024 * 1_024
     static let maximumSourcePixelCount: UInt64 = 120_000_000
 
@@ -45,6 +52,14 @@ struct BoundedImageLoader {
     }
 
     func load(at url: URL) throws -> NSImage {
+        try load(at: url, preservingJPEG: false).image
+    }
+
+    func loadForInsertion(at url: URL, rasterBudget: PDFRasterBudget? = nil) throws -> InsertionImage {
+        try load(at: url, preservingJPEG: true, rasterBudget: rasterBudget)
+    }
+
+    private func load(at url: URL, preservingJPEG: Bool, rasterBudget: PDFRasterBudget? = nil) throws -> InsertionImage {
         let values: URLResourceValues
         do {
             values = try url.resourceValues(
@@ -65,8 +80,26 @@ struct BoundedImageLoader {
         }
 
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        let sourceData: Data?
+        let sourceReference: CGImageSource?
+        if preservingJPEG {
+            // Both the preview and original compression must describe the same
+            // immutable file version. Bound this read even if the file grows
+            // between the metadata check and opening it.
+            let file = try FileHandle(forReadingFrom: url)
+            defer { try? file.close() }
+            let data = try file.read(upToCount: Self.maximumFileBytes + 1) ?? Data()
+            guard !data.isEmpty, data.count <= Self.maximumFileBytes else {
+                throw BoundedImageLoadingError.sourceTooLarge
+            }
+            sourceData = data
+            sourceReference = CGImageSourceCreateWithData(data as CFData, sourceOptions)
+        } else {
+            sourceData = nil
+            sourceReference = CGImageSourceCreateWithURL(url as CFURL, sourceOptions)
+        }
         guard
-            let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions),
+            let source = sourceReference,
             CGImageSourceGetCount(source) > 0,
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
                 as? [CFString: Any],
@@ -88,9 +121,10 @@ struct BoundedImageLoader {
             throw BoundedImageLoadingError.sourceTooLarge
         }
 
-        let budget = efficientRenderingEnabled
+        let defaultBudget = efficientRenderingEnabled
             ? PDFRasterBudget(maximumDimension: 3_200, maximumPixelCount: 6_000_000)
             : PDFRasterBudget(maximumDimension: 4_096, maximumPixelCount: 12_000_000)
+        let budget = rasterBudget ?? defaultBudget
         let target = budget.boundedPixelSize(
             logicalSize: CGSize(width: CGFloat(sourceWidth), height: CGFloat(sourceHeight)),
             scale: 1
@@ -105,9 +139,27 @@ struct BoundedImageLoader {
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
             throw BoundedImageLoadingError.decodeFailed
         }
-        return NSImage(
+        let preview = NSImage(
             cgImage: image,
             size: CGSize(width: image.width, height: image.height)
         )
+        var originalJPEG: PDFOriginalJPEG?
+        if let sourceData, CGImageSourceGetType(source) as String? == "public.jpeg",
+           CGFloat(sourceWidth) <= target.width, CGFloat(sourceHeight) <= target.height {
+            let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+            if let jpeg = PDFOriginalJPEG(data: sourceData, orientation: orientation),
+               jpeg.image.width == Int(sourceWidth), jpeg.image.height == Int(sourceHeight),
+               let reference = CGImageSourceCreateImageAtIndex(source, 0, sourceOptions),
+               let referenceSpace = reference.colorSpace, let storedSpace = jpeg.image.colorSpace,
+               CFEqual(referenceSpace, storedSpace) {
+                // Some files describe color through EXIF rather than ICC.
+                // If removing private metadata changes that interpretation,
+                // use the already color-managed preview instead.
+                originalJPEG = jpeg
+            }
+        }
+        return InsertionImage(image: preview, originalJPEG: originalJPEG,
+            sourcePixelSize: CGSize(width: CGFloat(sourceWidth), height: CGFloat(sourceHeight)),
+            sourceFileBytes: sourceData?.count ?? fileSize)
     }
 }

@@ -300,7 +300,16 @@ enum PDFOCRSnapshotWriter {
                 ]
             )
         } else {
-            wrote = document.write(to: url)
+            // The SDK serializer can clone Text/Popup targets outside Annots.
+            // Use the same verified graph writer as ordinary Save before the
+            // OCR worker reopens this process-local snapshot.
+            try Task.checkCancellation()
+            try PDFSaveCancellation.checkCurrent()
+            try AtomicPDFWriter.write(
+                document, to: url, allowDirectOverwriteFallback: false,
+                checkCancellation: { try Task.checkCancellation() }
+            )
+            wrote = true
         }
 
         guard wrote else {

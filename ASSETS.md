@@ -1,4 +1,4 @@
-# HwattakPDF 자산 라이선스와 출처
+# EmberPDF 자산 라이선스와 출처
 
 Copyright 2026 SeederPowerDrop
 
@@ -11,34 +11,48 @@ MPL-2.0으로 제공하는 데 필요한 권리를 보유하고 있음을 확인
 
 OpenAI ImageGen으로 제작한 자산은 프로젝트 소유자의 지시에 따라 생성되었고,
 생성 또는 편집 입력으로 제3자 이미지·로고·기타 시각 자산을 제공하지 않았음을
-같은 날 확인했습니다. ImageGen 사용 사실은 OpenAI가 HwattakPDF를 후원하거나
+같은 날 확인했습니다. ImageGen 사용 사실은 OpenAI가 EmberPDF(이전 이름 HwattakPDF)를 후원하거나
 공식적으로 보증한다는 뜻이 아닙니다.
+
+앱의 현재 이름은 EmberPDF입니다. 제작 당시 이름·날짜와 체크섬은 출처 기록으로 유지하고, 자산은 아래 표의 현재 경로에 보존합니다. 내용이 같은 이전 파일명은 별도 표에 기록합니다. 2026-10-04에 사용자 요청으로 새 잉걸불 앱 아이콘을 ImageGen 내장 도구로 제작했습니다. 첫 생성에는 텍스트 프롬프트를, 이후 편집에는 이 프로젝트에서 생성한 수정안을 사용했으며 외부 시각 자산은 입력하지 않았습니다. 사용자가 승인한 최종 v4를 현재 기본 아이콘으로 사용합니다. 앞의 2026-08-31 확인은 당시 자산에 관한 기록이며, 첫 제작 기록은 [AppIcon-Ember.prompt.md](Documentation/AppIcon-Ember.prompt.md), 최종 편집·적용 기록은 [AppIcon-Ember-v4.prompt.md](Documentation/AppIcon-Ember-v4.prompt.md)에 보존합니다.
 
 ## 앱 번들에 사용하는 자산
 
 | 저장소 파일 | 용도와 출처 | SHA-256 |
 | --- | --- | --- |
+| `Resources/AppIcon-Ember.png` | EmberPDF 기본 앱 아이콘 및 선택지. OpenAI ImageGen v4 승인본. 선명한 Ember 제목과 흐릿한 본문을 담은 온전한 종이를 아래 잉걸불 무리가 따뜻하게 비춤 | `77a24bf885822d5b5c94aa1d04a399a99d81a9bcff05d4f3c8e7bbbf10997212` |
 | `Resources/AppIcon-StackAndSelect.png` | 선택 가능한 앱 아이콘. ImageGen 탐색안 B와 같은 파일 | `c94cd6e1d36c7a7c30e4c1a9366c0255bf0e6ab5a6b3c014c40b7e319c2e0cc7` |
 | `Resources/AppIcon-PrecisionMarkup.png` | 선택 가능한 앱 아이콘. ImageGen 탐색안 A와 같은 파일 | `c39919beac3ce65cc1664ff982715cb33dc42e167f711c4bb9158e72b566210c` |
-| `Resources/AppIcon-FoldWorkspace.png` | 기본 앱 아이콘. ImageGen 탐색안 C와 같은 파일 | `e9db64c1a79bad8aab7e80311d9c324644588add3c6a33760085f2cf9661d324` |
+| `Resources/AppIcon-FoldWorkspace.png` | 선택 가능한 이전 기본 아이콘. ImageGen 탐색안 C와 같은 파일 | `e9db64c1a79bad8aab7e80311d9c324644588add3c6a33760085f2cf9661d324` |
 | `Resources/HwattakPDFDocument.icns` | PDF 연결 파일 아이콘. `scripts/generate_document_icon.swift`의 프로젝트 내 벡터 도형으로 제작한 16–1024px 다중 해상도 자산 | `d05d2bb79878a3c58bc48551c3870ad8d90a4bf4d318724ae9a74205d88b9a45` |
 | `Resources/HwattakPDFDocument.png` | PDF 연결 파일 아이콘의 1024px 미리보기. 같은 벡터 생성기로 제작; 앱 번들에는 ICNS만 포함 | `5c92bff76e75a4c84a32472c125c6f7052a984d4ea8ae05ee5feabdfafededc6` |
 | `Resources/AboutAuthor-SeederPowerDrop-UserProvided.jpg` | 프로젝트 소유자가 제공한 정보 화면 그림 | `a7bae1f9d82833339173d5c2e17ca490b8acd34f7a1c946d4d028183e90470ae` |
 
 배포 스크립트가 만드는 `AppIcon.png`는
-`Resources/AppIcon-FoldWorkspace.png`의 번들용 복사본이며 별도의 원본 자산이
-아닙니다. 소개 그림의 개별 기록은
+`Resources/AppIcon-Ember.png`의 번들용 복사본이며 별도의 원본 자산이
+아닙니다. Finder와 Dock에 등록하는 `AppIcon.icns`도 같은 원본에서 16–1024px의 표준·Retina 표현 10개를 만들어 묶은 배포 파생 자산입니다. 소개 그림의 개별 기록은
 `Resources/AboutAuthor-UserProvided-NOTICE.txt`에도 보존합니다.
+
+## 같은 내용의 이전 파일명
+
+2026-10-17에 아래 네 파일이 현재 자산과 바이트 단위로 같음을 확인한 뒤 중복 복사본을 정리했습니다. 이미지 내용과 위 표의 SHA-256은 그대로 유지합니다. 이전 경로의 파일은 정리 전 마일스톤 태그 `milestone/2026-10-17-build78-before-cleanup`(커밋 `f6b8dc9`)에 보존합니다.
+
+| 제작 당시 파일명 | 현재 보존 경로 |
+| --- | --- |
+| `Resources/AppIcon-Concept-A-ReadMark.png` | `Resources/AppIcon-PrecisionMarkup.png` |
+| `Resources/AppIcon-Concept-B-PageStack.png` | `Resources/AppIcon-StackAndSelect.png` |
+| `Resources/AppIcon-Concept-C-SplitWorkspace.png` | `Resources/AppIcon-FoldWorkspace.png` |
+| `Resources/AppIcon-Ember-v4.png` | `Resources/AppIcon-Ember.png` |
 
 ## 탐색·제작 기록 자산
 
-아래 파일은 현재 앱 번들에는 들어가지 않는 디자인 탐색 또는 원본 기록입니다.
+아래 파일은 현재 앱 번들에 들어가지 않는 디자인 탐색 또는 원본 기록입니다. 승인된 v4는 위의 `Resources/AppIcon-Ember.png`로 보존하고 번들에 포함합니다.
 
 | 저장소 파일 | 출처 또는 관계 | SHA-256 |
 | --- | --- | --- |
-| `Resources/AppIcon-Concept-A-ReadMark.png` | OpenAI ImageGen; `AppIcon-PrecisionMarkup.png`와 동일 | `c39919beac3ce65cc1664ff982715cb33dc42e167f711c4bb9158e72b566210c` |
-| `Resources/AppIcon-Concept-B-PageStack.png` | OpenAI ImageGen; `AppIcon-StackAndSelect.png`와 동일 | `c94cd6e1d36c7a7c30e4c1a9366c0255bf0e6ab5a6b3c014c40b7e319c2e0cc7` |
-| `Resources/AppIcon-Concept-C-SplitWorkspace.png` | OpenAI ImageGen; `AppIcon-FoldWorkspace.png`와 동일 | `e9db64c1a79bad8aab7e80311d9c324644588add3c6a33760085f2cf9661d324` |
+| `Resources/AppIcon-Ember-v1.png` | 2026-10-04 OpenAI ImageGen 텍스트 생성 초안. 처음 기본 아이콘으로 사용했던 문서와 불씨의 결합 형태를 보존한 기록; 현재 미번들 | `9f4b544472ce4beb35a427c0fb0a2fc7d244eb809169a140aa7f762064c692f8` |
+| `Resources/AppIcon-Ember-v2.png` | 2026-10-04 OpenAI ImageGen 텍스트 생성 수정안. 양파처럼 보이는 곡선을 제거하고 문서와 주황빛 모서리로 표현; 미번들 | `3f4d5d9cc632ae0c17f272fd32161f1eec84a3af33de4e231b00f090d931451a` |
+| `Resources/AppIcon-Ember-v3.png` | 2026-10-04 OpenAI ImageGen으로 v2를 편집한 수정안. 잉걸불 위의 온전한 종이에 따뜻한 빛과 활자 조판을 표현; 미번들 | `fb92dff25331836ad5bb16695f4aedad83c4dd1276fc99161d1530e899096ad3` |
 | `Resources/AppIcon-Concept-D-TransformCursor.png` | OpenAI ImageGen 탐색안 | `910a0c54e88a508b8ee21a84307917ee05f0c168ee833868ce6e4e4f1f7b72c2` |
 | `Resources/AppIcon-Concept-E-LayerSplice.png` | OpenAI ImageGen 탐색안 | `b91861775993dd0aa77d6691fe673c1c83aec9fda3dccd00fa2e4770063ef1c3` |
 | `Resources/AppIcon-Concept-F-PrecisionMarker.png` | OpenAI ImageGen 탐색안 | `b82194c64bb73a3f36f5f74ad730d26ec352ee453355aa1f00fc0f09737a7134` |
@@ -69,7 +83,7 @@ OpenAI ImageGen으로 제작한 자산은 프로젝트 소유자의 지시에 �
 
 ## 0.9.0 화면 미리보기 (2026-09-30)
 
-새 시작 화면과 읽기 도구 배치를 확인하기 위해 실제 SwiftUI 뷰를 렌더링했습니다.
+EmberPDF 이름·문구·강조색 변경 전 시작 화면과 읽기 도구 배치를 확인하기 위해 실제 SwiftUI 뷰를 렌더링했습니다.
 최근 파일 목록은 가상의 예제 이름이며, 본문은 프로젝트에서 직접 그린 예제 문서입니다.
 읽기 화면의 본문은 해당 예제의 페이지 이미지로 표시했으므로 전체 PDFKit 실행 화면을
 촬영한 스크린샷과는 구분합니다. 개인 문서, 참고로 전달된 타사 앱 화면이나 외부 출판물은
@@ -84,7 +98,7 @@ OpenAI ImageGen으로 제작한 자산은 프로젝트 소유자의 지시에 �
 
 ## 상표와 공식성
 
-MPL-2.0은 위 자산에 적용되지만, 그 사실만으로 HwattakPDF의 상표를 사용할
+MPL-2.0은 위 자산에 적용되지만, 그 사실만으로 EmberPDF 및 이전 HwattakPDF의 상표를 사용할
 권리나 수정본이 공식 배포본이라는 인상을 줄 권리가 생기지는 않습니다. 정확한
 출처 표기와 혼동 방지 원칙은 [TRADEMARKS.md](TRADEMARKS.md)를 참고하세요.
 

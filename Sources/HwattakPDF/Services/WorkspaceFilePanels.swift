@@ -73,6 +73,23 @@ enum WorkspaceFilePanels {
         return panel.runModal() == .OK ? panel.urls : []
     }
 
+    /// A failed recent bookmark needs a fresh user grant. The saved path only
+    /// points the chooser at a useful location; it never authorizes an open.
+    static func chooseRecentPDF(named displayName: String, suggestedURL: URL?) -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.resolvesAliases = true
+        panel.title = L10n.string("recent.reconnect.title")
+        panel.prompt = L10n.string("action.open")
+        panel.message = L10n.format("recent.reconnect.panel", displayName)
+        panel.directoryURL = suggestedURL?.deletingLastPathComponent()
+        panel.nameFieldStringValue = displayName
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
     /// PDF 스탬프로 변환할 수 있는 대표적인 bitmap 형식만 허용한다.
     static func chooseImages(allowsMultipleSelection: Bool = false) -> [URL] {
         let panel = NSOpenPanel()

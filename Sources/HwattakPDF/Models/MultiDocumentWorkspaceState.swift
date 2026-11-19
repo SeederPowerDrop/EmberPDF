@@ -86,12 +86,14 @@ final class MultiDocumentWorkspaceState: ObservableObject {
     @Published private(set) var activeWorkspaceID: UUID {
         didSet { scheduleSessionPersistence() }
     }
+    @Published var recentDocumentRecovery: RecentDocumentRecoveryRequest?
 
     let recentDocumentsStore: RecentDocumentsStore?
     private let sessionStore: WorkspaceSessionStore?
     private let lazyDocumentInspector: any PDFLazyDocumentInspecting
     private var workspaceObservers: [UUID: AnyCancellable] = [:]
     private var recentDocumentsObserver: AnyCancellable?
+    private var pendingWorkspaceChangeNotification: Task<Void, Never>?
     private var isLoadingWorkspace = false
     private var sessionPersistenceTask: Task<Void, Never>?
     private var isSessionPersistenceSuspended = false
@@ -412,6 +414,25 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         tabs.filter { $0.workspace.hasOpenDocument }
     }
 
+    /// Browsing comparison candidates never activates or resumes their tabs.
+    /// Keep the current workspace first for initial selection, but allow a
+    /// comparison to include documents from every workspace in this window.
+    var comparisonDocuments: [ComparisonDocument] {
+        let orderedWorkspaces = workspaces.filter { $0.id == activeWorkspaceID }
+            + workspaces.filter { $0.id != activeWorkspaceID }
+        return orderedWorkspaces.flatMap { record in
+            record.tabs.enumerated().compactMap { index, session in
+                guard session.workspace.hasOpenDocument else { return nil }
+                return ComparisonDocument(
+                    id: session.id, title: session.displayName, workspace: session.workspace,
+                    workspaceID: record.id, workspaceTitle: record.title,
+                    tabIndex: index + 1,
+                    groupTitle: record.tabGroups.first { $0.tabIDs.contains(session.id) }?.title
+                )
+            }
+        }
+    }
+
     var recentDocuments: [RecentDocument] {
         recentDocumentsStore?.documents ?? []
     }
@@ -495,6 +516,36 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         return true
     }
 
+    /// A gallery can browse every named workspace without activating any
+    /// document. Commit its choice in one step so a lazy destination's former
+    /// active tab is not needlessly resumed before the requested tab.
+    @discardableResult
+    func selectGalleryDocument(
+        workspaceID: UUID,
+        tabID: UUID,
+        searchResult: PDFSearchResult? = nil
+    ) -> Bool {
+        guard
+            var destination = workspaces.first(where: { $0.id == workspaceID }),
+            let target = destination.tabs.first(where: { $0.id == tabID }),
+            target.workspace.hasOpenDocument
+        else { return false }
+
+        if workspaceID == activeWorkspaceID {
+            selectTab(tabID)
+        } else {
+            synchronizeActiveWorkspaceRecord()
+            destination.activeTabID = tabID
+            loadWorkspace(destination)
+        }
+        guard activeWorkspaceID == workspaceID, activeTabID == tabID,
+              target.workspace.document != nil else { return false }
+        if let searchResult {
+            return target.workspace.activateGallerySearchResult(searchResult)
+        }
+        return true
+    }
+
     /// Removes a workspace and closes its document sessions. Unsaved sessions
     /// are rejected unless the caller already confirmed a discard/save flow.
     /// The final workspace can never be deleted.
@@ -507,10 +558,12 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         }
 
         let removedWorkspace = workspaces[index]
-        if workspaceID == activeWorkspaceID {
-            activeSession?.workspace.prepareForDeactivation()
-        }
-        removedWorkspace.tabs.forEach { $0.workspace.synchronizeWidgetValues() }
+        removedWorkspace.tabs.forEach { $0.workspace.prepareForDeactivation() }
+        // Unapplied body drafts are not PDF dirty state. Check every tab,
+        // including inactive tabs whose editor failed during deactivation.
+        guard discardingChanges || !removedWorkspace.tabs.contains(where: {
+            $0.workspace.pendingInlineTextEdit != nil
+        }) else { return false }
         guard discardingChanges || !removedWorkspace.hasUnsavedChanges else { return false }
 
         removedWorkspace.tabs.forEach { session in
@@ -640,6 +693,14 @@ final class MultiDocumentWorkspaceState: ObservableObject {
     /// of 50–200 MB files in one synchronous callback.
     @discardableResult
     func openPDFsInTabs(urls: [URL], inGroup groupID: UUID? = nil) -> [UUID] {
+        openPDFsInTabs(urls: urls, inGroup: groupID, recordingRecentDocuments: true)
+    }
+
+    private func openPDFsInTabs(
+        urls: [URL],
+        inGroup groupID: UUID?,
+        recordingRecentDocuments: Bool
+    ) -> [UUID] {
         // A password sheet can run a nested AppKit event loop. Refuse a
         // synchronous re-entrant installation rather than letting it intermix
         // two tab snapshots; UI-owned requests use the async path below and
@@ -656,7 +717,10 @@ final class MultiDocumentWorkspaceState: ObservableObject {
                 return .failed(url)
             }
         }
-        return installPreparedPDFBatch(prepared, inGroup: groupID)
+        return installPreparedPDFBatch(
+            prepared, inGroup: groupID,
+            recordingRecentDocuments: recordingRecentDocuments
+        )
     }
 
     /// Asynchronously prepares a multi-file selection without blocking AppKit.
@@ -667,7 +731,8 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         urls: [URL],
         inGroup groupID: UUID? = nil,
         maximumInspectionConcurrency: Int = PDFLazyDocumentBatchInspector.defaultMaximumConcurrency,
-        imageSources: [URL: URL] = [:]
+        imageSources: [URL: URL] = [:],
+        activatingLastOpenedTab: Bool = true
     ) async -> [UUID] {
         let targetWorkspaceID = activeWorkspaceID
         let uniqueURLs = uniquePDFURLs(urls)
@@ -681,7 +746,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         var inspectionSlots: [Int] = []
 
         for (index, url) in uniqueURLs.enumerated() {
-            if session(opening: url) != nil {
+            if session(opening: url, inAllWorkspaces: !activatingLastOpenedTab) != nil {
                 prepared[index] = .existing(url)
             } else {
                 inspectionURLs.append(url)
@@ -720,8 +785,23 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         }
 
         return withExtendedLifetime(batchAccesses) {
-            installPreparedPDFBatch(prepared.compactMap { $0 }, inGroup: groupID, imageSources: imageSources)
+            installPreparedPDFBatch(
+                prepared.compactMap { $0 }, inGroup: groupID, imageSources: imageSources,
+                activatingLastOpenedTab: activatingLastOpenedTab
+            )
         }
+    }
+
+    /// Add a comparison candidate without navigating the normal tab surface.
+    /// The caller prepares the chosen candidate before changing the comparison
+    /// selection, so a failed open or password cancellation leaves its old pane
+    /// intact. Existing tabs are reused across every workspace in this window.
+    /// New candidates never consume welcome placeholders; the caller may close
+    /// a newly created tab after failed preparation without losing prior tabs.
+    /// The comparison picker presents errors rather than the active tab.
+    @discardableResult
+    func openPDFForComparison(url: URL) async -> UUID? {
+        await openPDFsInTabsAsync(urls: [url], activatingLastOpenedTab: false).first
     }
 
     /// Starts a UI-owned batch. A newer request supersedes the previous one;
@@ -838,7 +918,9 @@ final class MultiDocumentWorkspaceState: ObservableObject {
     private func installPreparedPDFBatch(
         _ prepared: [PreparedPDFBatchOpen],
         inGroup groupID: UUID?,
-        imageSources: [URL: URL] = [:]
+        imageSources: [URL: URL] = [:],
+        recordingRecentDocuments: Bool = true,
+        activatingLastOpenedTab: Bool = true
     ) -> [UUID] {
         guard !prepared.isEmpty else { return [] }
         let originalTabs = tabs
@@ -873,7 +955,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
                 continue
             case let .existing(existingURL):
                 url = existingURL
-                guard let existing = session(opening: existingURL) else {
+                guard let existing = session(opening: existingURL, inAllWorkspaces: !activatingLastOpenedTab) else {
                     failedNames.append(existingURL.lastPathComponent)
                     continue
                 }
@@ -883,7 +965,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
                 requiresSuccessfulActivation = existing.workspace.isHibernated
             case let .inspected(descriptor):
                 url = descriptor.url
-                if let existing = session(opening: descriptor.url) {
+                if let existing = session(opening: descriptor.url, inAllWorkspaces: !activatingLastOpenedTab) {
                     // Another request may have installed this file while the
                     // metadata task was suspended. Reuse it instead of racing
                     // a duplicate tab into the workspace.
@@ -892,7 +974,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
                         || existing.workspace.isHibernated
                     break
                 }
-                if let reusable = reusableEmptySession() {
+                if let reusable = activatingLastOpenedTab ? reusableEmptySession() : nil {
                     if originalTabIDs.contains(reusable.id) {
                         mutatedReusableOriginalTabIDs.insert(reusable.id)
                     }
@@ -923,7 +1005,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
             openedDocuments.append(
                 (targetSession.id, url, requiresSuccessfulActivation)
             )
-            if let groupID {
+            if let groupID, tabs.contains(where: { $0.id == targetSession.id }) {
                 _ = addTab(targetSession.id, toGroup: groupID)
             }
         }
@@ -933,6 +1015,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         }
 
         if
+            activatingLastOpenedTab,
             let finalID = openedIDs.last,
             tabs.contains(where: { $0.id == finalID })
         {
@@ -960,10 +1043,12 @@ final class MultiDocumentWorkspaceState: ObservableObject {
             return []
         }
 
-        let installedIDs = Set(tabs.map(\.id))
+        let installedSessions = activatingLastOpenedTab ? tabs : allTabs
+        let installedIDs = Set(installedSessions.map(\.id))
         openedIDs.removeAll { !installedIDs.contains($0) }
-        for openedDocument in openedDocuments where installedIDs.contains(openedDocument.id) {
-            let installedSession = tabs.first { $0.id == openedDocument.id }
+        for openedDocument in openedDocuments
+            where recordingRecentDocuments && installedIDs.contains(openedDocument.id) {
+            let installedSession = installedSessions.first { $0.id == openedDocument.id }
             guard
                 !openedDocument.requiresSuccessfulActivation
                     || installedSession?.workspace.isHibernated == false
@@ -973,13 +1058,18 @@ final class MultiDocumentWorkspaceState: ObservableObject {
             }
         }
 
-        if !openedIDs.isEmpty {
+        if !openedIDs.isEmpty, activatingLastOpenedTab {
             enforceLoadedPDFTabBudgetAfterOpening()
         }
 
-        if !failedNames.isEmpty {
+        if !failedNames.isEmpty, activatingLastOpenedTab {
             let names = failedNames.map { "‘\($0)’" }.joined(separator: ", ")
-            activeWorkspace?.presentedError = L10n.format("status.open_failed", names)
+            let message = L10n.format("status.open_failed", names)
+            if let existing = activeWorkspace?.presentedError, !existing.isEmpty {
+                activeWorkspace?.presentedError = existing + "\n\n" + message
+            } else {
+                activeWorkspace?.presentedError = message
+            }
         }
         return openedIDs
     }
@@ -1123,20 +1213,42 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         do {
             try recentDocumentsStore.record(url: url)
         } catch {
-            let message = L10n.string("status.recent_record_failed")
-            if let existing = activeWorkspace?.presentedError, !existing.isEmpty {
-                activeWorkspace?.presentedError = existing + "\n" + message
-            } else {
-                activeWorkspace?.presentedError = message
-            }
+            presentRecentRecordFailure(error, in: activeWorkspace)
         }
+    }
+
+    /// A multi-file open can fail to write every bookmark for the same reason.
+    /// Report that warning once until the alert is dismissed, without losing
+    /// either its first useful cause or an unrelated document-opening error.
+    private func presentRecentRecordFailure(_ error: Error, in workspace: PDFWorkspaceState?) {
+        guard let workspace else { return }
+        let heading = L10n.string("status.recent_record_failed")
+        let existing = workspace.presentedError ?? ""
+        guard !existing.components(separatedBy: "\n").contains(heading) else { return }
+
+        let reason = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let warning = reason.isEmpty || reason == heading ? heading : heading + "\n" + reason
+        workspace.presentedError = existing.isEmpty ? warning : existing + "\n\n" + warning
     }
 
     @discardableResult
     func openRecentDocument(id: UUID) -> UUID? {
+        recentDocumentRecovery = nil
         guard let recentDocumentsStore else {
             activeWorkspace?.presentedError = L10n.string("error.recent_store_unavailable")
             return nil
+        }
+        // A resident tab already owns its document and access. Selecting it
+        // needs no new file read and must not depend on an old bookmark.
+        // Hibernated tabs still require bookmark resolution before reopening.
+        if let hint = recentDocumentsStore.fileURLHint(id: id),
+           let resident = tabs.first(where: { session in
+               guard session.workspace.document != nil,
+                     let url = session.workspace.documentURL else { return false }
+               return canonicalFileKey(for: url) == hint.path
+           }) {
+            selectTab(resident.id)
+            return resident.id
         }
         do {
             let access = try recentDocumentsStore.resolve(id: id)
@@ -1146,17 +1258,66 @@ final class MultiDocumentWorkspaceState: ObservableObject {
                 openPDFsInTabs(urls: [access.url]).first
             }
         } catch {
-            activeWorkspace?.presentedError = error.localizedDescription
+            if let recent = recentDocumentsStore.documents.first(where: { $0.id == id }) {
+                recentDocumentRecovery = RecentDocumentRecoveryRequest(
+                    recentID: id,
+                    displayName: recent.displayName,
+                    suggestedURL: recentDocumentsStore.fileURLHint(id: id),
+                    reason: error.localizedDescription
+                )
+            } else {
+                activeWorkspace?.presentedError = error.localizedDescription
+            }
             return nil
+        }
+    }
+
+    /// The URL must come from the user's file chooser, never `fileURLHint`.
+    /// Reuse normal tab opening and hold the chooser's scope through the
+    /// handoff. History changes only after the chosen PDF has actually opened.
+    @discardableResult
+    func reopenRecentDocument(id: UUID, from authorizedURL: URL) -> UUID? {
+        guard let recentDocumentsStore,
+              recentDocumentsStore.fileURLHint(id: id) != nil else {
+            activeWorkspace?.presentedError = L10n.string("error.recent_not_found")
+            return nil
+        }
+        if recentDocumentRecovery?.recentID == id { recentDocumentRecovery = nil }
+        guard authorizedURL.isFileURL else {
+            activeWorkspace?.presentedError = L10n.string("error.recent_local_only")
+            return nil
+        }
+        let access = SecurityScopedAccess(url: authorizedURL)
+        return withExtendedLifetime(access) {
+            guard let openedID = openPDFsInTabs(
+                urls: [authorizedURL], inGroup: nil, recordingRecentDocuments: false
+            ).first,
+                  let opened = tabs.first(where: { $0.id == openedID }),
+                  let document = opened.workspace.document, !document.isLocked,
+                  let openedURL = opened.workspace.documentURL,
+                  canonicalFileKey(for: openedURL) == canonicalFileKey(for: authorizedURL)
+            else { return nil }
+
+            opened.workspace.retainAuthorizedAccess(to: authorizedURL)
+            // Update the replacement and seven-item bound in one operation.
+            // A failed new bookmark leaves the prior history entry intact.
+            do {
+                try recentDocumentsStore.record(url: authorizedURL, replacing: id)
+            } catch {
+                presentRecentRecordFailure(error, in: opened.workspace)
+            }
+            return openedID
         }
     }
 
     func removeRecentDocument(id: UUID) {
         recentDocumentsStore?.remove(id: id)
+        if recentDocumentRecovery?.recentID == id { recentDocumentRecovery = nil }
     }
 
     func clearRecentDocuments() {
         recentDocumentsStore?.clear()
+        recentDocumentRecovery = nil
     }
 
     func selectTab(_ id: UUID) {
@@ -1338,9 +1499,12 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         }
         for session in sessionsToClose {
             session.workspace.prepareForDeactivation()
-            if session.workspace.isDirty || session.workspace.hasPendingReviewTextDraft {
+            if session.workspace.isDirty || session.workspace.hasPendingReviewTextDraft
+                || session.workspace.pendingInlineTextEdit != nil {
                 activeTabID = session.id
-                session.workspace.presentedError = L10n.string("error.unsaved_group_delete")
+                if session.workspace.pendingInlineTextEdit == nil || session.workspace.presentedError == nil {
+                    session.workspace.presentedError = L10n.string("error.unsaved_group_delete")
+                }
                 return false
             }
         }
@@ -1360,10 +1524,13 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         session.workspace.prepareForDeactivation()
         guard
             !session.workspace.isDirty,
-            !session.workspace.hasPendingReviewTextDraft
+            !session.workspace.hasPendingReviewTextDraft,
+            session.workspace.pendingInlineTextEdit == nil
         else {
             activeTabID = id
-            session.workspace.presentedError = L10n.string("error.unsaved_tab_close")
+            if session.workspace.pendingInlineTextEdit == nil || session.workspace.presentedError == nil {
+                session.workspace.presentedError = L10n.string("error.unsaved_tab_close")
+            }
             return false
         }
 
@@ -1479,6 +1646,7 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         !session.workspace.hasOpenDocument
             && !session.workspace.isDirty
             && !session.workspace.hasPendingReviewTextDraft
+            && session.workspace.pendingInlineTextEdit == nil
     }
 
     private func reusableEmptySession() -> PDFTabSession? {
@@ -1488,9 +1656,9 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         return tabs.first(where: canReuseForOpening)
     }
 
-    private func session(opening url: URL) -> PDFTabSession? {
+    private func session(opening url: URL, inAllWorkspaces: Bool = false) -> PDFTabSession? {
         let requestedKey = canonicalFileKey(for: url)
-        return tabs.first { session in
+        return (inAllWorkspaces ? allTabs : tabs).first { session in
             if let imageSource = session.workspace.imageSourceURL,
                PDFSourceFileVersion.refersToSameLocation(imageSource, url) { return true }
             guard let openURL = session.workspace.documentURL else { return false }
@@ -1556,11 +1724,26 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         }
         workspaceObservers[session.id] = session.workspace.objectWillChange
             .sink { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.objectWillChange.send()
-                    self?.scheduleSessionPersistence()
+                MainActor.assumeIsolated {
+                    self?.scheduleWorkspaceChangeNotification()
                 }
             }
+    }
+
+    /// Opening, resuming, and editing a document update several published
+    /// fields together. Forward their final state once on the next main-actor
+    /// turn instead of queuing a window refresh and persistence timer for each
+    /// field. The document's own observers still receive every change.
+    private func scheduleWorkspaceChangeNotification() {
+        guard pendingWorkspaceChangeNotification == nil else { return }
+        pendingWorkspaceChangeNotification = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Clear before delivery: an observer may synchronously change a
+            // document, which must schedule a subsequent notification.
+            self.pendingWorkspaceChangeNotification = nil
+            self.objectWillChange.send()
+            self.scheduleSessionPersistence()
+        }
     }
 
     private func scheduleSessionPersistence() {
@@ -1770,9 +1953,21 @@ final class MultiDocumentWorkspaceState: ObservableObject {
         guard let index = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else {
             return
         }
-        workspaces[index].tabs = tabs
-        workspaces[index].activeTabID = activeTabID
-        workspaces[index].tabGroups = tabGroups
+        var record = workspaces[index]
+        let sameTabs = record.tabs.count == tabs.count
+            && zip(record.tabs, tabs).allSatisfy {
+                $0.id == $1.id && $0.workspace === $1.workspace
+            }
+        // Flushing persistence also synchronizes this projection. Publishing an
+        // unchanged record would schedule another save from workspaces.didSet,
+        // continuously re-arming the debounce even while every window is idle.
+        guard !sameTabs || record.activeTabID != activeTabID || record.tabGroups != tabGroups else {
+            return
+        }
+        record.tabs = tabs
+        record.activeTabID = activeTabID
+        record.tabGroups = tabGroups
+        workspaces[index] = record
     }
 
     private func loadWorkspace(_ workspace: PDFDocumentWorkspace) {

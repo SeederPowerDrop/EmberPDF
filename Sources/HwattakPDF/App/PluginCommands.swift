@@ -28,6 +28,8 @@ enum PluginCommandAvailability {
 struct PluginCommands: Commands {
     @ObservedObject var manager: PluginManager
     @ObservedObject private var editCommandRouter = AppEditCommandRouter.shared
+    @ObservedObject private var runtimeCommands = PluginRuntimeCommandRegistry.shared
+    @FocusedValue(\.pluginExtensionScope) private var extensionScope
     @FocusedObject private var focusedWorkspace: MultiDocumentWorkspaceState?
     @FocusedValue(\.comparisonReadOnlyActive) private var comparisonReadOnlyActive
     @Environment(\.openWindow) private var openWindow
@@ -45,7 +47,10 @@ struct PluginCommands: Commands {
                 documentWorkspace?.pluginCommandPaletteVisible = true
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
-            .disabled(documentWorkspace?.document == nil)
+            .disabled(documentWorkspace == nil)
+            ForEach(extensionScope.map { runtimeCommands.commands(in: $0) } ?? []) { command in
+                Button(command.title) { runtimeCommands.run(command.id, scope: extensionScope) }
+            }
             Divider()
             if manager.enabledPlugins.isEmpty {
                 Button(
@@ -56,13 +61,13 @@ struct PluginCommands: Commands {
                 ) {}
                 .disabled(true)
             } else {
-                ForEach(manager.enabledPlugins) { plugin in
+                ForEach(manager.enabledPlugins.filter { !$0.manifest.actions.isEmpty }) { plugin in
                     if plugin.manifest.actions.count == 1,
                        let action = plugin.manifest.actions.first {
                         Button(BundledPluginPresentation.displayName(for: plugin.manifest)) {
                             run(action, from: plugin)
                         }
-                        .disabled(!isAvailable(action))
+                        .disabled(!isAvailable(action) || !manager.isAuthorized(pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest, actionID: action.id))
                         .help(
                             BundledPluginPresentation.actionDescription(
                                 action,
@@ -81,7 +86,7 @@ struct PluginCommands: Commands {
                                 Button(BundledPluginPresentation.actionTitle(action, in: plugin.manifest)) {
                                     run(action, from: plugin)
                                 }
-                                .disabled(!isAvailable(action))
+                                .disabled(!isAvailable(action) || !manager.isAuthorized(pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest, actionID: action.id))
                                 .help(
                                     BundledPluginPresentation.actionDescription(
                                         action,

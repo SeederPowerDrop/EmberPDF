@@ -40,8 +40,9 @@ final class WorkspaceSaveCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testOverwriteOriginalWorksWithFileScopedWriteAccess() throws {
+    func testFileScopedOverwriteOffersSaveCopyAndKeepsEdits() throws {
         let fixture = try makeFixture()
+        let originalBytes = try Data(contentsOf: fixture.sourceURL)
         addTeardownBlock {
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0o755],
@@ -63,11 +64,19 @@ final class WorkspaceSaveCoordinatorTests: XCTestCase {
 
         let outcome = WorkspaceSaveCoordinator.apply(.overwriteOriginal, to: workspace)
 
-        XCTAssertEqual(outcome, .saved)
-        XCTAssertFalse(workspace.isDirty)
-        XCTAssertNil(workspace.presentedError)
+        XCTAssertEqual(outcome, .cancelled)
+        XCTAssertTrue(workspace.isDirty)
+        XCTAssertEqual(workspace.presentedError, L10n.string("error.choose_save_location"))
         XCTAssertEqual(workspace.documentURL, fixture.sourceURL)
-        XCTAssertEqual(PDFDocument(url: fixture.sourceURL)?.page(at: 0)?.rotation, 90)
+        XCTAssertEqual(workspace.document?.page(at: 0)?.rotation, 90)
+        XCTAssertEqual(try Data(contentsOf: fixture.sourceURL), originalBytes)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fixture.directory.path)
+        let copy = fixture.directory.appendingPathComponent("copy.pdf")
+        XCTAssertEqual(WorkspaceSaveCoordinator.apply(.saveCopy, to: workspace, copyDestination: { copy }), .saved)
+        XCTAssertFalse(workspace.isDirty)
+        XCTAssertEqual(PDFDocument(url: copy)?.page(at: 0)?.rotation, 90)
+        XCTAssertEqual(try Data(contentsOf: fixture.sourceURL), originalBytes)
     }
 
     @MainActor
@@ -103,7 +112,7 @@ final class WorkspaceSaveCoordinatorTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: secondLink), originalBytes)
         XCTAssertEqual(
             workspace.presentedError,
-            L10n.string("error.save_copy_same_as_original")
+            L10n.string("error.choose_save_location")
         )
     }
 

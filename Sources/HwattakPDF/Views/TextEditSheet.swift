@@ -9,30 +9,32 @@ import SwiftUI
 /// Consequently Escape/cancel never leaves a half-created annotation or dirty
 /// document behind. The workspace owns validation and undo registration.
 struct TextEditSheet: View {
-    let edit: PendingTextEdit
+    @ObservedObject var edit: PendingTextEdit
     let onCommit: (String) -> Void
     let onDraftChanged: (String) -> Void
     let onCancel: () -> Void
+    let editorActions: StudyNoteEditorActions?
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var text: String
     @State private var focused = false
     @State private var lengthLimitReached = false
+    @StateObject private var insertion = StudyNoteDraftInsertionController()
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     init(
         edit: PendingTextEdit,
         onCommit: @escaping (String) -> Void,
         onDraftChanged: @escaping (String) -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        editorActions: StudyNoteEditorActions? = nil
     ) {
         self.edit = edit
         self.onCommit = onCommit
         self.onDraftChanged = onDraftChanged
         self.onCancel = onCancel
+        self.editorActions = editorActions
         // `State` must be seeded through its backing storage in an initializer.
         // Assigning `text` later in `body` would reset user typing on redraw.
         _text = State(initialValue: edit.initialText)
@@ -44,9 +46,10 @@ struct TextEditSheet: View {
 
             VStack(alignment: .leading, spacing: 13) {
                 HStack {
-                    Text("주석 내용")
+                    Text(L10n.string("주석 내용"))
                         .font(.callout.weight(.semibold))
                     Spacer()
+                    if let editorActions { insertionButtons(editorActions) }
                     Text(L10n.format("text.character_count", text.count))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(theme.secondaryText)
@@ -58,9 +61,10 @@ struct TextEditSheet: View {
                     budget: PDFBoundedPlainTextView.freeTextBudget,
                     onLengthLimitReached: {
                         lengthLimitReached = true
-                    }
+                    },
+                    insertionController: insertion
                 )
-                    .frame(minHeight: 220)
+                    .frame(minHeight: 150)
                     .background(theme.card, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 13, style: .continuous)
@@ -81,18 +85,18 @@ struct TextEditSheet: View {
                 }
 
                 Label(
-                    "PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다.",
+                    L10n.string("study.notes.editor_hint", defaultValue: "적용하면 페이지에 메모가 추가되고 메모 목록에서도 확인할 수 있습니다. 긴 내용은 목록에서 다시 열어 읽을 수 있습니다."),
                     systemImage: "info.circle.fill"
                 )
                 .font(.caption)
                 .foregroundStyle(theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(20)
+            .padding(14)
 
             actionBar
         }
-        .frame(minWidth: 590, idealWidth: 650, maxWidth: 720, minHeight: 410, idealHeight: 450)
+        .frame(minWidth: 290, maxWidth: .infinity, minHeight: 330, maxHeight: .infinity)
         .background(theme.panel)
         .foregroundStyle(theme.primaryText)
         .tint(theme.accent)
@@ -106,55 +110,91 @@ struct TextEditSheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 13) {
-            Image(systemName: "character.cursor.ibeam")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(theme.accent)
-                .frame(width: 40, height: 40)
-                .background(theme.dropHighlight, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(
-                    edit.isEditingExistingAnnotation
-                        ? L10n.string("텍스트 수정")
-                        : L10n.string("텍스트 추가")
-                )
-                    .font(.title3.weight(.semibold))
-                Text("페이지 위에 읽기 쉬운 텍스트 주석을 배치합니다.")
-                    .font(.caption)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "character.cursor.ibeam")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.accent)
+                Text(edit.isEditingExistingAnnotation
+                     ? L10n.string("study.notes.edit", defaultValue: "메모 수정")
+                     : L10n.string("study.notes.add", defaultValue: "새 메모"))
+                    .font(.headline)
+                Spacer(minLength: 4)
+                Text(L10n.format("page.number", edit.pageIndex + 1))
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(theme.secondaryText)
+                if let editorActions {
+                    Button(action: editorActions.togglePresentation) {
+                        Image(systemName: editorActions.isFloating ? "sidebar.right" : "arrow.up.forward.square")
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.string(editorActions.isFloating ? "study.notes.editor.dock" : "study.notes.editor.float"))
+                    .accessibilityLabel(L10n.string(editorActions.isFloating ? "study.notes.editor.dock" : "study.notes.editor.float"))
+                    .accessibilityIdentifier("study-note-editor-location")
+                }
             }
-            Spacer()
-            Label(L10n.format("page.number", edit.pageIndex + 1), systemImage: "doc.text")
-                .font(.caption.weight(.medium))
+            Text(L10n.string("study.notes.saved_in_pdf", defaultValue: "메모는 이 PDF의 주석으로 저장됩니다. 파일에 남기려면 저장하세요."))
+                .font(.caption2)
                 .foregroundStyle(theme.secondaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(theme.card, in: Capsule())
-                .overlay { Capsule().stroke(theme.border, lineWidth: 1) }
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 20)
-        .frame(height: 74)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
         .background(.regularMaterial)
         .overlay(alignment: .bottom) { Rectangle().fill(theme.border).frame(height: 1) }
+    }
+
+    private func insertionButtons(_ actions: StudyNoteEditorActions) -> some View {
+        HStack(spacing: 3) {
+            Button {
+                if let value = actions.selectedText() { insertion.insert(value) }
+            } label: {
+                Image(systemName: "text.quote").frame(width: 24, height: 24)
+            }
+            .disabled(!actions.canInsertSelection || insertion.isComposing)
+            .help(L10n.string("study.notes.insert.selection"))
+            .accessibilityLabel(L10n.string("study.notes.insert.selection"))
+            .accessibilityIdentifier("study-note-insert-selection")
+
+            Button { insertion.insert(StudyNoteDraftInsertion.dateTime()) } label: {
+                Image(systemName: "clock").frame(width: 24, height: 24)
+            }
+            .disabled(insertion.isComposing)
+            .help(L10n.string("study.notes.insert.time"))
+            .accessibilityLabel(L10n.string("study.notes.insert.time"))
+            .accessibilityIdentifier("study-note-insert-time")
+
+            Button {
+                if let value = actions.currentLocation() { insertion.insert(value) }
+            } label: {
+                Image(systemName: "doc.text.magnifyingglass").frame(width: 24, height: 24)
+            }
+            .disabled(insertion.isComposing)
+            .help(L10n.string("study.notes.insert.location"))
+            .accessibilityLabel(L10n.string("study.notes.insert.location"))
+            .accessibilityIdentifier("study-note-insert-location")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(theme.accent)
     }
 
     private var actionBar: some View {
         HStack(spacing: 9) {
             Spacer()
-            Button("취소", action: onCancel)
+            Button(L10n.string("취소"), action: onCancel)
                 .keyboardShortcut(.cancelAction)
             Button {
                 onCommit(text)
             } label: {
-                Label("적용", systemImage: "checkmark")
+                Label(L10n.string("적용"), systemImage: "checkmark")
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
+        .padding(.horizontal, 14)
+        .frame(height: 48)
         .background(.regularMaterial)
         .overlay(alignment: .top) { Rectangle().fill(theme.border).frame(height: 1) }
     }
@@ -172,6 +212,7 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
     @Binding var isFocused: Bool
     let budget: EncodedTextBudget
     let onLengthLimitReached: () -> Void
+    var insertionController: StudyNoteDraftInsertionController? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -217,6 +258,8 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
         }
 
         context.coordinator.textView = textView
+        context.coordinator.insertionController = insertionController
+        insertionController?.attach(textView)
         scrollView.documentView = textView
         return scrollView
     }
@@ -233,6 +276,11 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
         }
         textView.encodedTextBudget = budget
         textView.onLengthLimitReached = context.coordinator.reportLengthLimit
+        if context.coordinator.insertionController !== insertionController {
+            context.coordinator.insertionController?.detach(textView)
+            context.coordinator.insertionController = insertionController
+            insertionController?.attach(textView)
+        }
 
         // Do not assign an equal String: replacing NSTextView contents during
         // marked-text composition would interrupt Korean/Japanese/Chinese IME.
@@ -245,20 +293,22 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
             }
         }
 
-        if isFocused, textView.window?.firstResponder !== textView {
-            // The view can be updated before AppKit attaches it to the sheet's
-            // window. Deferring one run-loop turn gives `makeFirstResponder`
-            // a real window without polling or retaining the panel.
-            DispatchQueue.main.async { [weak textView] in
-                guard let textView, textView.window != nil else { return }
-                textView.window?.makeFirstResponder(textView)
-            }
+        context.coordinator.requestFocusIfNeeded()
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        if let view = scrollView.documentView as? PDFBoundedPlainTextView {
+            coordinator.insertionController?.detach(view)
         }
+        coordinator.cancelFocusRequest()
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         weak var textView: PDFBoundedPlainTextView?
+        weak var insertionController: StudyNoteDraftInsertionController?
+        private var lastRequestedFocus = false
+        private var focusRequest = UUID()
         private var text: Binding<String>
         private var isFocused: Binding<Bool>
         private var budget: EncodedTextBudget
@@ -286,6 +336,25 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
             self.isFocused = isFocused
             self.budget = budget
             self.onLengthLimitReached = onLengthLimitReached
+        }
+
+        func cancelFocusRequest() { focusRequest = UUID() }
+
+        func requestFocusIfNeeded() {
+            let requested = isFocused.wrappedValue
+            guard requested != lastRequestedFocus else { return }
+            lastRequestedFocus = requested
+            cancelFocusRequest()
+            guard requested, let textView, textView.window?.firstResponder !== textView else { return }
+            let request = focusRequest
+            // Only an explicit false→true request can focus the editor. PDF
+            // selection publishes workspace changes too; those redraws must
+            // never pull focus away from a drag on the page.
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, self.focusRequest == request,
+                      self.isFocused.wrappedValue, let textView, textView.window != nil else { return }
+                textView.window?.makeFirstResponder(textView)
+            }
         }
 
         func reportLengthLimit() {
@@ -319,6 +388,12 @@ struct BoundedPlainTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             synchronizeFromTextView(textView)
+            insertionController?.updateComposition(from: textView)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            insertionController?.updateComposition(from: textView)
         }
     }
 }

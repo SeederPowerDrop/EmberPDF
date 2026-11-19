@@ -443,6 +443,210 @@ final class PDFTabMemoryManagerTests: XCTestCase {
         XCTAssertEqual(workspace.activeWorkspace?.documentURL, fixture.urls[0])
     }
 
+    @MainActor
+    func testComparisonExitDefersAndCoalescesCleanupOneDocumentPerSlice() throws {
+        let setup = try makeComparisonMemorySetup()
+        let manager = setup.manager
+        let scheduler = setup.scheduler
+
+        manager.releaseComparisonProtectionAfterTransition()
+        manager.enforceBudget()
+        manager.workspaceContentsDidChange()
+        manager.updateLoadedTabBudget(1)
+        manager.releaseComparisonProtectionAfterTransition()
+
+        XCTAssertEqual(manager.metrics.loadedDocumentCount, 4, "exit must not release PDF graphs inline")
+        XCTAssertEqual(scheduler.pendingJobs.count, 1, "eligibility callbacks join the existing cleanup")
+        XCTAssertEqual(scheduler.pendingJobs.first?.delay, 0.2)
+        for remaining in [3, 2, 1] {
+            scheduler.fireNext()
+            XCTAssertEqual(manager.metrics.loadedDocumentCount, remaining)
+            XCTAssertNotNil(setup.workspace.activeWorkspace?.document)
+            if remaining > 1 {
+                XCTAssertEqual(scheduler.pendingJobs.count, 1)
+                XCTAssertEqual(scheduler.pendingJobs.first?.delay, 0.05)
+            }
+        }
+        XCTAssertTrue(scheduler.pendingJobs.isEmpty)
+        XCTAssertEqual(manager.metrics.cumulativeHibernations, 3)
+    }
+
+    @MainActor
+    func testRemovingAComparisonPaneDefersItsReleaseAndKeepsSurvivorsResident() throws {
+        let setup = try makeComparisonMemorySetup()
+        let removedID = setup.ids[0]
+        let removed = try XCTUnwrap(setup.workspace.tabs.first { $0.id == removedID })
+        let survivingIDs = Set(setup.ids.dropFirst())
+
+        setup.manager.setProtectedTabIDs(survivingIDs, deferCleanup: true)
+        setup.manager.workspaceContentsDidChange()
+        setup.manager.enforceBudget()
+
+        XCTAssertNotNil(removed.workspace.document, "The outgoing PDFView must detach before document release.")
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 4)
+        XCTAssertEqual(setup.scheduler.pendingJobs.count, 1)
+        XCTAssertEqual(setup.scheduler.pendingJobs.first?.delay, 0.2)
+
+        setup.scheduler.fireNext()
+
+        XCTAssertTrue(removed.workspace.isHibernated)
+        XCTAssertTrue(removed.workspace.hasOpenDocument, "Removing a comparison pane must keep its tab available.")
+        XCTAssertEqual(setup.workspace.tabs.count, 4)
+        XCTAssertTrue(setup.workspace.tabs.filter { survivingIDs.contains($0.id) }
+            .allSatisfy { $0.workspace.document != nil })
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 3)
+        XCTAssertTrue(setup.scheduler.pendingJobs.isEmpty)
+    }
+
+    @MainActor
+    func testReplacingAComparisonPaneResumesNewPDFBeforeDeferringOldPDFRelease() throws {
+        let setup = try makeComparisonMemorySetup()
+        let old = try XCTUnwrap(setup.workspace.tabs.first { $0.id == setup.ids[0] })
+        let survivor = try XCTUnwrap(setup.workspace.tabs.first { $0.id == setup.ids[1] })
+        let replacement = try XCTUnwrap(setup.workspace.tabs.first { $0.id == setup.ids[2] })
+        setup.manager.setProtectedTabIDs([old.id, survivor.id])
+        XCTAssertTrue(replacement.workspace.isHibernated)
+
+        setup.manager.setProtectedTabIDs([survivor.id, replacement.id], deferCleanup: true)
+        setup.manager.enforceBudget()
+
+        XCTAssertNotNil(old.workspace.document, "The old pane must survive the replacement transition.")
+        XCTAssertNotNil(survivor.workspace.document)
+        XCTAssertNotNil(replacement.workspace.document, "The replacement is resident before presentation changes.")
+        XCTAssertFalse(replacement.workspace.isHibernated)
+        XCTAssertEqual(setup.scheduler.pendingJobs.count, 1)
+
+        setup.scheduler.fireNext()
+
+        XCTAssertTrue(old.workspace.isHibernated)
+        XCTAssertNotNil(survivor.workspace.document)
+        XCTAssertNotNil(replacement.workspace.document)
+        XCTAssertNotNil(setup.workspace.activeWorkspace?.document)
+        XCTAssertEqual(setup.workspace.tabs.count, 4)
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 3)
+        XCTAssertTrue(setup.scheduler.pendingJobs.isEmpty)
+    }
+
+    @MainActor
+    func testDeferredCleanupReevaluatesResumedActiveDirtyAndClosedTabs() throws {
+        let setup = try makeComparisonMemorySetup()
+        setup.manager.releaseComparisonProtectionAfterTransition()
+        setup.scheduler.fireNext()
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 3)
+        let hibernated = try XCTUnwrap(setup.workspace.tabs.first { $0.workspace.isHibernated })
+        let dirty = try XCTUnwrap(setup.workspace.tabs.first {
+            $0.workspace.document != nil && $0.id != setup.workspace.activeTabID
+        })
+        dirty.workspace.setMode(.editing)
+        dirty.workspace.rotateSelectedPages(clockwise: true)
+        XCTAssertTrue(dirty.workspace.isDirty)
+        let toClose = try XCTUnwrap(setup.workspace.tabs.first {
+            $0.id != hibernated.id && $0.id != dirty.id && $0.id != setup.workspace.activeTabID
+        })
+        XCTAssertTrue(setup.workspace.closeTab(toClose.id))
+        setup.workspace.selectTab(hibernated.id)
+        setup.manager.activeTabDidChange()
+        setup.manager.workspaceContentsDidChange()
+
+        setup.scheduler.fireNext()
+
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 2)
+        XCTAssertNotNil(dirty.workspace.document, "new edits remain resident even above the budget")
+        XCTAssertNotNil(hibernated.workspace.document, "a newly resumed active tab must survive old work")
+        XCTAssertTrue(setup.scheduler.pendingJobs.isEmpty)
+    }
+
+    @MainActor
+    func testReenteringComparisonCancelsPendingAndLateCleanupCallbacks() throws {
+        let setup = try makeComparisonMemorySetup()
+        setup.manager.releaseComparisonProtectionAfterTransition()
+        let cancelledJob = try XCTUnwrap(setup.scheduler.pendingJobs.first)
+
+        setup.manager.setProtectedTabIDs(Set(setup.ids))
+        XCTAssertTrue(cancelledJob.isCancelled)
+        cancelledJob.fireIgnoringCancellation()
+
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 4)
+        XCTAssertTrue(setup.scheduler.pendingJobs.isEmpty)
+        setup.manager.releaseComparisonProtectionAfterTransition()
+        cancelledJob.fireIgnoringCancellation()
+        XCTAssertEqual(setup.scheduler.pendingJobs.count, 1, "an old callback cannot consume the new cleanup")
+        setup.scheduler.fireNext()
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 3)
+    }
+
+    @MainActor
+    func testMemoryPressureBypassesExitDelayAndCancelsItsScheduledWork() throws {
+        let setup = try makeComparisonMemorySetup()
+        setup.manager.releaseComparisonProtectionAfterTransition()
+        let cancelledJob = try XCTUnwrap(setup.scheduler.pendingJobs.first)
+
+        setup.manager.handleMemoryPressure(.critical)
+
+        XCTAssertEqual(setup.manager.metrics.loadedDocumentCount, 1)
+        XCTAssertEqual(setup.manager.metrics.lastPressureLevel, .critical)
+        XCTAssertNotNil(setup.workspace.activeWorkspace?.document)
+        XCTAssertTrue(cancelledJob.isCancelled)
+        cancelledJob.fireIgnoringCancellation()
+        XCTAssertTrue(setup.scheduler.pendingJobs.isEmpty)
+        XCTAssertEqual(setup.manager.metrics.cumulativeHibernations, 3)
+    }
+
+    @MainActor
+    func testDeferredCleanupDoesNotRetainManagerOrWorkspaceAfterWindowCloses() throws {
+        let fixture = try makePDF(pageCount: 1, fileCount: 4)
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let scheduler = ManualPDFTabMemoryCleanupScheduler()
+        let pressure = StubPDFMemoryPressureMonitor()
+        weak var weakManager: PDFTabMemoryManager?
+        weak var weakWorkspace: MultiDocumentWorkspaceState?
+        var pendingJob: ManualPDFTabMemoryCleanupScheduler.Job?
+        do {
+            let workspace = MultiDocumentWorkspaceState()
+            let ids = workspace.openPDFsInTabs(urls: fixture.urls)
+            let manager = PDFTabMemoryManager(
+                workspace: workspace,
+                loadedTabBudget: 1,
+                pressureMonitor: pressure,
+                cleanupScheduler: scheduler
+            )
+            weakManager = manager
+            weakWorkspace = workspace
+            manager.setProtectedTabIDs(Set(ids))
+            manager.releaseComparisonProtectionAfterTransition()
+            pendingJob = scheduler.pendingJobs.first
+        }
+
+        XCTAssertNil(weakManager)
+        XCTAssertNil(weakWorkspace)
+        XCTAssertTrue(try XCTUnwrap(pendingJob).isCancelled)
+        pendingJob?.fireIgnoringCancellation()
+        XCTAssertTrue(scheduler.pendingJobs.isEmpty)
+    }
+
+    @MainActor
+    private func makeComparisonMemorySetup() throws -> (
+        workspace: MultiDocumentWorkspaceState,
+        ids: [UUID],
+        manager: PDFTabMemoryManager,
+        scheduler: ManualPDFTabMemoryCleanupScheduler
+    ) {
+        let fixture = try makePDF(pageCount: 1, fileCount: 4)
+        addTeardownBlock { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = MultiDocumentWorkspaceState()
+        let ids = workspace.openPDFsInTabs(urls: fixture.urls)
+        let scheduler = ManualPDFTabMemoryCleanupScheduler()
+        let manager = PDFTabMemoryManager(
+            workspace: workspace,
+            loadedTabBudget: 1,
+            pressureMonitor: StubPDFMemoryPressureMonitor(),
+            cleanupScheduler: scheduler
+        )
+        manager.setProtectedTabIDs(Set(ids))
+        XCTAssertEqual(manager.metrics.loadedDocumentCount, 4)
+        return (workspace, ids, manager, scheduler)
+    }
+
     func testHundredTabPolicyPlanningBenchmark() {
         let ids = (0..<100).map { _ in UUID() }
         let inputs = ids.enumerated().map { index, id in
@@ -496,6 +700,41 @@ final class PDFTabMemoryManagerTests: XCTestCase {
         }
         return (directory, try XCTUnwrap(urls.first), urls)
     }
+}
+
+private final class ManualPDFTabMemoryCleanupScheduler: PDFTabMemoryCleanupScheduling {
+    final class Job: PDFTabMemoryCleanupToken {
+        let delay: TimeInterval
+        private let action: @MainActor () -> Void
+        private(set) var isCancelled = false
+        private(set) var hasFired = false
+
+        init(delay: TimeInterval, action: @escaping @MainActor () -> Void) {
+            self.delay = delay
+            self.action = action
+        }
+
+        func cancel() { isCancelled = true }
+
+        @MainActor
+        func fireIgnoringCancellation() {
+            hasFired = true
+            action()
+        }
+    }
+
+    private var jobs: [Job] = []
+    var pendingJobs: [Job] { jobs.filter { !$0.isCancelled && !$0.hasFired } }
+
+    @MainActor
+    func schedule(after delay: TimeInterval, action: @escaping @MainActor () -> Void) -> any PDFTabMemoryCleanupToken {
+        let job = Job(delay: delay, action: action)
+        jobs.append(job)
+        return job
+    }
+
+    @MainActor
+    func fireNext() { pendingJobs.first?.fireIgnoringCancellation() }
 }
 
 private final class TrackingLazyDocumentInspector: PDFLazyDocumentInspecting, @unchecked Sendable {

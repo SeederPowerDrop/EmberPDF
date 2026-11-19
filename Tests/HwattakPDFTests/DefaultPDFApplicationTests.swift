@@ -171,7 +171,7 @@ final class DefaultPDFApplicationTests: XCTestCase {
         let document = try XCTUnwrap(PDFDocument(url: sample))
         XCTAssertEqual(document.pageCount, 1)
         let page = try XCTUnwrap(document.page(at: 0))
-        XCTAssertTrue(page.string?.contains("HwattakPDF") == true)
+        XCTAssertTrue(page.string?.contains("EmberPDF") == true)
         XCTAssertEqual(page.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
         XCTAssertGreaterThan(page.thumbnail(of: CGSize(width: 100, height: 140), for: .mediaBox).size.width, 0)
         XCTAssertLessThan(try Data(contentsOf: sample).count, 65_536)

@@ -32,6 +32,7 @@ enum PluginActionLauncher {
         runner: PluginActionRunner
     ) throws -> PluginActionEffect {
         guard
+            manager.isAuthorized(pluginIdentifier: plugin.id, manifestDigest: plugin.manifestDigest, actionID: action.id),
             let livePlugin = manager.enabledPlugins.first(where: {
                 $0.id == plugin.id && $0.manifestDigest == plugin.manifestDigest
             }),
@@ -50,7 +51,16 @@ enum PluginActionLauncher {
         return try runner.run(
             plugin: livePlugin,
             action: liveAction,
-            workspace: liveAction.needsOpenDocument ? workspace : nil
+            workspace: liveAction.needsOpenDocument ? workspace : nil,
+            revalidate: {
+                guard manager.isAuthorized(pluginIdentifier: livePlugin.id, manifestDigest: livePlugin.manifestDigest, actionID: liveAction.id),
+                      manager.installedPlugins.first(where: { $0.id == livePlugin.id })?.manifest.actions.contains(liveAction) == true else {
+                    throw PluginSystemError.actionUnavailable(L10n.string(
+                        "plugins.permissions.action_revoked",
+                        defaultValue: "권한이 철회되거나 플러그인 상태가 변경되어 작업을 중단했습니다."
+                    ))
+                }
+            }
         )
     }
 }

@@ -203,6 +203,175 @@ final class PDFArrowKeyRepeaterTests: XCTestCase {
         XCTAssertTrue(repeater.handleMonitoredEvent(nativeRepeat) === nativeRepeat)
     }
 
+    func testOptedInOptionUsesNormalSpeedWithoutAcceptingOtherShortcuts() {
+        for speed in PDFKeyboardNavigationSpeed.allCases {
+            for flags: NSEvent.ModifierFlags in [.option, [.option, .numericPad, .function, .capsLock]] {
+                XCTAssertTrue(PDFArrowKeyRepeater.accepts(modifiers: flags, allowsOption: true))
+                XCTAssertEqual(
+                    PDFArrowKeyRepeater.effectiveRepeatInterval(speed: speed, modifiers: flags, allowsOption: true),
+                    PDFArrowKeyRepeater.effectiveRepeatInterval(speed: speed, modifiers: [])
+                )
+                XCTAssertEqual(
+                    PDFArrowKeyRepeater.effectiveInitialDelay(speed: speed, modifiers: flags, allowsOption: true),
+                    PDFArrowKeyRepeater.effectiveInitialDelay(speed: speed, modifiers: [])
+                )
+            }
+        }
+        for flags: NSEvent.ModifierFlags in [
+            .command, .control, [.option, .shift], [.option, .command], [.option, .control]
+        ] {
+            XCTAssertFalse(PDFArrowKeyRepeater.accepts(modifiers: flags, allowsOption: true))
+            XCTAssertNil(PDFArrowKeyRepeater.effectiveRepeatInterval(
+                speed: .normal, modifiers: flags, allowsOption: true
+            ))
+        }
+    }
+
+    func testOptedInOptionArrowsStepHoldAndStopOnKeyUp() {
+        let window = makeWindow()
+        for keyCode: UInt16 in 123...126 {
+            let repeater = makeRepeater()
+            var steps = 0
+            XCTAssertTrue(repeater.handleKeyDown(
+                keyCode: keyCode, modifiers: .option, isRepeat: false,
+                window: window, allowsOption: true
+            ) {
+                steps += 1
+                return true
+            })
+            XCTAssertEqual(steps, 1)
+            XCTAssertTrue(repeater.isRepeating)
+            XCTAssertEqual(repeater.currentModifiers, .option)
+            XCTAssertTrue(repeater.handleKeyDown(
+                keyCode: keyCode, modifiers: [.option, .numericPad, .function], isRepeat: true,
+                window: window, allowsOption: true
+            ) {
+                XCTFail("An OS repeat must retain the original action.")
+                return true
+            })
+            XCTAssertEqual(steps, 1)
+            repeater.performScheduledRepeat()
+            repeater.performScheduledRepeat()
+            XCTAssertEqual(steps, 3)
+            XCTAssertTrue(repeater.handleKeyUp(keyCode: keyCode))
+            repeater.performScheduledRepeat()
+            XCTAssertEqual(steps, 3)
+            XCTAssertFalse(repeater.isRepeating)
+            XCTAssertTrue(repeater.currentModifiers.isEmpty)
+        }
+    }
+
+    func testOptedInHoldAcceptsAddingAndRemovingOptionWithoutAnExtraStep() throws {
+        let window = makeWindow()
+        let repeater = makeRepeater()
+        defer { repeater.stop() }
+        var steps = 0
+        _ = repeater.handleKeyDown(
+            keyCode: 125, modifiers: [], isRepeat: false, window: window, allowsOption: true
+        ) {
+            steps += 1
+            return true
+        }
+        for (index, flags) in ([.option, [], .option] as [NSEvent.ModifierFlags]).enumerated() {
+            let event = try keyEvent(.flagsChanged, code: 58, window: window, modifiers: flags)
+            XCTAssertTrue(repeater.handleMonitoredEvent(event) === event)
+            XCTAssertTrue(repeater.isRepeating)
+            XCTAssertEqual(repeater.currentModifiers, flags)
+            XCTAssertEqual(steps, index + 1)
+            repeater.performScheduledRepeat()
+            XCTAssertEqual(steps, index + 2)
+        }
+    }
+
+    func testShortcutModifiersCancelAnOptedInOptionHoldAndRemainNative() throws {
+        let window = makeWindow()
+        for flags: NSEvent.ModifierFlags in [[.option, .shift], [.option, .command], [.option, .control]] {
+            let repeater = makeRepeater()
+            var steps = 0
+            _ = repeater.handleKeyDown(
+                keyCode: 123, modifiers: .option, isRepeat: false, window: window, allowsOption: true
+            ) {
+                steps += 1
+                return true
+            }
+            let event = try keyEvent(.flagsChanged, code: 56, window: window, modifiers: flags)
+            XCTAssertTrue(repeater.handleMonitoredEvent(event) === event)
+            repeater.performScheduledRepeat()
+            XCTAssertEqual(steps, 1)
+            XCTAssertFalse(repeater.isRepeating)
+        }
+    }
+
+    func testOptionPermissionDoesNotLeakIntoTheNextHold() throws {
+        let window = makeWindow()
+        let repeater = makeRepeater()
+        var steps = 0
+        _ = repeater.handleKeyDown(
+            keyCode: 124, modifiers: .option, isRepeat: false, window: window, allowsOption: true
+        ) {
+            steps += 1
+            return true
+        }
+        repeater.stop()
+        _ = repeater.handleKeyDown(keyCode: 124, modifiers: [], isRepeat: false, window: window) {
+            steps += 1
+            return true
+        }
+        _ = repeater.handleMonitoredEvent(try keyEvent(
+            .flagsChanged, code: 58, window: window, modifiers: .option
+        ))
+        repeater.performScheduledRepeat()
+        XCTAssertEqual(steps, 2)
+        XCTAssertFalse(repeater.isRepeating)
+    }
+
+    func testChangingOptionPermissionOnAQueuedRepeatCancelsTheHold() {
+        let window = makeWindow()
+        for initiallyAllowed in [false, true] {
+            let repeater = makeRepeater()
+            var steps = 0
+            _ = repeater.handleKeyDown(
+                keyCode: 124, modifiers: [], isRepeat: false,
+                window: window, allowsOption: initiallyAllowed
+            ) {
+                steps += 1
+                return true
+            }
+            _ = repeater.handleKeyDown(
+                keyCode: 124, modifiers: [], isRepeat: true,
+                window: window, allowsOption: !initiallyAllowed
+            ) {
+                XCTFail("A queued repeat cannot change the surface's Option permission.")
+                return true
+            }
+            repeater.performScheduledRepeat()
+            XCTAssertEqual(steps, 1)
+            XCTAssertFalse(repeater.isRepeating)
+        }
+    }
+
+    func testOptedInOptionHoldStopsWhenFocusMovesAndCannotRestartFromARepeat() {
+        let window = makeWindow()
+        let repeater = makeRepeater()
+        var steps = 0
+        _ = repeater.handleKeyDown(
+            keyCode: 126, modifiers: .option, isRepeat: false, window: window, allowsOption: true
+        ) {
+            steps += 1
+            return true
+        }
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+        repeater.performScheduledRepeat()
+        _ = repeater.handleKeyDown(
+            keyCode: 126, modifiers: .option, isRepeat: true, window: window, allowsOption: true
+        ) {
+            steps += 1
+            return true
+        }
+        XCTAssertEqual(steps, 1)
+        XCTAssertFalse(repeater.isRepeating)
+    }
+
     func testOtherKeyAndKeyUpCancelTheActiveHold() throws {
         let window = makeWindow()
         for (type, keyCode) in [(NSEvent.EventType.keyDown, UInt16(0)), (.keyUp, UInt16(123))] {

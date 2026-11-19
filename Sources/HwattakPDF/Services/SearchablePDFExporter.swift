@@ -43,6 +43,34 @@ enum SearchablePDFExporter {
             destination: destination
         )
 
+        func writeFinalOutput(_ output: PDFDocument) throws {
+            try Task.checkCancellation()
+            try PDFSaveCancellation.checkCurrent()
+
+            try AtomicPDFWriter.write(
+                output,
+                to: destination,
+                validateDestinationBeforeCommit: {
+                    // Keep the precondition captured BEFORE OCR rendering, not
+                    // just the one the writer captures before serialization.
+                    try beforeDestinationCommit?()
+                    try validateDoesNotAliasSource(protectedSourceURLs, destination: destination)
+                    try destinationPrecondition.validate()
+                }
+            )
+
+            guard PDFDocument(url: destination)?.pageCount == document.pageCount else {
+                throw WorkspaceError.operationFailed(L10n.string("error.reopen_ocr_copy"))
+            }
+        }
+        let replacementIndexes = PDFOCRApplication.replacementPageIndexes(checkpoint: checkpoint).sorted()
+        if !document.isEncrypted, replacementIndexes.isEmpty {
+            // No recognized page needs replacement. Save the current graph
+            // directly so an unnecessary reload cannot normalize its relations.
+            try writeFinalOutput(document)
+            return
+        }
+
         // NSSavePanel can authorize only the chosen file, not a temporary
         // sibling in its folder. Render in our private temporary directory,
         // then let the shared writer handle the file-scoped save permission.
@@ -56,24 +84,52 @@ enum SearchablePDFExporter {
             attributes: [.posixPermissions: 0o700]
         )
         defer { try? fileManager.removeItem(at: stagingDirectory) }
-        let replacementIndexes = PDFOCRApplication.replacementPageIndexes(checkpoint: checkpoint).sorted()
-        let snapshotData: Data?
+        let stagedDocument: PDFDocument
         if document.isEncrypted {
             // Only owner-unlocked sources reach this point. Like the OCR
             // snapshot writer, produce a passwordless, process-local copy.
-            snapshotData = document.dataRepresentation(options: [
+            let snapshotData = document.dataRepresentation(options: [
                 .ownerPasswordOption: "",
                 .userPasswordOption: "",
                 PDFDocumentWriteOption(rawValue: kCGPDFContextEncryptionKeyLength as String): NSNumber(value: 128)
             ])
+            guard let snapshotData,
+                  let snapshot = PDFDocument(data: snapshotData),
+                  !snapshot.isLocked,
+                  snapshot.pageCount == document.pageCount else {
+                throw WorkspaceError.operationFailed(L10n.string("error.validate_ocr_copy"))
+            }
+            PDFRawStreamProvenance.bindCreated(snapshot, data: snapshotData)
+            stagedDocument = snapshot
         } else {
-            snapshotData = document.dataRepresentation()
+            // The SDK Data round trip can clone Text/Popup targets outside
+            // Annots. Preserve the current graph in our private directory,
+            // then establish provenance from those completed snapshot bytes.
+            try Task.checkCancellation()
+            try PDFSaveCancellation.checkCurrent()
+            let snapshotURL = stagingDirectory.appendingPathComponent("snapshot.pdf")
+            try AtomicPDFWriter.write(
+                document, to: snapshotURL,
+                allowDirectOverwriteFallback: false,
+                checkCancellation: { try Task.checkCancellation() }
+            )
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: snapshotURL.path
+            )
+            try Task.checkCancellation()
+            try PDFSaveCancellation.checkCurrent()
+            let snapshot = try PDFCatalogStructurePreserver.loadPrivateSearchableSnapshot(at: snapshotURL)
+            guard !snapshot.isLocked,
+                  snapshot.pageCount == document.pageCount else {
+                throw WorkspaceError.operationFailed(L10n.string("error.validate_ocr_copy"))
+            }
+            stagedDocument = snapshot
         }
-        guard let snapshotData,
-              let stagedDocument = PDFDocument(data: snapshotData),
-              !stagedDocument.isLocked,
-              stagedDocument.pageCount == document.pageCount else {
-            throw WorkspaceError.operationFailed(L10n.string("error.validate_ocr_copy"))
+        // PDFKit serialization need not retain a canonical form catalog, and
+        // associated markers do not survive a Data round trip. Retained pages
+        // still need the same forms-only save boundary as the source.
+        if PDFCanonicalFormMaterializer.shouldMaterialize(document) {
+            PDFCanonicalFormMaterializer.mark(stagedDocument)
         }
         // Keep the page objects from this full-document copy. Rebuilding all
         // pages through Core Graphics would flatten unselected annotations,
@@ -112,23 +168,7 @@ enum SearchablePDFExporter {
             for change in linkChanges { change.apply() }
             stagedDocument.outlineRoot = outline
         }
-        try Task.checkCancellation()
-
-        try AtomicPDFWriter.write(
-            stagedDocument,
-            to: destination,
-            validateDestinationBeforeCommit: {
-                // Keep the precondition captured BEFORE OCR rendering, not
-                // just the one the writer captures before serialization.
-                try beforeDestinationCommit?()
-                try validateDoesNotAliasSource(protectedSourceURLs, destination: destination)
-                try destinationPrecondition.validate()
-            }
-        )
-
-        guard PDFDocument(url: destination)?.pageCount == document.pageCount else {
-            throw WorkspaceError.operationFailed(L10n.string("error.reopen_ocr_copy"))
-        }
+        try writeFinalOutput(stagedDocument)
     }
 
     /// Render only pages with usable new recognition. A skipped or empty
@@ -147,6 +187,7 @@ enum SearchablePDFExporter {
         defer { context.closePDF() }
         for index in pageIndexes {
             try Task.checkCancellation()
+            try PDFSaveCancellation.checkCurrent()
             try autoreleasepool {
                 guard let page = document.page(at: index),
                       let result = checkpoint.pages[index] else {

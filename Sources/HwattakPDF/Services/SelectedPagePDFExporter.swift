@@ -4,7 +4,7 @@ import Foundation
 import PDFKit
 
 /// Result of exporting selected pages as separate one-page PDF files.
-struct IndividualPagePDFExportResult {
+struct IndividualPagePDFExportResult: Sendable {
     let directoryURL: URL
     let fileURLs: [URL]
     let sourcePageIndices: [Int]
@@ -13,7 +13,7 @@ struct IndividualPagePDFExportResult {
 /// Non-mutating selected-page export utilities shared by the sidebar, toolbar,
 /// app menu, and workspace model.
 enum SelectedPagePDFExporter {
-    private static let fallbackBaseName = "HwattakPDF"
+    private static let fallbackBaseName = "EmberPDF"
     // APFS permits 255 UTF-8 bytes per path component. Keeping the source-
     // derived stem compact leaves ample room for page numbers, export suffixes,
     // collision counters, and the extension without splitting a grapheme.
@@ -54,6 +54,7 @@ enum SelectedPagePDFExporter {
         fileManager: FileManager = .default
     ) throws -> IndividualPagePDFExportResult {
         try PDFDocumentSecurityPolicy.validateCanExtractPages(document)
+        try PDFPageStructurePreserver.validateCatalog(document)
         // Validate the complete selection before creating anything in the
         // user-selected folder. Pages themselves are detached one at a time
         // below so a large, image-heavy selection cannot retain hundreds of
@@ -62,6 +63,35 @@ enum SelectedPagePDFExporter {
             indexes,
             pageCount: document.pageCount
         )
+        return try exportIndividually(from: document, indexes: normalizedIndexes,
+            originalPageIndices: normalizedIndexes, to: parentDirectory,
+            sourceURL: sourceURL, fileManager: fileManager)
+    }
+
+    /// The UI has already detached only the selected pages. Preserve their
+    /// original document numbers in filenames without retaining the live PDF.
+    static func exportPreparedIndividually(
+        from document: PDFDocument, originalPageIndices: [Int],
+        to parentDirectory: URL, sourceURL: URL?, fileManager: FileManager = .default
+    ) throws -> IndividualPagePDFExportResult {
+        guard originalPageIndices.count == document.pageCount,
+              originalPageIndices.allSatisfy({ $0 >= 0 && $0 < Int.max }),
+              Set(originalPageIndices).count == originalPageIndices.count else {
+            throw WorkspaceError.noPagesSelected
+        }
+        try PDFDocumentSecurityPolicy.validateCanExtractPages(document)
+        try PDFPageStructurePreserver.validateCatalog(document)
+        let indexes = try PDFPageOperations.normalizedSelection(Array(0..<document.pageCount), pageCount: document.pageCount)
+        return try exportIndividually(from: document, indexes: indexes,
+            originalPageIndices: originalPageIndices, to: parentDirectory,
+            sourceURL: sourceURL, fileManager: fileManager)
+    }
+
+    private static func exportIndividually(
+        from document: PDFDocument, indexes: [Int], originalPageIndices: [Int],
+        to parentDirectory: URL, sourceURL: URL?, fileManager: FileManager
+    ) throws -> IndividualPagePDFExportResult {
+        try PDFSaveCancellation.checkCurrent()
         let access = SecurityScopedAccess(url: parentDirectory)
         defer { withExtendedLifetime(access) {} }
         let baseName = documentBaseName(for: sourceURL)
@@ -79,11 +109,12 @@ enum SelectedPagePDFExporter {
             stagingWasCreated = true
 
             var fileNames: [String] = []
-            fileNames.reserveCapacity(normalizedIndexes.count)
-            for sourcePageIndex in normalizedIndexes {
+            fileNames.reserveCapacity(indexes.count)
+            for (sourcePageIndex, originalPageIndex) in zip(indexes, originalPageIndices) {
+                try PDFSaveCancellation.checkCurrent()
                 let fileName = individualFileName(
                     baseName: baseName,
-                    sourcePageIndex: sourcePageIndex
+                    sourcePageIndex: originalPageIndex
                 )
                 let stagingURL = stagingDirectory.appendingPathComponent(fileName)
                 try autoreleasepool {
@@ -96,6 +127,7 @@ enum SelectedPagePDFExporter {
                 fileNames.append(fileName)
             }
 
+            try PDFSaveCancellation.checkCurrent()
             let finalDirectory = try moveStagingDirectory(
                 stagingDirectory,
                 toUniqueDirectoryNamed: individualDirectoryName(for: sourceURL),
@@ -106,7 +138,7 @@ enum SelectedPagePDFExporter {
             return IndividualPagePDFExportResult(
                 directoryURL: finalDirectory,
                 fileURLs: fileNames.map { finalDirectory.appendingPathComponent($0) },
-                sourcePageIndices: normalizedIndexes
+                sourcePageIndices: originalPageIndices
             )
         } catch {
             let exportError = error
@@ -162,6 +194,7 @@ enum SelectedPagePDFExporter {
         fileManager: FileManager
     ) throws -> URL {
         for attempt in 1...maximumDirectoryNameAttempts {
+            try PDFSaveCancellation.checkCurrent()
             let suffix = attempt == 1 ? "" : "-\(attempt)"
             let candidate = parentDirectory.appendingPathComponent(
                 preferredName + suffix,

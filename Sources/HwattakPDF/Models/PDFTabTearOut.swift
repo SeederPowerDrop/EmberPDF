@@ -271,7 +271,11 @@ final class AppWideWorkspaceSessionCoordinator:
             selectedDocumentIDs: record.selectedDocumentIDs,
             layout: PDFComparisonLayout(rawValue: record.layout) ?? .sideBySide,
             syncEnabled: record.syncEnabled,
-            lockedDocumentIDs: Set(record.lockedDocumentIDs)
+            lockedDocumentIDs: Set(record.lockedDocumentIDs),
+            splitTree: record.splitTree?.normalized(
+                selectedDocumentIDs: record.selectedDocumentIDs,
+                fallbackAxis: PDFComparisonLayout(rawValue: record.layout) ?? .sideBySide
+            )
         )
         configuration.restorePersistedPanelWeights(
             sideBySide: Dictionary(
@@ -284,7 +288,7 @@ final class AppWideWorkspaceSessionCoordinator:
             )
         )
         return WorkspaceComparisonPresentationState(
-            isComparing: record.isComparing && configuration.canBeginComparison,
+            isComparing: record.isComparing && configuration.canContinueComparison,
             configuration: configuration
         )
     }
@@ -321,7 +325,11 @@ final class AppWideWorkspaceSessionCoordinator:
                         state.configuration.lockedDocumentIDs.contains($0)
                     },
                     sideBySideWeights: weights(for: .sideBySide),
-                    stackedWeights: weights(for: .stacked)
+                    stackedWeights: weights(for: .stacked),
+                    splitTree: state.configuration.splitTree?.normalized(
+                        selectedDocumentIDs: state.configuration.selectedDocumentIDs,
+                        fallbackAxis: state.configuration.layout
+                    )
                 )
             )
         }

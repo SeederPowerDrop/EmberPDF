@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 4,
+  "identifier": "org.emberpdf.examples.hover-translator",
+  "displayName": "Hover Translator",
+  "version": "1.0.0",
+  "author": "EmberPDF community examples",
+  "description": "Translate the PDF word under the pointer using the host's local translation panel.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "hoverText",
+    "localTranslation"
+  ],
+  "actions": [
+    {
+      "id": "open-panel",
+      "title": "Open hover translation",
+      "output": "hoverTranslationPanel",
+      "template": ""
+    }
+  ]
+}
+

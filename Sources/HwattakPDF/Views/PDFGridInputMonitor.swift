@@ -339,7 +339,7 @@ struct PDFGridInputMonitor: NSViewRepresentable {
             let primaryDelta: CGFloat
             let crossAxisDelta: CGFloat
             switch pagingDirection {
-            case .vertical:
+            case .vertical, .allDirections:
                 primaryDelta = event.scrollingDeltaY * precisionMultiplier
                 crossAxisDelta = event.scrollingDeltaX * precisionMultiplier
             case .horizontal:

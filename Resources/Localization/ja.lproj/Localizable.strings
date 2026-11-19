@@ -12,6 +12,8 @@
 "settings.language.description" = "メニュー、ボタン、メッセージに使用する言語を選択します。";
 "settings.icon.title" = "アプリアイコン";
 "settings.icon.description" = "DockとFinderに表示するアイコンを選択します。";
+"settings.icon.ember.title" = "熾火";
+"settings.icon.ember.subtitle" = "文書を照らす、あたたかな灯り";
 "settings.icon.stack.title" = "ページスタック";
 "settings.icon.stack.subtitle" = "ページの整理と選択";
 "settings.icon.markup.title" = "精密マークアップ";
@@ -29,13 +31,13 @@
 "mode.viewer.summary" = "閲覧、選択、コメント、署名、翻訳、AI、メモの共有に集中します。";
 "mode.editing.title" = "編集モード";
 "mode.editing.short" = "編集";
-"mode.editing.summary" = "PDF上にテキストを重ねて入力し、既存文字を視覚的に置き換え、署名、画像、手書き、ページを編集します。";
+"mode.editing.summary" = "PDF本文のテキストを修正・削除・追加し、署名、画像、手書き、ページを編集します。";
 "mode.study.title" = "学習モード";
 "mode.study.short" = "学習";
 "mode.study.summary" = "AI、翻訳、用語・計算支援、メモ、手書き、下線、ハイライトを活用します。";
 "status.mode_changed" = "%@に切り替えました。";
 "tool.comment_note" = "コメントメモ";
-"tool.pdf_text" = "PDFテキスト";
+"tool.pdf_text" = "本文を編集";
 "tool.study_note" = "学習メモ";
 "toolbar.share_note" = "メモを共有";
 "share_note.title" = "メモして共有";
@@ -68,7 +70,7 @@
 "help.item.mode_viewer.title" = "ビューアモード";
 "help.item.mode_viewer.detail" = "テキストの閲覧・選択、コメントや署名の追加、AIによる翻訳・要約、メモの共有ができます。本文の直接編集は無効です。";
 "help.item.mode_editing.title" = "編集モード";
-"help.item.mode_editing.detail" = "PDF上にテキストを直接入力するか、既存文字をオーバーレイで覆って視覚的に置き換え、署名や画像の配置、手書き、ページ整理ができます。元のコンテンツストリームの文字は残り、オーバーレイは取り消しと保存の対象です。";
+"help.item.mode_editing.detail" = "選択ツールで本文をドラッグし、「本文を編集」（가T）を押して文字を直接修正します。「本文を編集」で空白をクリックすると、新しい文字を挿入できます。署名・画像・手書きの追加やページの整理もでき、変更は取り消しと保存の対象です。";
 "help.item.mode_study.title" = "学習モード";
 "help.item.mode_study.detail" = "AIの説明、翻訳、用語・計算支援と、入力メモ、手書き、下線、調整可能なハイライトを組み合わせます。";
 "help.shortcut.mode_viewer" = "ビューアモードに切り替え";
@@ -151,10 +153,10 @@
 "PDF 또는 이미지 파일을 드롭해 주세요." = "PDFまたは画像ファイルをドロップしてください。";
 "PDF를 새 탭으로 열거나 이미지 추가" = "PDFを新しいタブで開く／画像を追加";
 "PDF 병합…" = "PDFを結合…";
-"PDF 비교 닫기" = "PDF比較を閉じる";
-"PDF 비교 배치" = "PDF比較のレイアウト";
-"PDF 비교 설정" = "PDF比較設定";
-"PDF 비교" = "PDFを比較";
+"PDF 비교 닫기" = "一緒に表示を終了";
+"PDF 비교 배치" = "一緒に表示の配置";
+"PDF 비교 설정" = "一緒に表示の設定";
+"PDF 비교" = "一緒に表示";
 "PDF 양식 값을 변경했습니다." = "PDFフォームの値を変更しました。";
 "PDF 없음" = "PDFなし";
 "PDF 여러 개를 놓으면 각 파일을 별도의 탭으로 엽니다." = "複数のPDFをドロップすると、それぞれ別のタブで開きます。";
@@ -164,7 +166,7 @@
 "PDF 추가…" = "PDFを追加…";
 "PDF 탭별 부담" = "PDFタブ別の負荷";
 "PDF 탭을 주제별로 묶어 접거나 펼칠 수 있습니다." = "PDFタブをトピックごとにまとめて、折りたたんだり展開したりできます。";
-"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "PDF標準のフリーテキスト注釈として保存されます。既存本文オブジェクトの再配置は、今後の高度な編集エンジンで対応予定です。";
+"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "PDF標準のフリーテキスト注釈として保存します。既存の本文を変更するには、編集モードの選択ツールでドラッグし、「本文を編集」（가T）を押してください。";
 "PDF는 각각 새 탭에서 열고 이미지는 현재 페이지 중앙에 놓습니다." = "PDFはそれぞれ別のタブで開き、画像は現在のページ中央に配置します。";
 "PDF는 각각 새 탭에서 열고, 이미지는 현재 페이지 중앙에 놓습니다." = "PDFはそれぞれ別のタブで開き、画像は現在のページ中央に配置します。";
 "PDF를 새 탭으로 열기" = "PDFを新しいタブで開く";
@@ -272,14 +274,14 @@
 "보기" = "表示";
 "분할선 방향까지 함께 표시합니다." = "分割線の方向も併せて表示します。";
 "불투명도" = "不透明度";
-"비교 배치" = "比較レイアウト";
-"비교 시작" = "比較を開始";
-"비교 종료" = "比較を終了";
-"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "比較画面でロックした書類は、ほかの書類を動かさず、ほかの書類にも追従しません。";
-"비교하려면 PDF 탭을 하나 더 열어 주세요." = "比較するにはPDFタブをもう1つ開いてください。";
-"비교할 PDF" = "比較するPDF";
-"비교할 PDF가 부족합니다" = "比較するPDFが足りません";
-"비교할 PDF가 없습니다" = "比較できるPDFがありません";
+"비교 배치" = "一緒に表示の配置";
+"비교 시작" = "一緒に表示を開始";
+"비교 종료" = "一緒に表示を終了";
+"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "「一緒に表示」で固定したPDFは、ほかの文書を動かしたり、ほかの文書に連動して動いたりしません。";
+"비교하려면 PDF 탭을 하나 더 열어 주세요." = "一緒に表示するには、PDFタブをもう1つ開いてください。";
+"비교할 PDF" = "一緒に表示するPDF";
+"비교할 PDF가 부족합니다" = "一緒に表示するPDFが足りません";
+"비교할 PDF가 없습니다" = "一緒に表示するPDFがありません";
 "빈 탭 추가" = "空のタブを追加";
 "빠르게 그은 획을 더 가늘게 표현하는 정도입니다." = "速く描いた線をより細く表現する度合いです。";
 "빠르게" = "高速";
@@ -339,7 +341,7 @@
 "열 PDF를 선택하세요. iCloud Drive와 Finder의 파일 제공자 위치도 사용할 수 있습니다." = "開くPDFを選択してください。iCloud DriveやFinderのファイルプロバイダの場所も使用できます。";
 "열 PDF를 선택하세요. 각 파일을 별도의 탭으로 엽니다." = "開くPDFを選択してください。各ファイルを別々のタブで開きます。";
 "열려 있는 PDF 중 2~4개를 다시 선택해 주세요." = "開いているPDFから2〜4件を選び直してください。";
-"열린 PDF 비교" = "開いているPDFを比較";
+"열린 PDF 비교" = "一緒に表示";
 "열린 탭 관리" = "開いているタブを管理";
 "열린 탭" = "開いているタブ";
 "예: 연구 자료" = "例：研究資料";
@@ -351,8 +353,8 @@
 "왼쪽" = "左";
 "왼쪽으로 회전" = "左に回転";
 "운영 체제가 잘못된 리소스 카운터를 반환했습니다." = "オペレーティングシステムから無効なリソースカウンタが返されました。";
-"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "上記の値はHwattakPDFプロセス全体の実際のRSSとCPU使用率です。CPU 100%は論理コア1個分を表します。";
-"위아래 비교" = "上下比較";
+"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "上記の値はEmberPDFプロセス全体の実際のRSSとCPU使用率です。CPU 100%は論理コア1個分を表します。";
+"위아래 비교" = "縦に並べる";
 "이 탭으로 전환합니다." = "このタブに切り替えます。";
 "이동 감도" = "移動感度";
 "이동할 그룹 없음" = "移動できるグループなし";
@@ -404,7 +406,7 @@
 "접습니다" = "折りたたみます";
 "접힘" = "折りたたみ済み";
 "정밀하게" = "高精度";
-"좌우 비교" = "左右比較";
+"좌우 비교" = "横に並べる";
 "주석 내용" = "注釈の内容";
 "주석 선 색상" = "注釈の線の色";
 "주석을 변경했습니다." = "注釈を変更しました。";
@@ -533,7 +535,7 @@
 "comparison.lock_help.disabled" = "同期を再び有効にしたとき、このPDFをスクロールグループから除外します。";
 
 /* Semantic keys used throughout the workspace */
-"app.version" = "HwattakPDFバージョン%@";
+"app.version" = "EmberPDFバージョン%@";
 "comparison.horizontal_split" = "横分割";
 "comparison.side_by_side" = "左右比較";
 "comparison.stacked" = "上下比較";
@@ -544,8 +546,8 @@
 "document.untitled" = "新規PDF";
 "error.cannot_open_file" = "ファイルを開けません：%@";
 "error.cannot_save_file" = "ファイルを保存できません：%@";
-"error.external_file_modified" = "「%@」は開いた後にHwattakPDFの外部で変更されました。新しいファイルは上書きしていません。代わりにコピーを保存してください。";
-"새 HwattakPDF 창으로 분리" = "新しいHwattakPDFウインドウに分離";
+"error.external_file_modified" = "「%@」は開いた後にEmberPDFの外部で変更されました。新しいファイルは上書きしていません。代わりにコピーを保存してください。";
+"새 HwattakPDF 창으로 분리" = "新しいEmberPDFウインドウに分離";
 "error.choose_save_location" = "「別名で保存」を使って保存先を選択してください。";
 "error.copy_merged_page" = "結合ファイルの%dページをコピーできませんでした。";
 "error.copy_page" = "%dページをコピーできませんでした。";
@@ -813,7 +815,15 @@
 "ai.api_key_required" = "このプロバイダーのAPIキーを設定で保存してください。";
 "ai.empty.title" = "PDFについて質問";
 "ai.empty.message" = "送信範囲を選び、プレビューを確認した場合にのみ外部AIへ内容を送信します。関連PDFの検索はこのMac内だけで処理されます。";
+"ai.empty.message.direct" = "質問と一緒に送る範囲を選ぶと、選択したAIプロバイダーに直接送信します。関連PDFの検索はこのMac内だけで処理されます。";
 "ai.external_notice.short" = "送信前に内容とプロバイダーをもう一度確認します。";
+"ai.display_options" = "AIオプション";
+"ai.external_notice.show" = "送信に関する案内を表示";
+"ai.external_notice.hide" = "案内を非表示";
+"ai.confirmation.show" = "送信前に確認画面を表示";
+"ai.confirmation.setting_help" = "オフにすると、選択した範囲の内容を選択したプロバイダーに直接送信します。";
+"ai.send.direct" = "AIへ送信";
+"ai.external_notice.direct" = "選択した範囲の内容を選択したプロバイダーに直接送信します。";
 "ai.send" = "確認してAIへ送信";
 "ai.cancel_request" = "AIリクエストを停止";
 "ai.clear" = "会話を消去";
@@ -832,7 +842,7 @@
 "ai.draft.apply_confirmation.message" = "追加前にエディターで文章を確認できます。保存を選ぶまで元のファイルには書き込まれません。";
 "ai.draft.review_and_apply" = "確認してテキストとして追加";
 "ai.consent.title" = "外部AIへ送信する前に確認";
-"ai.consent.message" = "以下のPDF内容は、選択したAIプロバイダーのサーバーへ送信されます。HwattakPDFがリクエスト本文にAPIキーを含めることはありません。";
+"ai.consent.message" = "以下のPDF内容は、選択したAIプロバイダーのサーバーへ送信されます。EmberPDFがリクエスト本文にAPIキーを含めることはありません。";
 "ai.consent.preview" = "送信内容のプレビュー";
 "ai.consent.acknowledge" = "表示されたPDF内容と質問を上記のプロバイダーへ送信することに同意します。";
 "ai.consent.send" = "同意して送信";
@@ -876,9 +886,10 @@
 "ai.settings.api_key_placeholder" = "新しいAPIキーを入力";
 "ai.settings.key_saved" = "キーチェーンに安全に保存済み";
 "ai.settings.key_missing" = "このプロバイダーにはAPIキーが必要です。";
+"ai.settings.key_access_requires_reentry" = "保存済みのAPIキーにアクセスできません。「設定 > AI」でこのプロバイダーのAPIキーをもう一度保存してください。ログインキーチェーンがロックされている場合は、先にロックを解除してください。";
 "ai.settings.key_deleted" = "保存済みのAPIキーを削除しました。";
 "ai.settings.web_search" = "プロバイダーのWeb検索を許可";
-"ai.settings.billing_note" = "ChatGPT、Claude、Geminiのサブスクリプションと、開発者APIの利用・課金は別の場合があります。文書の送信はAIパネルのリクエストごとに確認します。";
+"ai.settings.billing_note" = "ChatGPT、Claude、Geminiのサブスクリプションと、開発者APIの利用・課金は別の場合があります。";
 "ai.settings.mcp_title" = "リモートMCPサーバー";
 "ai.settings.mcp_label" = "サーバーラベル";
 "ai.settings.mcp_approval_note" = "公開HTTPSサーバーだけに接続し、MCPツールの呼び出しは実行前に毎回内容を確認して承認する必要があります。";
@@ -889,21 +900,35 @@
 "ai.error.duplicate_mcp" = "このMCPサーバーはすでに登録されています。";
 
 /* About */
-"about.menu" = "HwattakPDFについて";
-"about.title" = "HwattakPDFについて";
+"about.menu" = "EmberPDFについて";
+"about.title" = "EmberPDFについて";
 "about.close" = "閉じる";
 "about.confirm" = "閉じる";
-"about.github" = "GitHub · github.com/SeederPowerDrop/HwattakPDF";
-"about.support" = "HwattakPDFを支援する";
-"about.introduction.1" = "あるPDFソフトを買い切りで購入して使っていましたが、今では基本的な機能までサブスクリプションに変わってしまい、あまりにも腹が立ったので、Vibe CodingでHwattakPDFを作りました。";
-"about.introduction.2" = "その会社にも経営を続ける事情があり、やむを得ない面があることは理解しています。それでも、すでに料金を支払ったユーザーに対する対応としてはあまりに不公平だと感じ、自分で作ることにしました。";
-"about.introduction.3" = "HwattakPDFが、より多くの方に便利に使ってもらえるアプリになればうれしいです。";
-"about.introduction.4" = "これからもできる限り、ずっと無料で提供し、サポートを続けていきます。もしよろしければ、少額のtipだけいただければ幸いです。";
-"about.introduction.5" = "そして ERW FWS WRG";
-"about.support.title" = "HwattakPDFをずっと無料で届けるための力";
-"about.support.detail" = "HwattakPDFには、サブスクリプション料金も広告もありません。皆さまからの任意のご支援が、無料での開発とメンテナンスを続けるための唯一の支えです。";
+"about.github" = "GitHub · SeederPowerDrop";
+"about.support" = "EmberPDFを支援する";
+"about.introduction.1" = "高いお金を払って購入したPDF閲覧・編集アプリがサブスクリプション制に変わり、それまで使っていた機能が使えなくなりました。腹が立ったので、バイブコーディングでEmberPDFを作りました。";
+"about.introduction.2" = "そうして怒りから作り始めましたが、いつしかその気持ちは熾火のように静まりました。私と同じことを経験した人は多いのではないかと思いました。そうした方々のために、長くメンテナンスが続くアプリになってほしいと願いながら作りました。";
+"about.introduction.3" = "PDFの世界のObsidianのようなアプリを目指して、プラグイン機能も加えました。それぞれに必要な機能を追加し、一緒に可能性を広げていけたらうれしいです。";
+"about.introduction.4" = "熾火が温もりを保つように、皆さんにEmberPDFを長く役立てていただきたいと思っています。私にできる限り、無料での配布と手入れを続けていきます。";
+"about.introduction.5" = "ありがとうございます。\nそして ERW FWS WRG";
+"about.support.title" = "支援する";
+"about.support.detail" = "これまでいただいた助けを次の誰かへつなぐ気持ちで、誰もが無料で使える道具を作っています。お役に立ちましたら、小さなご支援で開発とメンテナンスを応援していただけるとうれしいです。";
 "about.image_accessibility" = "作者が提供した白黒のキャラクター絵";
 "about.image_unavailable" = "紹介画像を読み込めませんでした";
+"about.tagline" = "誰もが自由に使えるmacOSのPDFツール。";
+"about.guide" = "使い方ガイド";
+"about.rights.title" = "ソフトウェアを使う基本的な権利";
+"about.rights.detail" = "コンピュータを使うために必要な基本的な道具は、誰もが無料で、自由に使えるべきだと考えています。私たちが分かち合う知識が誰かの出発点となり、人とAIが共に学び、作り、可能性を広げていけることを願っています。";
+"about.licenses" = "オープンソースライセンス";
+"about.licenses.detail" = "EmberPDFはMozilla Public License 2.0のもとで配布されています。使用しているオープンソースの構成要素についても、ライセンスと著作権表示を確認できます。";
+"about.licenses.project" = "EmberPDFのライセンス";
+"about.licenses.components" = "構成要素と著作権表示";
+"about.bitcoin" = "Bitcoin (BTC)";
+"about.bitcoin.detail" = "以下のアドレスにBitcoin（BTC）で支援できます。";
+"about.bitcoin.copy" = "アドレスをコピー";
+"about.bitcoin.copied" = "アドレスをコピーしました";
+"about.bitcoin.qr" = "Bitcoin支援先アドレスのQRコード";
+"about.support.optional" = "支援は任意です。支援の有無によって利用できるアプリの機能が変わることはありません。";
 "page.sidebar.layout" = "ページのグループ表示";
 "page.sidebar.layout.single" = "1ページ";
 "page.sidebar.layout.facing" = "左右2ページ";
@@ -920,11 +945,12 @@
 "settings.pdf_input.keyboard_speed.slow" = "遅い";
 "settings.pdf_input.keyboard_speed.normal" = "標準";
 "settings.pdf_input.keyboard_speed.fast" = "速い";
-"settings.pdf_input.keyboard_speed.help" = "矢印キーを押し続けたときの移動速度です。Shift (⇧) を同時に押すと約2.2倍の速度で移動します。Option (⌥)＋矢印キーは従来どおりのページ移動に使えます。";
+"settings.pdf_input.keyboard_speed.help" = "矢印キーを押し続けたときの移動速度です。Shift (⇧) を同時に押すと約2.2倍の速度で移動します。すべての矢印キーモードでは Option (⌥)＋矢印キーでもページをめくれます。他のモードや文字の入力・選択では通常の Option 操作が使えます。";
 "pdf.navigation.label" = "メイン画面のページ移動";
 "pdf.navigation.vertical" = "上下スクロール";
 "pdf.navigation.horizontal" = "左右のページめくり";
-"pdf.navigation.help" = "上下スクロールまたは左右のページめくりを選択します。左右のページめくりでは ←/→ キーか左右スワイプで移動し、2・4ページ表示では表示中のページ全体をまとめてめくります。";
+"pdf.navigation.all_directions" = "すべての矢印キーを使う";
+"pdf.navigation.help" = "上下スクロール、左右のページめくり（←/→ キー・左右スワイプ）、すべての矢印キーから選びます。すべての矢印キーモードでは、PDF画面で ↑/← は前、↓/→ は次のページまたはページの組へ移動し、Option (⌥) との併用も可能です。マウスとトラックパッドは通常どおりスクロールできます。";
 "settings.pdf_input.zoom_modifier.label" = "スクロールズームキー";
 "settings.pdf_input.zoom_modifier.option" = "Option (⌥)";
 "settings.pdf_input.zoom_modifier.command" = "Command (⌘)";
@@ -937,8 +963,8 @@
 "page.jump.help" = "ページ番号を入力してReturnキーを押します。";
 
 /* Help tutorial */
-"help.title" = "HwattakPDF ユーザーガイド";
-"help.menu" = "HwattakPDF ユーザーガイド";
+"help.title" = "EmberPDF ユーザーガイド";
+"help.menu" = "EmberPDF ユーザーガイド";
 "help.subtitle" = "アイコン、ジェスチャ、ショートカット、安全な書類操作について説明します。";
 "help.search" = "機能またはショートカットを検索";
 "help.no_results.title" = "結果がありません";
@@ -954,16 +980,16 @@
 "help.item.open.title" = "PDFを開く";
 "help.item.open.detail" = "フォルダアイコンまたは⌘Oを使います。複数のPDFを選択すると、それぞれが個別のタブで開きます。";
 "help.item.layout.title" = "画面構成を知る";
-"help.item.layout.detail" = "上部バーではワークスペース、タブ、比較、リソースを管理します。その下のツールバーではページ、表示、編集、OCR、AI、検索を操作します。";
+"help.item.layout.detail" = "上部のバーでタブとワークスペースを管理します。表示ツールバーではページ移動、画面配置、「一緒に表示」を使えます。";
 "help.item.resume.title" = "作業を再開する";
-"help.item.resume.detail" = "通常どおり終了した場合、ファイル、ワークスペース、タブの順序とスタック、表示中のページ、表示状態、比較レイアウトが復元されます。PDFへの編集内容は別途保存が必要です。";
+"help.item.resume.detail" = "アプリを正常に終了すると、文書、タブ、読んでいた位置、「一緒に表示」の配置が復元されます。PDFの編集内容は別途保存してください。";
 
 "help.topic.tabs.title" = "タブ、スタック、ワークスペース";
 "help.topic.tabs.summary" = "各書類の状態を保ったまま、多数の書類を整理します。";
 "help.item.tab_stack.title" = "タブスタックを作成して並べ替える";
 "help.item.tab_stack.detail" = "タブを別のタブの中央にドロップするとスタックになります。端の近くにドロップすると、代わりに順序を変更できます。";
 "help.item.unstack.title" = "タブをスタックから取り出す";
-"help.item.unstack.detail" = "スタック内のタブをメインのタブ列の末尾までドラッグすると単独のタブになります。書類領域にドロップすると、そのセッションをそのまま新しいHwattakPDFウインドウへ移動できます。";
+"help.item.unstack.detail" = "スタック内のタブをメインのタブ列の末尾までドラッグすると単独のタブになります。書類領域にドロップすると、そのセッションをそのまま新しいEmberPDFウインドウへ移動できます。";
 "help.item.workspace.title" = "ワークスペースを分ける";
 "help.item.workspace.detail" = "重なった四角形のメニューで、ワークスペースの作成、名前変更、切り替え、削除を行い、関連するタブをまとめて移動できます。";
 "help.item.resources.title" = "リソース使用量を確認する";
@@ -980,14 +1006,14 @@
 "help.item.thumbnails.title" = "サムネイルのグループを調整する";
 "help.item.thumbnails.detail" = "ページパネルでは、1ページずつ、固定された左右のペア、または4ページのグループを表示できます。スライダ、プラス／マイナスボタン、トラックパッドの拡大操作で調整し、実際のページサムネイルをドラッグして並べ替えます。";
 
-"help.topic.compare.title" = "PDFを比較する";
+"help.topic.compare.title" = "一緒に表示";
 "help.topic.compare.summary" = "開いている2〜4個の書類を左右または上下に並べて読みます。";
-"help.item.compare_start.title" = "比較を開始する";
-"help.item.compare_start.detail" = "2個以上のPDFを開き、重なった長方形のアイコンを選択して、比較する書類を選びます。";
+"help.item.compare_start.title" = "一緒に表示を開始";
+"help.item.compare_start.detail" = "PDFを2つ以上開き、表示ツールバーの「一緒に表示」を押して、文書を2〜4件選びます。";
 "help.item.compare_layout.title" = "パネルを並べ替えてサイズを変更する";
-"help.item.compare_layout.detail" = "左右または上下に重ねるレイアウトを選びます。パネルのヘッダをドラッグして順序を変更し、区切り線をドラッグして隣接する幅または高さを調整します。";
-"help.item.compare_sync.title" = "スクロールを同期または固定する";
-"help.item.compare_sync.detail" = "スクロール同期をオンにすると、書類間の相対的な進行位置に追従します。動かしたくないパネルは固定できます。";
+"help.item.compare_layout.detail" = "横、縦、格子状の配置を選ぶか、「配置を編集」をオンにしてPDFをドラッグします。端に置くと分割し、中央に置くと入れ替えます。区切り線をドラッグするとサイズが変わります。";
+"help.item.compare_sync.title" = "一緒に移動と固定";
+"help.item.compare_sync.detail" = "「一緒に移動」をオンにすると、各PDFの相対位置を保ちながらスクロールとページ移動が連動します。動かさないPDFはピンで固定してください。";
 
 "help.topic.edit.title" = "編集と注釈";
 "help.topic.edit.summary" = "標準のPDF注釈を追加し、ページを安全に管理します。";
@@ -1018,7 +1044,7 @@
 "help.item.ai_actions.title" = "操作と対象範囲を選ぶ";
 "help.item.ai_actions.detail" = "きらめきボタンから、選択テキスト、ページ、または書類を代表する文脈を対象に、要約、分析、問題解決、入力案、関連PDF、ウェブ調査の各操作を開けます。";
 "help.item.ai_privacy.title" = "送信前に確認する";
-"help.item.ai_privacy.detail" = "HwattakPDFは、リクエストのたびにMacから送信されるテキストと会話を表示します。元のPDFが自動的にアップロードされることはありません。ウェブ機能とMCPツールは任意で有効にでき、MCP呼び出しには承認が必要です。";
+"help.item.ai_privacy.detail" = "EmberPDFは、リクエストのたびにMacから送信されるテキストと会話を表示します。元のPDFが自動的にアップロードされることはありません。ウェブ機能とMCPツールは任意で有効にでき、MCP呼び出しには承認が必要です。";
 
 "help.topic.save.title" = "安全に保存する";
 "help.topic.save.summary" = "PDFファイル自体が変更される場合と、ワークスペースだけが記憶される場合を理解します。";
@@ -1029,10 +1055,10 @@
 "help.item.save_close.title" = "作業を失わずに閉じる";
 "help.item.save_close.detail" = "未保存のタブ、ウインドウ、またはアプリを閉じると、上書き、コピーを保存、変更を破棄、キャンセルのいずれかを求められます。キャンセルすると書類は開いたままになります。";
 "help.item.session_vs_pdf.title" = "セッションの復元はPDFの保存ではありません";
-"help.item.session_vs_pdf.detail" = "タブスタック、ワークスペース、ウインドウ、比較レイアウト、ページ、表示位置は自動的に記憶されます。注釈とページ編集がPDFファイルに反映されるのは、保存した後だけです。";
+"help.item.session_vs_pdf.detail" = "タブ、ワークスペース、読んでいた位置、「一緒に表示」の配置は自動で記憶されます。メモやページの編集はPDFファイルに保存してください。";
 
 "help.topic.shortcuts.title" = "キーボードショートカット";
-"help.topic.shortcuts.summary" = "HwattakPDFに現在実装されている主なコマンドです。";
+"help.topic.shortcuts.summary" = "EmberPDFに現在実装されている主なコマンドです。";
 "help.shortcut.new_tab" = "新規タブ";
 "help.shortcut.open" = "PDFを開く";
 "help.shortcut.close" = "アクティブなタブを閉じる";
@@ -1043,7 +1069,7 @@
 "help.shortcut.previous_tab" = "前のタブ";
 "help.shortcut.settings" = "設定を開く";
 "help.shortcut.signature_undo" = "直前の署名ストロークを取り消す";
-"help.shortcut.compare_exit" = "比較を終了またはキャンセル";
+"help.shortcut.compare_exit" = "配置をキャンセル、または一緒に表示を終了";
 "help.shortcut.help" = "このユーザーガイドを開く";
 
 "help.topic.accessibility.title" = "アクセシビリティと快適な操作";
@@ -1065,7 +1091,7 @@
 "status.undo_completed" = "%@を取り消しました";
 "status.redo_completed" = "%@をやり直しました";
 "help.item.undo_redo.title" = "PDF編集を取り消す／やり直す";
-"help.item.undo_redo.detail" = "⌘Zで取り消し、⇧⌘Zでやり直します。HwattakPDFはPDFごとに、ペン、マークアップ、追加オブジェクト、ページ操作を含む最大22件の可逆な編集操作を保持します。PDF全体のコピーを22個保持することはありません。";
+"help.item.undo_redo.detail" = "⌘Zで取り消し、⇧⌘Zでやり直します。EmberPDFはPDFごとに、ペン、マークアップ、追加オブジェクト、ページ操作を含む最大22件の可逆な編集操作を保持します。PDF全体のコピーを22個保持することはありません。";
 "help.shortcut.undo" = "直前のPDF編集を取り消す";
 "help.shortcut.redo" = "取り消したPDF編集をやり直す";
 
@@ -1078,16 +1104,18 @@
 "search.navigator.clear" = "検索を消去";
 "search.navigator.compact_position" = "%d/%d";
 "search.navigator.show_results" = "検索結果ナビゲータを表示";
+"search.navigator.hide_results" = "検索結果ナビゲータを隠す";
 "search.navigator.results_count" = "検索結果 %d 件";
 "search.navigator.query" = "「%@」";
 "search.navigator.query_accessibility" = "検索語: %@";
 "search.navigator.cancel" = "キャンセル";
 "search.navigator.progress_label" = "検索の進捗";
 "search.navigator.current_position" = "%d / %d 件目";
-"search.navigator.enter_query_message" = "⌘F で検索欄を開き、検索語を入力して Return を押します。";
+"search.navigator.enter_query_message" = "⌘F で検索欄を開き、検索語を入力します。";
 "search.navigator.no_position" = "選択できる検索結果はありません。";
 "search.navigator.progress" = "%d / %d ページを検索";
 "search.navigator.page_heading" = "%@ ページ · %d 件";
+"search.navigator.file_page_detail" = "ファイルの%d/%dページ";
 "search.navigator.result_accessibility" = "%@ ページ、%d/%d 件目: %@";
 "search.navigator.result_hint" = "この一致を選択し、ページ上の正確な位置へ移動します。";
 "search.navigator.current_result" = "現在の結果";
@@ -1128,7 +1156,9 @@
 "study.ai.prompt.study_points" = "試験や復習に重要な概念、覚えるべき関係、間違えやすい点を学習ポイントとして整理してください。";
 "study.ai.prompt.quiz" = "内容を確認する短いクイズを作り、答えはすぐ見えないよう最後に分けて掲載してください。";
 "study.ai.current_page_help" = "現在のページのプレビューを準備します。確認するまで外部AIへ送信しません。";
+"study.ai.current_page_help.direct" = "現在のページを選択したAIプロバイダーに直接送信します。";
 "study.ai.selection_help" = "選択したテキストのプレビューを準備します。確認するまで外部AIへ送信しません。";
+"study.ai.selection_help.direct" = "選択したテキストをAIプロバイダーに直接送信します。";
 "study.note.typed" = "入力メモ";
 "study.note.typed_help" = "PDFをクリックし、キーボードで学習メモ注釈を追加します。";
 "study.note.handwriting" = "手書き";
@@ -1148,7 +1178,7 @@
 "study.status.underline_added" = "下線を追加しました。";
 
 /* 編集モードのインラインテキストエディタ */
-"inline_text.editor" = "PDFインラインテキストエディタ";
+"inline_text.editor" = "PDFテキストエディタ";
 "inline_text.font" = "フォント";
 "inline_text.font_size" = "文字サイズ";
 "inline_text.text_color" = "文字色";
@@ -1168,10 +1198,10 @@
 "inline_text.visual_replacement_warning" = "見た目だけの置換です。元のPDFテキストは検索・コピー可能なままで、安全な墨消しではありません。";
 "status.inline_text_updated" = "テキストと外観を更新しました。";
 "status.visual_text_replacement_added" = "見た目上のテキスト置換を追加しました。元の文字は下に残っています。";
-"help.item.inline_text.title" = "PDF上で直接テキスト入力";
-"help.item.inline_text.detail" = "編集モードでテキストツールを使ってページをクリックすると、その場で入力できます。アプリが作成したテキストはダブルクリックで編集できます。フォント、サイズ、文字色、背景、揃えを設定し、Returnまたは⌘Returnで適用、Shift-Returnで改行、Escでキャンセルします。";
-"help.item.visual_text_replacement.title" = "既存テキストの見た目上の置換";
-"help.item.visual_text_replacement.detail" = "本文を選択してテキストツールで選択範囲をクリックすると、FreeTextで覆えます。元のPDFテキストは検索・コピー・アクセシビリティ抽出に残るため、機密情報の削除や安全な墨消しには使用しないでください。";
+"help.item.inline_text.title" = "本文の修正とテキストの追加";
+"help.item.inline_text.detail" = "編集モードで選択ツールを使って本文をドラッグし、「本文を編集」（가T）を押すと、選択した文字を直接修正できます。入力すると選択範囲を置き換え、編集中はクリックや矢印キーでカーソルを移動できます。Returnで改行、⌘Returnで適用、Escでキャンセルします。新しい文字を入れるには、「本文を編集」で空白をクリックします。既存のフリーテキスト注釈は注釈として編集します。";
+"help.item.visual_text_replacement.title" = "本文の編集範囲と削除";
+"help.item.visual_text_replacement.detail" = "エディタにはPDFに保存されたテキストオブジェクト全体が表示され、選択した単語より広い範囲になる場合があります。すべて消して適用すると、そのオブジェクトが削除されます。保存した変更は検索・コピーに反映されます。段落全体の自動再配置、傾斜や複雑な変形のある文字、スキャン画像内の文字は未対応です。従来の視覚的置換注釈の下にある原文は残ります。";
 "help.item.study_palette.title" = "学習クイックツールとプライバシー確認";
 "help.item.study_palette.detail" = "テキストを選択すると翻訳・説明・要約・解法・学習ポイント・クイズを準備し、未選択時は現在のページだけを使います。外部AIへの送信はプレビュー確認後にのみ開始されます。入力は学習メモ注釈を作成し、手書きはマウス、トラックパッド、またはSidecar経由のApple Pencilポインタ入力を使います。色・太さ・濃さを調整し、Command-Zで取り消せます。";
 "help.item.study_markup_interop.title" = "調整可能なマークの互換性";
@@ -1187,7 +1217,7 @@
 "error.image_unsafe_file" = "通常の画像ファイルのみ追加できます。";
 
 "menu.plugins" = "プラグイン";
-"plugins.manager.title" = "HwattakPDFプラグイン";
+"plugins.manager.title" = "EmberPDFプラグイン";
 "plugins.manager.summary" = "%d個のプラグイン · 有効なアクション%d個";
 "plugins.install" = "プラグインをインストール…";
 "plugins.install.confirm" = "インストール";
@@ -1212,17 +1242,17 @@
 "plugins.permissions.none" = "文書への権限なし";
 "plugins.permission.document_metadata" = "文書名とページ情報を読み取る";
 "plugins.permission.selected_text" = "ユーザーが選択したテキストを読み取る";
-"plugins.permission.clipboard" = "クリップボードにテキストを書き込む";
+"plugins.permission.clipboard" = "クリップボードにテキスト・画像を書き込む";
 "plugins.permission.external_url" = "確認後に外部HTTPSリンクを開く";
 
-"plugins.safety.title" = "安全な宣言型プラグイン";
-"plugins.safety.detail" = "v1テンプレートアクションは任意コード、シェル、キーチェーン、PDFの生バイト、ネットワーク、GPUへ直接アクセスできません。v2ウェブパネルは確認済み外部サイトを一時セッションで表示しますが、リモートスクリプト、Cookie、追跡は動作できます。移動制限は追跡防止機能やファイアウォールではありません。";
+"plugins.safety.title" = "権限を確認する拡張プラットフォーム";
+"plugins.safety.detail" = "機能ごとの権限とパッケージ・コードのハッシュを確認します。実行型プラグインのコードは別の実行プロセスで動作します。公開者の署名・身元は検証しません。確認済みウェブパネルでも、外部サイトのリモートスクリプト、Cookie、追跡がセッション中に動作する場合があります。";
 "plugins.resources.title" = "リソースと安定性のポリシー";
-"plugins.resources.detail" = "インストールは%d個、プラグインごとのアクションは%d個、パッケージは%d MBまでです。アクションは要求時だけ実行され、CPUやGPUに常駐処理を作りません。";
+"plugins.resources.detail" = "インストールは%d個、プラグインごとのアクションは%d個、パッケージは%d MBまでです。許可されたウインドウ拡張は、ウインドウが開いている間バックグラウンドで動作できます。独立した実行プロセスはアプリ全体で最大8個です。";
 
 "plugins.review.install_title" = "プラグインのインストールを確認";
 "plugins.review.update_title" = "プラグインのアップデートを確認";
-"plugins.review.unsigned_notice" = "公開者の署名は検証されません。v1パッケージに実行コードを含めることはできず、上記の制限付きホストアクションだけを使用します。v2ウェブパネルは確認済みのアプリ内コピーと完全に一致する場合のみインストールされますが、リモートスクリプト、Cookie、追跡はセッション中に動作できます。";
+"plugins.review.unsigned_notice" = "インストール前に機能ごとの権限を確認してください。パッケージ・コードのハッシュは確認しますが、公開者の署名・身元は検証しません。実行型プラグインのコードは別の実行プロセスで動作します。ウェブパネルはアプリ内の確認済みコピーと完全に一致する場合のみインストールできますが、外部サイトのリモートスクリプト、Cookie、追跡がセッション中に動作する場合があります。";
 "plugins.review.package_info" = "%dファイル · %d KB · SHA-256 %@";
 
 "plugins.external_url.title" = "外部リンクを開きますか？";
@@ -1235,7 +1265,7 @@
 "plugins.error.title" = "プラグインエラー";
 "plugins.error.invalid_package" = "無効なプラグインパッケージです：%@";
 "plugins.error.invalid_manifest" = "無効なプラグインマニフェストです：%@";
-"plugins.error.incompatible" = "このプラグインにはHwattakPDF %@以降が必要です。現在のバージョン：%@";
+"plugins.error.incompatible" = "このプラグインにはEmberPDF %@以降が必要です。現在のバージョン：%@";
 "plugins.error.already_installed" = "プラグイン「%@」はすでにインストールされています。";
 "plugins.error.package_changed" = "確認後にプラグインパッケージが変更されました。もう一度選択してください。";
 "plugins.error.limit" = "インストールできるプラグインは%d個までです。";
@@ -1258,7 +1288,7 @@
 "action.stop" = "読み込みを停止";
 "plugins.browser.address_placeholder" = "検索語句またはHTTPSアドレス";
 "plugins.browser.privacy" = "アドレスバーとトップレベルの移動は公開HTTPSに制限されます。サブリソース、fetch、WebSocket、DNSを遮断する追跡防止機能やファイアウォールではありません。";
-"plugins.bundled.title" = "HwattakPDF標準プラグイン";
+"plugins.bundled.title" = "EmberPDF標準プラグイン";
 "plugins.bundled.detail" = "アプリに同梱 · インストール前に権限を確認";
 "plugins.bundled.review_install" = "確認してインストール";
 "plugins.bundled.translation.name" = "翻訳アシスタント";
@@ -1334,7 +1364,7 @@
 "settings.plugins.title" = "プラグイン";
 "settings.plugins.description" = "検証済みの.hwattakpluginパッケージをインストールし、権限と有効状態を管理します。";
 "settings.plugins.installed_count" = "インストール済み%d個 · 有効なアクション%d個";
-"settings.plugins.safety_note" = "実行コードや常駐処理はなく、ユーザーが開始した制限付きテンプレートアクションだけが動作します。";
+"settings.plugins.safety_note" = "許可された拡張コードは、権限の確認と実行時間・サイズの制限を適用した別のプロセスで動作します。確認済みのウェブパネルでも、外部サイトのスクリプト、Cookie、追跡がセッション中に動作する場合があります。";
 "settings.plugins.resource_note" = "v1テンプレートアクションには数とサイズの上限があり、ネットワークやGPUへ直接アクセスできません。v2ウェブパネルは確認済み外部サイトへ接続しますが、移動制限は追跡防止機能やファイアウォールではありません。";
 
 "help.topic.plugins.title" = "プラグイン";
@@ -1521,7 +1551,7 @@
 
 "pen.pressure.enabled" = "タブレットの筆圧を使用";
 
-"pen.pressure.help" = "Sidecarやタブレットの筆圧を使用します。筆圧付きの線はPDFスタンプとして保存され、マウスの線幅は固定です。";
+"pen.pressure.help" = "マウスでは一定の太さで描きます。Sidecar経由のApple Pencilや筆圧対応タブレットでは、筆圧に応じて太さが変わります。";
 
 "recovery.title" = "作業を復元…";
 
@@ -1550,19 +1580,19 @@
 
 // Default PDF app association
 "settings.default_pdf.title" = "デフォルトのPDFアプリ";
-"settings.default_pdf.description" = "FinderでPDFをダブルクリックするとHwattakPDFで開くように設定します。";
+"settings.default_pdf.description" = "FinderでPDFをダブルクリックするとEmberPDFで開くように設定します。";
 "settings.default_pdf.current" = "現在のデフォルトアプリ: %@";
 "settings.default_pdf.unknown" = "確認できません";
-"settings.default_pdf.active" = "このHwattakPDFがデフォルトのPDFアプリです。";
+"settings.default_pdf.active" = "このEmberPDFがデフォルトのPDFアプリです。";
 "settings.default_pdf.set" = "Finderで関連付けを設定…";
 "settings.default_pdf.refresh" = "関連付けの状態を更新";
 "settings.default_pdf.failed" = "関連付け設定の準備ができませんでした: %@";
-"settings.default_pdf.requires_app" = "インストールされたHwattakPDF.appで利用できます。アプリを「アプリケーション」フォルダに置いて起動してください。";
+"settings.default_pdf.requires_app" = "インストールされたEmberPDF.appで利用できます。アプリを「アプリケーション」フォルダに置いて起動してください。";
 "settings.default_pdf.location_hint" = "アプリを「アプリケーション」フォルダに置いてからデフォルトに設定することをおすすめします。その後アプリを移動または削除すると、関連付けの再設定が必要になる場合があります。";
 "settings.default_pdf.manual_title" = "デフォルトのPDFアプリに設定する方法";
-"settings.default_pdf.manual_help" = "下のボタンを押すと、Finderで設定用PDFが選択されます。「情報を見る」（⌘I）→「このアプリケーションで開く」でHwattakPDFを選択 →「すべてを変更」をクリックしてください。アプリに戻ると関連付けを再確認します。";
+"settings.default_pdf.manual_help" = "下のボタンを押すと、Finderで設定用PDFが選択されます。「情報を見る」（⌘I）→「このアプリケーションで開く」でEmberPDFを選択 →「すべてを変更」をクリックしてください。アプリに戻ると関連付けを再確認します。";
 "settings.default_pdf.manual_note" = "macOSのファイルの関連付けはFinderで確定します。個別のファイルに別の関連付けがある場合は、そのファイルの「情報を見る」でも確認してください。";
-"settings.default_pdf.revealed" = "Finderで選択されたPDFの「情報を見る」（⌘I）を開き、「このアプリケーションで開く」でHwattakPDFを選択してから、「すべてを変更」をクリックしてください。";
+"settings.default_pdf.revealed" = "Finderで選択されたPDFの「情報を見る」（⌘I）を開き、「このアプリケーションで開く」でEmberPDFを選択してから、「すべてを変更」をクリックしてください。";
 
 /* Local region text selection */
 "selection.region_drag" = "領域選択モードです。翻訳する部分を四角形でドラッグしてください。";
@@ -1679,3 +1709,701 @@
 "translation.local.error.timedOut" = "ローカル翻訳がタイムアウトしました。原文を短くして、もう一度お試しください。";
 "translation.local.error.cancelled" = "ローカル翻訳をキャンセルしました。";
 "translation.local.error.failed" = "ローカル翻訳に失敗しました。言語パックとArgos Translateのインストール状態を確認してください。";
+
+/* EmberPDF identity and hidden origin story */
+"brand.tagline" = "熾火のように長く寄り添う、頼れるPDFツール。";
+"brand.detail" = "誰もが快適に読んで編集できるPDFビューア・エディタ";
+"brand.origin.title" = "小さな火種の始まり";
+"brand.origin.message" = "腹が立ったことが、このアプリを作るきっかけでした。\nその気持ちを落ち着かせ、誰もがPDFを快適に扱える道具を作る力に変えました。";
+"brand.origin.close" = "書類に戻る";
+"brand.origin.accessibility" = "EmberPDFという名前の由来";
+"brand.origin.hint" = "名前を5回押すと、小さな物語が開きます。";
+
+/* Current-page translation preview */
+"plugins.bundled.page_translation.name" = "ページ翻訳";
+"plugins.bundled.page_translation.description" = "元のレイアウトに翻訳文を重ねて、現在のページを読みます。";
+"plugins.bundled.page_translation.page.title" = "翻訳したページを表示";
+"plugins.bundled.page_translation.page.description" = "現在のページを翻訳し、画像とレイアウトを保ったプレビューを表示します。";
+"translation.page.preview" = "ページプレビュー";
+"translation.page.original" = "原文";
+"translation.page.translated" = "翻訳後";
+"translation.page.expand" = "ページを拡大";
+"translation.page.save_pdf" = "翻訳したページをPDFとして保存";
+"translation.page.number" = "%dページ";
+"translation.page.note" = "翻訳して読むためのコピーです。テキスト領域の背景が隠れることがあります。複雑な表や数式は確認が必要です。";
+"translation.page.source_note" = "原文はページ上の位置に固定されます。スキャンしたページでは、先にOCRを実行してください。";
+"translation.page.continued" = "収まらないテキストは、次のページ以降に続きます。";
+"translation.page.preparing" = "ページを準備中…";
+"translation.page.preview_error" = "翻訳したページを準備できませんでした。";
+"translation.page.close" = "ページプレビューを閉じる";
+
+/* Translated-page layout and continuation */
+"translation.layout.error.geometry" = "このページのテキスト位置を正確に読み取れませんでした。テキスト翻訳表示をお試しください。";
+"translation.layout.error.render" = "翻訳したページ全体を表示できませんでした。不完全なページは使用していません。";
+"translation.layout.error.mapping" = "翻訳文がこのページのすべてのテキスト領域と一致しません。ページをもう一度翻訳してください。";
+"translation.layout.continuation" = "番号付き領域から続く翻訳全文";
+"translation.layout.region" = "領域 %@";
+"translation.layout.continuation_note" = "番号付きの各領域の翻訳全文を以下に表示します。";
+"translation.page.html_source" = "HTMLに原文を含める";
+
+/* Open-document current-page gallery */
+"gallery.title" = "開いているPDFのギャラリー";
+"gallery.subtitle" = "ワークスペースを切り替えながら、文書とその内容を一覧で探せます。";
+"gallery.open" = "開いているPDFのギャラリー";
+"gallery.close" = "ギャラリーを閉じる";
+"gallery.search" = "文書名または内容を検索";
+"gallery.count" = "%d件のPDF";
+"gallery.current_page" = "%d / %dページ";
+"gallery.current_document" = "現在の文書";
+"gallery.empty" = "このワークスペースで開いているPDFはありません。";
+"gallery.no_results" = "検索に一致する文書がありません。";
+"gallery.preview_loading" = "プレビューを準備中…";
+"gallery.preview_unavailable" = "プレビューを表示できません。";
+"gallery.preview_locked" = "文書を開いてロックを解除してください。";
+"gallery.open_document" = "この文書の続きを読む";
+"gallery.shortcut_hint" = "カードを選んで続きを読む · Escで閉じる";
+"gallery.modified" = "未保存の変更";
+
+/* Reading colors */
+"reading.title" = "読書の色合い";
+"reading.original" = "元の色";
+"reading.soft" = "やわらかな紙";
+"reading.sepia" = "あたたかな紙";
+"reading.night" = "夜の読書";
+"reading.description" = "アプリとPDFの紙の色を調整して、長時間でも読みやすい画面を選べます。";
+"reading.original.detail" = "現在の外観モードとPDF本来の色をそのまま使います。";
+"reading.soft.detail" = "白い紙をやわらかなアイボリーにします。";
+"reading.sepia.detail" = "アプリと紙にあたたかな色合いを加えます。";
+"reading.night.detail" = "暗いアプリと落ち着いた灰色の紙で明るさを抑えます。";
+"reading.display_only" = "画像や注釈の色も画面上では変わります。元のファイルや保存・書き出しの結果は変わりません。";
+"reading.preview" = "読書プレビュー";
+"reading.preview.text" = "小さな思いを読み、長くつないでいきましょう。";
+"reading.preview.caption" = "EmberPDFで穏やかな読書を";
+
+/* Gallery workspace navigation and local content search */
+"gallery.all_workspaces" = "すべてのワークスペース";
+"gallery.workspace_scope" = "ワークスペースを選択";
+"gallery.all_tabs" = "すべてのタブ";
+"gallery.tab_scope" = "タブを選択";
+"gallery.all_groups" = "すべての文書";
+"gallery.ungrouped" = "グループなしのタブ";
+"gallery.group_scope" = "タブグループ";
+"gallery.search.progress" = "%d/%d件の文書を検索中 · %dページを確認";
+"gallery.search.results" = "%d件の文書 · 本文内に%d件一致";
+"gallery.search.stop" = "検索を停止";
+"gallery.search.retry" = "もう一度検索";
+"gallery.search.cancelled" = "検索を停止しました。これまでの結果は引き続き表示できます。";
+"gallery.search.local" = "開いているPDFのテキストをこのデバイス内で検索します。";
+"gallery.search.limited" = "一部の結果を表示しています。検索語を絞るか、文書内で検索を続けてください。";
+"gallery.search.unreadable" = "%d件の文書の内容を検索できませんでした。";
+"gallery.search.unreadable_detail" = "パスワードでロックされたPDF、テキスト抽出が制限されたPDF、テキストのないスキャンは本文検索の対象外です。";
+"gallery.search.filename_only" = "文書名が一致";
+"gallery.search.content_count" = "本文内に%d件一致";
+"gallery.search.page" = "%dページ";
+"gallery.search.more" = "一致箇所をさらに%d件表示";
+"gallery.search.less" = "折りたたむ";
+"gallery.search.open_result" = "この箇所へ移動";
+"gallery.search.no_results" = "一致する文書や内容が見つかりませんでした。";
+"gallery.search.no_results_help" = "別の検索語を入力するか、ワークスペースやタブの検索範囲を広げてください。";
+"gallery.search.waiting" = "文書の内容を検索しています…";
+"gallery.search.clear" = "検索をクリア";
+"gallery.search.changed" = "文書が変更されました。もう一度検索してください。";
+"gallery.search.unavailable" = "本文を検索できません";
+"gallery.search.opened_result" = "一致する箇所へ移動しました。";
+"gallery.search.stale_result" = "文書が変更されたため、検索位置を確認できません。ギャラリーでもう一度検索してください。";
+
+/* Host-owned plugin companion panels, schema 4 */
+"plugins.appearance.detail" = "アプリと用紙の色を読みやすく調整します。元のPDFは変わりません。";
+"plugins.clip.adjust" = "領域を微調整";
+"plugins.clip.copied" = "画像をコピーしました。別のアプリに貼り付けてください。";
+"plugins.clip.copy" = "画像をコピー";
+"plugins.clip.drag" = "この画像を別のアプリへドラッグ";
+"plugins.clip.error.authorization" = "権限が変更されました。確認してパネルを開き直してください。";
+"plugins.clip.error.clipboard" = "画像をクリップボードにコピーできませんでした。";
+"plugins.clip.error.copy_restricted" = "このPDFは画像のコピーを許可していません。";
+"plugins.clip.error.destination" = "元のPDFを上書きしないPNGファイルを選んでください。";
+"plugins.clip.error.geometry" = "ページ内の領域を選んでください。";
+"plugins.clip.error.render" = "ページ画像を作成できませんでした。";
+"plugins.clip.error.size" = "画像が大きすぎます。領域を小さくしてください。";
+"plugins.clip.error.stale" = "文書が変更されました。ページ切り抜きを開き直してください。";
+"plugins.clip.error.unavailable" = "PDFのページを開いてください。";
+"plugins.clip.export_note" = "コピーまたは保存したPNGをPDF、ノート、Wordなどに貼り付けられます。画像は元の色で出力します。";
+"plugins.clip.full_page" = "ページ全体";
+"plugins.clip.height" = "高さ";
+"plugins.clip.instructions" = "ページ上をドラッグして切り抜きます。元のPDFは変わりません。";
+"plugins.clip.left" = "左";
+"plugins.clip.page" = "%dページ";
+"plugins.clip.save" = "PNGを保存";
+"plugins.clip.saved" = "PNG画像を保存しました。";
+"plugins.clip.selection" = "切り抜き領域。「領域を微調整」でキーボード操作ができます。";
+"plugins.clip.top" = "上";
+"plugins.clip.width" = "幅";
+"plugins.hover.detail" = "有効にしてPDFの単語上にカーソルを止めてください。このパネルを開いている間だけmacOSの端末内翻訳を使います。";
+"plugins.hover.download" = "初回はmacOSが言語パックのダウンロードを案内する場合があります。";
+"plugins.hover.enable" = "カーソル翻訳を有効にする";
+"plugins.hover.language" = "翻訳先の言語";
+"plugins.hover.requires_system" = "自動カーソル翻訳にはmacOS 15以降が必要です。";
+"plugins.hover.title" = "カーソルを置いて翻訳";
+"plugins.notes.edit" = "編集";
+"plugins.notes.editor" = "Markdownノート編集";
+"plugins.notes.empty" = "考えを書き留め、PDFから選んだ文章を集めましょう。";
+"plugins.notes.error.changed" = "別のアプリがファイルを変更しました。別名で保存してください。";
+"plugins.notes.error.encoding" = "UTF-8のテキストファイルを選んでください。";
+"plugins.notes.error.file" = "通常の.mdまたは.markdownを選んでください。エイリアスやシンボリックリンクは開きません。";
+"plugins.notes.error.linked" = "リンクされたファイルは上書きできません。別名で保存してください。";
+"plugins.notes.error.path" = "自分で選んだローカルMarkdownのみ開けます。";
+"plugins.notes.error.size" = "ノートはUTF-8で1 MB以下にしてください。";
+"plugins.notes.insert_selection" = "選択した文章";
+"plugins.notes.insert_source" = "ページの出典";
+"plugins.notes.local_only" = "この端末で編集します。リンク・画像・HTMLは自動で開きません。";
+"plugins.notes.mode" = "ノート表示";
+"plugins.notes.new" = "新規ノート";
+"plugins.notes.open" = "Markdownを開く";
+"plugins.notes.page" = "%dページ";
+"plugins.notes.preview" = "プレビュー";
+"plugins.notes.preview_limit" = "長いノートの先頭を表示しています。編集・保存では全文を保持します。";
+"plugins.notes.save" = "Markdownを保存";
+"plugins.notes.save_as" = "別名で保存";
+"plugins.notes.unsaved.title" = "ノートの変更を保存しますか？";
+"plugins.notes.untitled" = "無題.md";
+"plugins.permission.appearance" = "読書用の色を変更";
+"plugins.permission.export" = "選択した場所へ画像を保存・ドラッグ";
+"plugins.permission.files" = "選択したMarkdownを開く・保存";
+"plugins.permission.hover" = "カーソル下のPDFの単語を読む";
+"plugins.permission.local_translation" = "macOSの端末内翻訳を使用";
+"plugins.permission.notes" = "ローカルノートの読み書き";
+"plugins.permission.open_documents" = "開いているPDFの本文を検索";
+"plugins.permission.page_image" = "現在のPDFページを画像として読む";
+"plugins.related.detail" = "開いたPDFの共通語を探します。各文書の一部ページを調べ、外部へ送信しません。";
+"plugins.related.empty" = "調べたページに関連内容がありません。別の語を試してください。";
+"plugins.related.page" = "現在のページから話題を取得";
+"plugins.related.query" = "話題やキーワード";
+"plugins.safe_mode.detail" = "インストールと設定を保ったまま全プラグインを停止します。";
+"plugins.safe_mode.title" = "全プラグインを一時停止";
+
+"plugins.review.action.appearance" = "ホストの読書色設定を開きます。元のPDFは変更しません。";
+"plugins.review.action.notes" = "PDFの横でMarkdownノートを編集します。選んだファイルだけ開いて保存します。";
+"plugins.review.action.clip" = "ページの選択領域をPNGとしてコピー・保存・ドラッグします。PDFのコピー権限に従います。";
+"plugins.review.action.related" = "開いたPDFの一部ページで共通語を探します。外部送信やフォルダ全体へのアクセスはありません。";
+"plugins.review.action.hover" = "有効な間、カーソル下のPDFの単語をmacOSの端末内翻訳で表示します。言語パックが必要な場合があります。";
+
+/* Isolated script SDK */
+"plugins.permission.storage" = "プラグイン専用のローカル設定を保存";
+"plugins.review.action.script" = "別プロセスで開発者のコードを実行します。承認済みAPIのみ使い、ファイル・ネットワーク・シェルへ直接アクセスしません。";
+"plugins.script.invalid" = "プラグインの要求形式が正しくありません。";
+"plugins.script.limit" = "プラグインがサイズまたは要求回数の上限を超えました。";
+"plugins.script.unavailable" = "プラグイン実行ヘルパーが見つかりません。";
+"plugins.script.revoked" = "権限または文書が変わったためプラグインを停止しました。";
+"plugins.script.timeout" = "応答がないためプラグインを終了しました。PDFの作業は続けられます。";
+"plugins.script.running" = "プラグイン実行中";
+"plugins.script.stopped" = "プラグイン停止中";
+"plugins.script.stop" = "停止";
+"plugins.script.restart" = "再実行";
+"plugins.permission.background_execution" = "アプリの使用中に動作";
+"plugins.permission.document_text" = "文書全体のテキストを読む";
+"plugins.runtime.title" = "アプリと連動する拡張機能";
+"plugins.runtime.disclosure" = "インストールして有効にすると、アプリのウインドウが開いている間は自動的に起動します。パネルを閉じても許可したコマンドとイベントは動作し続けます。プラグインを無効にするか「アプリの使用中に動作」の権限を取り消すと停止します。";
+"plugins.extensions.title" = "拡張機能";
+"plugins.script.contextChanged" = "文書が変わったため、前のリクエストをキャンセルしました。";
+
+/* Native PDF body text editing */
+"body_text.edit_hint" = "本文を直接編集します。ページ内の別の場所をクリックするか、⌘Returnを押すと適用されます。";
+"status.body_text_updated" = "本文テキストを修正しました。";
+"status.body_text_deleted" = "本文テキストを削除しました。";
+"status.body_text_added" = "本文テキストを追加しました。";
+"error.body_text_stale" = "編集中のページが変更されました。編集をキャンセルしてからテキストを選び直してください。";
+"body_text.error.restricted" = "本文を編集するには、このPDFを所有者権限で開いてください。";
+"body_text.error.unreadable" = "PDF本文を編集できる形式で読み取れませんでした。";
+"body_text.error.too_complex" = "このページまたはテキストは、対応する編集サイズを超えています。";
+"body_text.error.unsupported" = "このテキストまたはページの構造・変形・描画方式は、まだ本文編集に対応していません。";
+"body_text.error.reading_order" = "この変更を適用すると、ページのテキストの読み取り順序が変わる可能性があります。PDFは変更されておらず、入力内容はエディタに残っています。";
+"body_text.error.reopen_for_edit" = "このページのアクセシビリティタグを保持するには、現在の下書きをキャンセルし、PDFを保存して開き直してから編集してください。";
+"body_text.error.save_accessibility_tags" = "%dページのアクセシビリティタグを保持できないため、保存を中止しました。編集中の内容は開いている文書に残っています。そのページの本文編集を取り消してから、もう一度保存してください。";
+"body_text.error.scan_background" = "選択したスキャン本文は、レイアウトと背景を安全に保持したまま編集できません。同じ段落内の行を選択するか、1行ずつ編集してください。";
+"body_text.error.scan_selection_fit" = "入力した文字が選択したスキャン範囲に収まりません。より広い文や段落を選択するか、文字サイズを小さくしてください。";
+"body_text.error.changed" = "編集中に原文が変更されました。テキストをもう一度選択してください。";
+"body_text.error.failed" = "PDF本文を変更できませんでした。原文は変更されていません。";
+"body_text.error.does_not_fit" = "入力したテキストを現在の編集領域に配置できません。フォントや文字サイズを調整するか、内容を短くしてください。";
+
+/* Recent PDF access recovery */
+"recent.reconnect.title" = "最近のPDFを再接続";
+"recent.reconnect.choose" = "ファイルを選び直す…";
+"recent.reconnect.message" = "「%@」の保存済みアクセス情報を利用できません。アプリの更新やファイルの移動により発生することがあります。ファイルを選び直すと再接続できます。";
+"recent.reconnect.panel" = "「%@」を選び直してください。移動した場合は、現在の場所にあるPDFを選択してください。";
+
+/* Study notes, pen and eraser controls, and thumbnail zoom */
+"page.sidebar.settings" = "ページプレビュー設定";
+"page.sidebar.thumbnail_reset" = "プレビューを100%に戻す";
+"pen.opacity" = "不透明度";
+"study.pen.style" = "ペンの太さ・不透明度";
+"study.eraser.settings" = "消しゴム設定";
+"study.eraser.mode" = "消去方式";
+"study.eraser.stroke" = "ストローク消去";
+"study.eraser.partial" = "部分消去";
+"study.eraser.option_help" = "Optionキーを押している間は、もう一方の方式で消去します。";
+"study.eraser.size" = "消しゴムのサイズ";
+"study.notes.open" = "学習メモ";
+"eraser.changed" = "手書きを消去しました。";
+"study.notes.title" = "メモ";
+"study.notes.add" = "新規メモ";
+"study.notes.quote" = "選択した文字からメモ";
+"study.notes.empty.title" = "メモはまだありません";
+"study.notes.empty.detail" = "PDFを読みながら追加したメモを、ここでまとめて確認できます。";
+"study.notes.scanning" = "メモを検索中…";
+"study.notes.saved_in_pdf" = "メモはこのPDFの注釈として保存されます。ファイルに残すには保存してください。";
+"study.notes.edit" = "メモを編集";
+"study.notes.reveal" = "メモの位置へ移動";
+"study.notes.delete" = "メモを削除";
+"study.notes.delete_unavailable" = "保存済みのメモは、編集モードに切り替えるか、内容を編集した後に削除できます。";
+"study.notes.untitled" = "空のメモ";
+"study.notes.editor_hint" = "適用するとページにメモが追加され、メモ一覧にも表示されます。長いメモは一覧から開き直して読めます。";
+"study.notes.deleted" = "メモを削除しました。";
+"study.notes.count" = "メモ %d件";
+"tool.select.help" = "ドラッグしてPDFの文字を選択します。画像のページでは、ドラッグした範囲の文字を認識します。";
+"tool.select.edit_help" = "本文をドラッグして選択し、「本文を編集」（가T）を押すと、選択した文字を直接修正できます。";
+
+// Study note editor, appearance, links and pen styles
+"study.notes.editor.float" = "別ウインドウで編集";
+"study.notes.editor.dock" = "サイドバーに戻す";
+"pen.style" = "ペンの種類";
+"pen.style.ink" = "インク";
+"pen.style.pencil" = "鉛筆";
+"pen.style.fountain" = "万年筆";
+"pen.style.highlighter" = "蛍光ペン";
+"pen.style.ink.help" = "なめらかな線で書き、筆圧で太さを変えられます。";
+"pen.style.pencil.help" = "紙に鉛筆で描くような細かな質感で描画します。";
+"pen.style.fountain.help" = "線の方向と筆圧に応じて太さが変わります。";
+"pen.style.highlighter.help" = "太く半透明の線で本文に印を付けます。選択後に太さと不透明度を調整できます。";
+"study.note.style.title" = "メモの外観";
+"study.note.style.background" = "背景色";
+"study.note.style.foreground" = "文字色";
+"study.note.style.opacity" = "背景の不透明度";
+"study.note.style.width" = "幅";
+"study.note.style.height" = "高さ";
+"study.note.style.x" = "横位置";
+"study.note.style.y" = "縦位置";
+"study.note.style.font_size" = "文字サイズ";
+"study.note.style.units" = "サイズと位置の単位はptです。縦位置はページの下端から測定します。";
+"study.note.style.move_resize" = "ページ上で移動・サイズ変更";
+"study.note.style.updated" = "メモの外観を変更しました。";
+"study.links.title" = "リンク";
+"study.links.add" = "リンクを追加";
+"study.links.empty" = "別のPDFのページ・メモ・ブックマークにリンクできます。";
+"study.links.local_hint" = "リンク一覧はこのMacのEmberPDFに保存され、他のアプリには含まれません。メモのリンクを維持するには、識別子を追加したPDFも保存してください。";
+"study.links.open" = "リンク先を開く";
+"study.links.reconnect" = "ファイルを再接続…";
+"study.links.remove" = "リンクを削除";
+"study.links.target" = "リンク先";
+"study.links.pdf" = "開いているPDF";
+"study.links.page" = "ページ";
+"study.links.page_only" = "このページ";
+"study.links.open_target" = "リンク先のPDFを先にアプリで開いてください。";
+"study.links.save_first" = "リンクする前にPDFをファイルとして保存してください。";
+"study.links.invalid_target" = "リンク先のページまたはメモを選び直してください。";
+"study.links.duplicate" = "この場所はすでにリンクされています。";
+"study.links.limit" = "リンクの保存容量がいっぱいです。不要なリンクを削除してください。";
+"study.links.unavailable" = "リンク先のPDFを開けません。「ファイルを再接続」でファイルを選択してください。";
+"study.links.storage_error" = "保存されたリンク一覧を読み込めませんでした。元のデータは保持されています。";
+"study.links.note_missing" = "リンク先のメモが見つからないため、そのページを開きました。";
+"study.links.note_permission" = "このメモをリンクするには、識別子を保存する編集権限が必要です。学習モードでリンクするか、ページをリンクしてください。";
+
+"study.notes.insert.selection" = "選択したPDFのテキストをカーソル位置に挿入";
+
+"study.notes.insert.time" = "現在の日時をカーソル位置に挿入";
+
+"study.notes.insert.location" = "現在のPDF名とページをカーソル位置に挿入";
+
+"study.notes.insert.location_format" = "%@ · %d/%dページ";
+
+"study.links.target_load_failed" = "このPDFを読み込めませんでした。ファイルへのアクセス権を確認して再試行してください。";
+
+"study.links.all_notes" = "すべてのメモ";
+
+"study.links.bookmarks" = "ブックマーク";
+
+"study.links.target_loading" = "PDFを読み込み中…";
+
+"study.links.retry" = "再読み込み";
+
+"study.links.targets_scanning" = "すべてのメモとブックマークを検索中…";
+
+"study.links.targets_limited" = "項目が多いため、一部のみ表示しています。ページ番号でもリンクできます。";
+
+"study.links.filter_targets" = "メモ・ブックマークを検索";
+
+"study.links.bookmark_hint" = "PDFの目次やブックマークが指すページにリンクします。";
+
+"study.links.targets_empty" = "選択できる項目がありません。";
+
+"study.links.total_pages" = "全%dページ";
+
+"study.links.current_page" = "現在の読書位置：%dページ";
+
+"study.links.page_range" = "1～%dのページ番号を入力してください。";
+
+"study.links.search_text" = "本文検索";
+
+"study.links.search_placeholder" = "選択したPDFの本文を検索";
+
+"study.links.search_hint" = "検索結果のページを選んでリンクします。テキストまたはOCR文字があるページを検索します。";
+
+"study.links.search_no_text" = "検索できる文字がありません。画像のみのPDFにはOCRを適用してから検索してください。";
+
+"study.links.search_empty" = "一致する本文が見つかりませんでした。";
+
+"study.links.search_copy_restricted" = "このPDFはコピーが制限されているため、本文のプレビューを検索できません。";
+
+"study.links.search_changed" = "PDFの内容が変わったため、検索を更新しています。";
+
+"study.links.search_unavailable" = "検索するPDFを読み込めませんでした。";
+
+"study.links.connect_current" = "現在読んでいる%dページに直接リンク";
+
+"study.links.search_pages" = "%dページで見つかりました";
+
+"study.links.search_progress" = "%d/%dページを検索中";
+
+"study.links.search_limited" = "最初の%d件の一致ページのみ表示しています。検索語を絞り込んでください。";
+
+"study.links.choose_pdf" = "リンクするPDFを選択";
+
+"study.note.style.preview" = "メモの色と不透明度のプレビュー";
+
+"study.note.style.color_target" = "色を変更する部分";
+
+"study.note.style.apply_failed" = "メモを変更できませんでした。メモを開き直してお試しください。";
+
+"study.note.style.apply_hint" = "プレビューを確認してから「適用」を押してください。";
+
+"study.notes.visibility.menu" = "メモの表示";
+
+"study.notes.visibility.hide_all" = "すべてのメモを隠す";
+
+"study.notes.visibility.show_all" = "すべてのメモを表示";
+
+"study.notes.visibility.hide" = "PDF上のメモを隠す";
+
+"study.notes.visibility.show" = "PDF上にメモを表示";
+
+"study.notes.visibility.hidden" = "非表示";
+
+"study.notes.visibility.count" = "メモ%d件 · 非表示%d件";
+
+"study.notes.visibility.hint" = "非表示のメモも一覧で読んだり、再表示したりできます。保存すると非表示の状態もPDFに保存されます。";
+
+"comparison.entry.open" = "一緒に表示";
+
+"comparison.entry.close" = "一緒に表示を終了";
+
+"comparison.entry.help" = "開いているPDFから2〜4件を選び、並べて表示します。";
+
+"comparison.arrange.horizontal" = "横に並べる";
+
+"comparison.arrange.vertical" = "縦に並べる";
+
+"comparison.arrange.grid" = "格子状に配置";
+
+"comparison.arrange.equal" = "サイズを均等に";
+
+"comparison.arrange.hint" = "タイトルをドラッグするか「配置を編集」をオンにしてPDFの位置を変えます。区切り線をドラッグするとサイズが変わります。";
+
+"comparison.arrange.panel" = "このPDFを配置";
+
+"comparison.arrange.document" = "%@を配置";
+
+"comparison.arrange.custom" = "カスタム配置 · 「一緒に表示」で各領域の方向とサイズを変更できます。";
+
+"comparison.motion_sync" = "一緒に移動";
+
+"comparison.motion_sync.help" = "各PDFで合わせた相対位置を保ちながら、スクロールとページ移動を連動します。";
+
+"comparison.all_previous" = "固定していないすべてのPDFを前のページへ";
+
+"comparison.all_next" = "固定していないすべてのPDFを次のページへ";
+
+"comparison.place.left" = "選択したPDFの左に";
+
+"comparison.place.right" = "選択したPDFの右に";
+
+"comparison.place.above" = "選択したPDFの上に";
+
+"comparison.place.below" = "選択したPDFの下に";
+
+"comparison.place.swap" = "位置を入れ替える";
+
+"comparison.pin" = "%@を固定";
+
+"comparison.unpin" = "%@の固定を解除";
+
+"comparison.pin.help" = "固定したPDFはスクロール位置、ページ、倍率が変わりません。もう一度押すと固定を解除します。";
+
+"comparison.pinned" = "固定中";
+
+"comparison.page.previous" = "%@の前のページ";
+
+"comparison.page.next" = "%@の次のページ";
+
+"comparison.resize.width" = "領域の幅を調整";
+
+"comparison.resize.height" = "領域の高さを調整";
+
+"comparison.arrange.edit" = "配置を編集";
+
+"comparison.arrange.done" = "配置を完了";
+
+"comparison.arrange.edit_hint" = "PDFを別のPDFの端や中央にドラッグしてください。終わったら「配置を完了」を押してください。";
+
+"comparison.drag.handle" = "ドラッグして配置";
+
+"comparison.drag.document" = "このPDFをドラッグして配置";
+
+"comparison.drag.cancel_hint" = "Escキーで配置をキャンセル";
+
+"comparison.drop.left" = "左";
+
+"comparison.drop.right" = "右";
+
+"comparison.drop.above" = "上";
+
+"comparison.drop.below" = "下";
+
+"comparison.drop.swap" = "入れ替え";
+// Together view document chooser
+"comparison.chooser.gallery" = "ギャラリー";
+"comparison.chooser.list" = "リスト";
+"comparison.chooser.presentation" = "文書の表示形式";
+"comparison.chooser.preview" = "プレビューページ";
+"comparison.chooser.preview.current" = "現在のページ";
+"comparison.chooser.preview.cover" = "最初のページ";
+"comparison.chooser.workspace" = "ワークスペース";
+"comparison.chooser.search" = "PDF名・ワークスペース・グループで検索";
+"comparison.chooser.selected_order" = "選択したPDF · 表示順";
+"comparison.chooser.select_hint" = "一緒に表示するPDFを下から2〜4個選んでください。";
+"comparison.chooser.remove" = "選択から除外";
+"comparison.chooser.no_results_help" = "別の名前を入力するか、ワークスペースの範囲を広げてください。";
+"comparison.chooser.tab" = "タブ%d";
+"comparison.focus.help" = "タブとツールバーを隠し、並べて表示しているPDFをウインドウいっぱいに表示します。";
+
+/* Recent internal validation, with scope and limitations */
+
+/* Continuous spreads with compact page spacing */
+"view.two_page.compact.title" = "見開きの間隔を自動調整";
+"view.two_page.compact.help" = "幅の異なるページも近づけて、連続して表示します。";
+
+/* Quick document changes in View Together */
+"comparison.document.add" = "PDFを追加";
+"comparison.document.replace" = "PDFを入れ替え";
+"comparison.document.close" = "一緒に表示から閉じる";
+"comparison.document.close.help" = "一緒に表示からのみ除外します。元のPDFタブは開いたままです。";
+"comparison.document.open" = "PDFファイルを開く…";
+"comparison.document.no_candidates" = "追加できる別のPDFが開かれていません";
+"comparison.document.add.help" = "開いているPDFを追加するか、ファイルを開きます（最大4件）。";
+"comparison.document.replace.help" = "この領域に別のPDFを表示します。";
+"comparison.document.limit" = "最大4件のPDFを一緒に表示できます。";
+"comparison.document.error" = "PDFを読み込めませんでした。既存の文書は変更されていません。";
+
+/* Current-document page gallery and page organization */
+"page_gallery.title" = "ページギャラリー";
+"page_gallery.open" = "ページギャラリーを表示";
+"page_gallery.close" = "閲覧に戻る";
+"page_gallery.subtitle" = "全%dページ";
+"page_gallery.selected" = "%dページ選択中";
+"page_gallery.select_all" = "すべて選択";
+"page_gallery.deselect_all" = "選択を解除";
+"page_gallery.size" = "サムネイルのサイズ";
+"page_gallery.hint" = "⌘クリックで複数選択 · Shiftクリックで範囲選択 · ダブルクリックで閲覧";
+"page_gallery.edit" = "ページを編集";
+"page_gallery.edit_hint" = "ページを回転・移動・削除するには、編集を開始してください。";
+"page_gallery.extract" = "抽出";
+"page_gallery.rotate" = "回転";
+"page_gallery.move" = "移動";
+"page_gallery.delete" = "削除";
+"page_gallery.move_title" = "選択したページを移動";
+"page_gallery.move_start" = "文書の先頭へ";
+"page_gallery.move_end" = "文書の末尾へ";
+"page_gallery.move_before" = "前へ";
+"page_gallery.move_after" = "後ろへ";
+"page_gallery.move_page" = "基準のページ";
+"page_gallery.move_apply" = "移動";
+"page_gallery.move_hint" = "選択したページの順序は維持されます。";
+"page_gallery.delete_title" = "選択した%dページを削除しますか？";
+"page_gallery.delete_message" = "取り消す（⌘Z）で復元できます。";
+"page_gallery.minimum_one" = "文書には少なくとも1ページ必要です。";
+"page_gallery.drop_end" = "ここにドロップして文書の末尾へ移動";
+"page_gallery.drag_hint" = "選択したページをドラッグして順序を変更できます。";
+"page_gallery.open_page" = "このページを読む";
+
+// AI conversation management and rich responses
+"ai.history.open" = "会話一覧";
+"ai.history.new" = "新しい会話";
+"ai.history.rename" = "会話名を変更";
+"ai.history.title" = "会話名";
+"ai.history.delete_title" = "この会話を削除しますか？";
+"ai.history.delete_message" = "このMacに保存された会話履歴も削除されます。";
+"ai.history.heading" = "このPDFの会話";
+"ai.history.search" = "会話名を検索";
+"ai.history.empty" = "表示する会話がありません。";
+"ai.history.saved_locally" = "会話履歴はこのMacに保存されます。";
+"ai.history.memory_only" = "このPDFの会話はアプリの実行中のみ保持されます。";
+"ai.history.message_count" = "メッセージ%d件";
+"ai.history.delete" = "会話を削除";
+"ai.history.options" = "会話を管理";
+"ai.message.copy" = "コピー";
+"ai.message.delete" = "メッセージを削除";
+"ai.message.options" = "メッセージのオプション";
+"ai.rich.load_image" = "画像を読み込む";
+"ai.rich.loading_image" = "読み込み中…";
+"ai.rich.image_failed" = "画像を読み込めませんでした。";
+"ai.rich.image_unavailable" = "この画像はサポートされていません。";
+"ai.history.untitled" = "新しい会話";
+"ai.history.error.invalid" = "保存された会話履歴を読み込めませんでした。既存の履歴は保持されています。";
+"ai.history.error.large" = "会話履歴が保存容量の上限に達しました。不要な会話を削除してください。";
+"ai.history.error.limit" = "PDFごとに最大100件の会話を保存できます。不要な会話を削除してから新しい会話を始めてください。";
+"ai.history.error.conversation_full" = "この会話は保存容量の上限に達しました。既存の内容は保持されます。新しい会話を始めると引き続き質問できます。";
+"ai.rich.image_alt" = "AI回答の画像";
+
+"body_text.shortcuts" = "Return 改行 · ⌘Return 適用 · Esc キャンセル";
+
+/* Image insertion choices and PDF size reduction. */
+"image.insert.quality.original" = "元の画質を優先";
+"image.insert.quality.balanced" = "バランス";
+"image.insert.quality.small" = "小さいファイル";
+"image.insert.quality.original.detail" = "可能な場合は元のJPEGを再圧縮せずに保持します。大きい画像は安全なサイズに縮小します。";
+"image.insert.quality.balanced.detail" = "最大2,400pxに縮小し、写真を再圧縮します。細部の表現が変わる場合があります。";
+"image.insert.quality.small.detail" = "最大1,600pxに縮小し、写真をより強く圧縮します。拡大すると画質の低下が見える場合があります。";
+"image.insert.batch_too_large" = "選択した画像が処理可能なサイズを超えています。「小さいファイル」を選ぶか、画像を分けて追加してください。";
+"image.insert.options.title" = "画像の画質とサイズ";
+"image.insert.options.detail" = "PDFに挿入する前に画質と推定サイズを確認してください。この設定は今回の画像に適用されます。";
+"image.insert.quality" = "画像の画質";
+"image.insert.preparing" = "プレビューと推定サイズを準備中…";
+"image.insert.estimated_size" = "PDFの推定増加量";
+"image.insert.estimate_note" = "保存時の実際のサイズは異なる場合があります。透明な背景は保持されます。";
+"image.insert.confirm" = "画像を挿入";
+"image.insert.source_size" = "元のファイル";
+"image.insert.resized" = "サイズ変更済み";
+"image.insert.transparency" = "透明度を保持・可逆圧縮";
+"compression.title" = "PDFのサイズを縮小";
+"compression.detail" = "画像品質を選び、実際のファイルサイズを確認してからコピーを保存します。";
+"compression.quality" = "画像品質";
+"compression.preservation" = "テキストと図形は保持されます。写真は再圧縮されるため、選択した設定によって画質が変わる場合があります。";
+"compression.current_size" = "現在のPDF";
+"compression.processing" = "画像を最適化して実際のサイズを計算中…";
+"compression.result_size" = "最適化後";
+"compression.no_reduction" = "この設定ではこれ以上縮小できません。別の品質をお試しください。現在のPDFは変更されていません。";
+"compression.preview_help" = "「サイズを計算」をクリックすると、保存前にファイルサイズを確認できます。";
+"compression.stop" = "停止";
+"compression.preview" = "サイズを計算";
+"compression.quality.high" = "高品質";
+"compression.quality.balanced" = "バランス";
+"compression.quality.small" = "小さいサイズ";
+"compression.quality.high_detail" = "写真の鮮明さを優先しながらサイズを縮小します。";
+"compression.quality.balanced_detail" = "日常的な画面表示やファイル共有に適しています。";
+"compression.quality.small_detail" = "サイズを大きく縮小します。拡大や印刷時に写真がぼやける場合があります。";
+"compression.savings" = "%@縮小";
+"compression.menu" = "PDFのサイズを縮小…";
+"compression.preparing" = "PDFを準備中…";
+"compression.document_changed" = "文書が変更されました。もう一度お試しください。";
+"compression.saved" = "サイズを縮小したコピーを保存しました: %@";
+"compression.error.unreadable" = "サイズを縮小するPDFを読み込めませんでした。";
+"compression.error.protected" = "暗号化またはデジタル署名されたPDFのサイズは縮小できません。";
+"compression.error.unsupported" = "このPDFの特殊な構造を安全に保持できないため、サイズを縮小しませんでした。";
+"compression.error.too_large" = "このPDFは現在のサイズ縮小機能の処理上限を超えています。";
+"compression.error.validation_failed" = "PDFの内容と編集情報が保持されていることを確認できませんでした。元のファイルは変更されていません。";
+
+// Quick writing tools and saved pen presets
+"pen.quick.title" = "筆記ツール";
+"pen.quick.settings" = "現在のペンの設定";
+"pen.quick.more" = "保存したペン";
+"pen.preset.save" = "現在のペンを保存";
+"pen.preset.replace" = "現在の設定で置き換える";
+"pen.preset.delete" = "保存したペンを削除";
+"pen.preset.limit" = "ペンは最大8本まで保存できます。";
+"pen.preset.help" = "1回クリックするとペンを使えます。選択中のペンをもう一度クリックすると設定が開きます。";
+"pen.shape" = "描画";
+"pen.shape.freehand" = "フリーハンド";
+"pen.shape.line" = "直線";
+"pen.shape.rectangle" = "長方形";
+"pen.shape.ellipse" = "楕円";
+"pen.pattern" = "線の種類";
+"pen.pattern.solid" = "実線";
+"pen.pattern.dashed" = "破線";
+"pen.tip" = "蛍光ペンの先端";
+"pen.tip.square" = "角型";
+"pen.tip.round" = "丸型";
+"pen.quick.width" = "太さを選択";
+"pen.quick.color" = "色を選択";
+"pen.quick.draw_help" = "自由描画または図形を選び、マウスやペンでドラッグして描きます。";
+
+/* Text comparison */
+"comparison.difference.title" = "本文の変更点";
+"comparison.difference.close" = "変更点を閉じる";
+"comparison.difference.scope" = "抽出可能な本文とページの追加・削除を比較します。画像・レイアウト・注釈の違いは比較しません。";
+"comparison.difference.before" = "基準文書";
+"comparison.difference.after" = "変更後の文書";
+"comparison.difference.start" = "本文を比較";
+"comparison.difference.restart" = "再比較";
+"comparison.difference.cancel" = "キャンセル";
+"comparison.difference.navigation" = "変更点を選ぶと両文書の該当ページへ移動します。固定したPDFの位置は維持します。";
+"comparison.difference.ready" = "本文を比較するPDFを2つ選んでください。";
+"comparison.difference.reading" = "本文を読み込み中: %d / %dページ";
+"comparison.difference.comparing" = "本文を比較中…";
+"comparison.difference.cancelled" = "比較をキャンセルしました。結果を表示するには再比較してください。";
+"comparison.difference.changed" = "比較元のPDFが変更されました。最新の内容で再比較してください。";
+"comparison.difference.identical" = "本文の変更は見つかりませんでした。";
+"comparison.difference.count" = "本文の変更点: %d件";
+"comparison.difference.textless" = "本文を抽出できない%dページは比較できませんでした。スキャンした文字はOCRを適用してから比較してください。";
+"comparison.difference.truncated" = "結果数の上限に達したため、一部の変更点のみ表示しています。";
+"comparison.difference.whole_page" = "ページ";
+"comparison.difference.page" = "%dページ";
+"comparison.difference.added" = "追加";
+"comparison.difference.removed" = "削除";
+"comparison.difference.modified" = "修正";
+"comparison.difference.unavailable" = "このPDFから本文を読み取れませんでした。";
+"comparison.difference.restricted" = "比較するには両方のPDFで本文のコピーが許可されている必要があります。";
+"comparison.difference.too_large" = "比較の処理上限を超えています。小さい文書に分けて比較してください。";
+"comparison.difference.no_text" = "抽出可能な本文がありません。スキャンした文字はOCRを適用してから比較してください。";
+"comparison.difference.timed_out" = "比較の制限時間を超えました。小さい文書に分けて比較してください。";
+
+/* Page structure preservation */
+"page_structure.error.unsupported" = "このPDFには、ページの結合後に安全に保持できない添付ファイル、レイヤー、アクセシビリティタグ、電子署名などの特殊な構造があります。元のファイルは変更されていません。";
+"page_structure.error.page_labels" = "このPDFのカスタムページ番号は、ページを組み合わせて保存するときに現在は保持できません。元のファイルは変更されていません。";
+"page_structure.error.destination" = "PDF内部リンクの移動先ページを安全に確認できないため、ページを組み合わせませんでした。";
+"page_structure.error.form_fields" = "同じ名前のフォーム項目や複雑な項目の関連付けがあるため、値を安全に保持できません。項目名を整理したコピーで再試行してください。";
+"page_structure.error.too_complex" = "PDFの目次、リンク、フォームの構造が、ページを安全に組み合わせられる範囲を超えています。";
+"page_structure.error.copy" = "ページの注釈と内部リンクを独立したコピーにできませんでした。元のファイルは変更されていません。";
+"page_structure.imported_document" = "読み込んだPDF";
+
+"pdf.rendering_unavailable" = "現在の環境ではPDFを表示できません。通常のmacOSデスクトップセッションでEmberPDFを開き直してください。";
+
+"page_structure.signed_original_notice" = "署名済みの原本を添付ファイルとして保持しました。新しい文書は電子署名されていません。";
+
+/* Asynchronous document saving */
+"action.saving" = "保存中";
+"status.saving_file" = "%@ を保存中…";
+"status.save_cancelled" = "保存をキャンセルしました。";
+"status.saved_earlier_edits" = "以前の編集内容を %@ に保存しました。新しい変更はまだ保存されていません。";
+"error.save_in_progress" = "保存中です。完了してからもう一度お試しください。";
+
+"resource.memory_footprint" = "アプリのメモリ";
+"resource.memory_note" = "アプリのメモリは圧縮メモリを含む現在のプロセスの使用量です。RSSは現在常駐しているメモリです。別の補助プロセスは含みません。CPU 100%は論理コア1個を意味します。";
+
+/* Native menu roles refreshed when the app language changes. */
+"native_menu.file" = "ファイル";
+"native_menu.edit" = "編集";
+"native_menu.view" = "表示";
+"native_menu.window" = "ウインドウ";
+"native_menu.help" = "ヘルプ";
+
+"native_menu.close_all" = "すべて閉じる";
+"native_menu.cut" = "カット";
+"native_menu.copy" = "コピー";
+"native_menu.paste" = "ペースト";
+"native_menu.select_all" = "すべて選択";
+
+/* AppKit tab commands use the current application language. */
+"native_menu.show_tab_bar" = "タブバーを表示";
+"native_menu.hide_tab_bar" = "タブバーを非表示";
+"native_menu.show_all_tabs" = "すべてのタブを表示";
+"native_menu.exit_tab_overview" = "タブ概要を終了";
+"native_menu.enter_full_screen" = "フルスクリーンにする";
+"native_menu.exit_full_screen" = "フルスクリーンを解除";

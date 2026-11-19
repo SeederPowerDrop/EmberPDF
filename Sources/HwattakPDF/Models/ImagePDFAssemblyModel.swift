@@ -5,8 +5,8 @@ import Foundation
 import PDFKit
 import SwiftUI
 
-struct ImagePDFAssemblyItem: Identifiable, Equatable {
-    enum Source: Equatable {
+struct ImagePDFAssemblyItem: Identifiable, Equatable, Sendable {
+    enum Source: Equatable, Sendable {
         case image(URL)
         case html(URL)
         case pdfPage(URL, pageIndex: Int)
@@ -104,7 +104,16 @@ final class ImagePDFAssemblyModel: ObservableObject {
     @Published private(set) var actualUsedOCR = false
 
     private var sourceAccesses: [URL: SecurityScopedAccess] = [:]
-    private var exportTask: Task<Void, Never>?
+    private var exportTask: Task<PDFBackgroundExportSession?, Never>?
+    private var exportSession: PDFBackgroundExportSession?
+    private var exportDrains: [UUID: Task<Void, Never>] = [:]
+    private let backgroundExportSession: @MainActor (PDFDocument, [SecurityScopedAccess]) throws -> PDFBackgroundExportSession
+
+    init(backgroundExportSession: @escaping @MainActor (PDFDocument, [SecurityScopedAccess]) throws -> PDFBackgroundExportSession = { document, access in
+        try PDFBackgroundExportSession(consuming: document, retainingAccess: access)
+    }) {
+        self.backgroundExportSession = backgroundExportSession
+    }
 
     var canExport: Bool { !items.isEmpty && !isProcessing }
     var canCancel: Bool { exportTask != nil }
@@ -217,9 +226,13 @@ final class ImagePDFAssemblyModel: ObservableObject {
         status = L10n.string("builder.status.assembling")
         let startedAt = ProcessInfo.processInfo.systemUptime
 
-        exportTask = Task { @MainActor [weak self] in
-            guard let self else { return }
+        let operation = UUID()
+        let task = Task<PDFBackgroundExportSession?, Never> { @MainActor [weak self] in
+            guard let self else { return nil }
+            var ownedSession: PDFBackgroundExportSession?
             defer {
+                ownedSession?.cancel()
+                self.exportSession = nil
                 self.isProcessing = false
                 self.exportTask = nil
                 withExtendedLifetime(destinationAccess) {}
@@ -236,9 +249,25 @@ final class ImagePDFAssemblyModel: ObservableObject {
                 }
                 try Task.checkCancellation()
                 let expectedPageCount = document.pageCount
+                guard expectedPageCount > 0 else { throw WorkspaceError.noDocument }
+                let sources = snapshot.compactMap { item -> URL? in
+                    if case .pdfPage(let url, _) = item.source { return url }
+                    return nil
+                }
+                let session = try self.backgroundExportSession(document, Array(self.sourceAccesses.values) + [destinationAccess])
+                ownedSession = session
+                self.exportSession = session
+                // Ownership is now private to the serial export session.
+                // Main never reads the assembled PDF again, including after
+                // OCR's await or while publishing completion metrics.
+                let validate: @Sendable () throws -> Void = {
+                    try Self.validateSources(snapshot, destination: destination)
+                    try destinationPrecondition.validate()
+                    try PDFSaveCancellation.checkCurrent()
+                }
 
                 if let effectiveOCRConfiguration {
-                    try AtomicPDFWriter.write(document, to: temporary)
+                    _ = try await session.write(to: temporary, protectedSourceURLs: sources, finishing: false)
                     self.status = L10n.string("builder.status.ocr")
                     let checkpoint = try await VisionOCRService.recognize(
                         pdfURL: temporary,
@@ -255,37 +284,18 @@ final class ImagePDFAssemblyModel: ObservableObject {
                     }
                     try Task.checkCancellation()
                     self.status = L10n.string("builder.status.validating")
-                    try SearchablePDFExporter.export(
-                        document: document,
-                        checkpoint: checkpoint,
-                        to: destination,
-                        renderDPI: effectiveOCRConfiguration.renderDPI,
-                        beforeDestinationCommit: {
-                            try Self.validateSources(snapshot, destination: destination)
-                            try destinationPrecondition.validate()
-                            try Task.checkCancellation()
-                        }
-                    )
+                    _ = try await session.exportSearchable(checkpoint: checkpoint, to: destination,
+                        renderDPI: effectiveOCRConfiguration.renderDPI, protectedSourceURLs: sources,
+                        destinationPrecondition: destinationPrecondition, validateBeforeCommit: validate)
                     self.recognizedText = checkpoint.pages.keys.sorted().compactMap {
                         checkpoint.pages[$0]?.text
                     }.filter { !$0.isEmpty }.joined(separator: "\n\n")
                 } else {
                     self.status = L10n.string("builder.status.validating")
-                    try AtomicPDFWriter.write(document, to: destination, validateDestinationBeforeCommit: {
-                        try Self.validateSources(snapshot, destination: destination)
-                        try destinationPrecondition.validate()
-                        try Task.checkCancellation()
-                    })
+                    _ = try await session.write(to: destination, protectedSourceURLs: sources,
+                        destinationPrecondition: destinationPrecondition, validateBeforeCommit: validate)
                 }
 
-                guard
-                    expectedPageCount > 0,
-                    PDFDocument(url: destination)?.pageCount == expectedPageCount
-                else {
-                    throw WorkspaceError.operationFailed(
-                        L10n.string("builder.error.validation")
-                    )
-                }
                 self.progress = 1
                 self.lastSavedURL = destination
                 self.actualDuration = max(
@@ -307,17 +317,30 @@ final class ImagePDFAssemblyModel: ObservableObject {
                 self.status = L10n.string("builder.status.failed")
                 self.progress = 0
             }
+            return ownedSession
+        }
+        exportTask = task
+        // The task can terminate before a cancelled queued session releases
+        // its graph. Retain that exact owner until its real cleanup barrier.
+        exportDrains[operation] = Task { @MainActor [weak self] in
+            let session = await task.value
+            await session?.waitForCompletion()
+            _ = self?.exportDrains.removeValue(forKey: operation)
         }
     }
 
     func cancelExport() {
         guard let exportTask else { return }
         status = L10n.string("builder.status.cancelling")
+        exportSession?.cancel()
         exportTask.cancel()
     }
 
     func waitForExportCompletion() async {
-        await exportTask?.value
+        while !exportDrains.isEmpty {
+            let pending = Array(exportDrains.values)
+            for drain in pending { await drain.value }
+        }
     }
 
     func copyRecognizedText() {
@@ -355,6 +378,9 @@ final class ImagePDFAssemblyModel: ObservableObject {
         }
         let output = PDFDocument()
         var cachedPDFs: [URL: PDFDocument] = [:]
+        var relationshipMetadata = 8 * 1_024 * 1_024
+        let relationshipCopies = PDFAnnotationRelationshipPreserver.CopyBudget()
+        let relationshipWork = PDFAnnotationRelationshipBaseline.WorkBudget(bytes: 64 * 1_024 * 1_024, visits: 500_000)
 
         for (index, item) in snapshot.enumerated() {
             try Task.checkCancellation()
@@ -406,12 +432,14 @@ final class ImagePDFAssemblyModel: ObservableObject {
                 if let cached = cachedPDFs[url] {
                     document = cached
                 } else {
-                    guard let loaded = PDFDocument(url: url), !loaded.isLocked else {
+                    let loaded = try PDFSourceFileAccess.loadDocument(at: url)
+                    guard loaded.version == expected else { throw WorkspaceError.externalModification(url) }
+                    guard !loaded.document.isLocked else {
                         throw WorkspaceError.cannotOpen(url)
                     }
-                    try PDFDocumentSecurityPolicy.validateCanExtractPages(loaded)
-                    cachedPDFs[url] = loaded
-                    document = loaded
+                    try PDFDocumentSecurityPolicy.validateCanExtractPages(loaded.document)
+                    cachedPDFs[url] = loaded.document
+                    document = loaded.document
                 }
                 guard
                     pageIndex >= 0,
@@ -423,6 +451,11 @@ final class ImagePDFAssemblyModel: ObservableObject {
                         L10n.format("builder.error.pdf_page", pageIndex + 1)
                     )
                 }
+                // Capture only this exact copy's Text/Popup relationship.
+                // Do not broaden the Builder into a whole catalog import.
+                try PDFAnnotationRelationshipPreserver.inherit(from: sourcePage, to: detached,
+                    remainingMetadata: &relationshipMetadata, workBudget: relationshipWork,
+                    copyBudget: relationshipCopies)
                 pages = [detached]
 
             case let .blank(size):
@@ -446,7 +479,7 @@ final class ImagePDFAssemblyModel: ObservableObject {
         return output
     }
 
-    private static func validateSources(_ items: [ImagePDFAssemblyItem], destination: URL) throws {
+    nonisolated private static func validateSources(_ items: [ImagePDFAssemblyItem], destination: URL) throws {
         for item in items {
             if case let .pdfPage(url, _) = item.source {
                 guard let expected = item.sourceVersion,

@@ -7,6 +7,91 @@ import XCTest
 
 final class PDFNativeSelectionProxyTests: XCTestCase {
     @MainActor
+    func testUnclosedFormSavesRecoverExactTextAndGeometryWithoutChangingSource() throws {
+        for rotation in [0, 90, 180, 270] {
+            let document = try XCTUnwrap(PDFDocument(data: formFixtureData(content: "q", rotation: rotation)))
+            let source = try XCTUnwrap(document.page(at: 0))
+            let originalText = source.string
+            let originalBounds = source.characterBounds(at: 0)
+            let proxy = try XCTUnwrap(PDFNativeSelectionProxy.makePage(for: source))
+            let referenceDocument = try XCTUnwrap(PDFDocument(data: formFixtureData(content: "q Q", rotation: rotation)))
+            let reference = try XCTUnwrap(referenceDocument.page(at: 0))
+
+            XCTAssertEqual(proxy.page.string, reference.string)
+            XCTAssertTrue(proxy.page.string?.contains("Recovered bottom line.") ?? false)
+            XCTAssertFalse(PDFTextSelectionGeometry.needsRegionSelection(on: proxy.page))
+            let start = CGPoint(x: 90, y: 404)
+            let end = CGPoint(x: 185, y: 374)
+            let expected = try XCTUnwrap(reference.selection(from: start, to: end))
+            for (anchor, extent) in [(start, end), (end, start)] {
+                let selection = try XCTUnwrap(proxy.page.selection(from: anchor, to: extent))
+                XCTAssertEqual(selection.string, expected.string)
+                assertEqual(selection.bounds(for: proxy.page), expected.bounds(for: reference))
+            }
+            XCTAssertEqual(source.string, originalText)
+            XCTAssertEqual(source.characterBounds(at: 0), originalBounds)
+            XCTAssertEqual(document.pageCount, 1)
+            XCTAssertTrue(document.page(at: 0) === source)
+        }
+    }
+
+    @MainActor
+    func testFormRepairTerminatesTrailingCommentsAndDoesNotCountQuotedOperators() throws {
+        let data = formFixtureData(content: "q BT /F1 8 Tf (q q Q) Tj ET % q q")
+        let document = try XCTUnwrap(PDFDocument(data: data))
+        let source = try XCTUnwrap(document.page(at: 0))
+        let proxy = try XCTUnwrap(PDFNativeSelectionProxy.makePage(for: source))
+
+        XCTAssertFalse(PDFFormGraphicsStateInspector.hasUnbalancedForm(on: proxy.page))
+        XCTAssertTrue(proxy.page.string?.contains("Alpha bravo charlie.") ?? false)
+    }
+
+    @MainActor
+    func testUnmatchedFormRestoreRetainsOCRFallbackInsteadOfInventingGraphicsState() throws {
+        let document = try XCTUnwrap(PDFDocument(data: formFixtureData(content: "Q")))
+        let source = try XCTUnwrap(document.page(at: 0))
+
+        XCTAssertTrue(PDFTextSelectionGeometry.needsRegionSelection(on: source))
+        XCTAssertNil(PDFNativeSelectionProxy.makePage(for: source))
+    }
+
+    @MainActor
+    func testOptionalReportedTextbookFormRepairPreservesExactWordsInBothColumns() throws {
+        guard let path = ProcessInfo.processInfo.environment["EMBER_SELECTION_PDF_FIXTURE"] else {
+            throw XCTSkip("Set EMBER_SELECTION_PDF_FIXTURE to run the local textbook regression.")
+        }
+        let document = try XCTUnwrap(PDFDocument(url: URL(fileURLWithPath: path)))
+        let source = try XCTUnwrap(document.page(at: 11))
+        let originalText = source.string
+        let originalBounds = source.characterBounds(at: 0)
+        let proxy = try XCTUnwrap(PDFNativeSelectionProxy.makePage(for: source))
+        let right = try XCTUnwrap(proxy.page.selection(
+            from: CGPoint(x: 295, y: 658), to: CGPoint(x: 387, y: 600)
+        ))
+        let left = try XCTUnwrap(proxy.page.selection(
+            from: CGPoint(x: 72, y: 627), to: CGPoint(x: 178, y: 426)
+        ))
+
+        for phrase in ["Real Gases: The Van der Waals Equation", "Equations of State 597",
+                       "20-7 Phase Changes 599", "20-8 Evaporation 601"] {
+            XCTAssertTrue(right.string?.contains(phrase) ?? false, phrase)
+        }
+        XCTAssertFalse(right.string?.contains("Doppler") ?? true)
+        XCTAssertTrue(left.string?.contains("17-9 The Doppler Shift 507") ?? false)
+        XCTAssertTrue(left.string?.contains("18-4 Standing Waves 531") ?? false)
+        XCTAssertFalse(left.string?.contains("Real Gases") ?? true)
+        for line in right.selectionsByLine() {
+            XCTAssertGreaterThan(line.bounds(for: proxy.page).minX, 290)
+        }
+        for line in left.selectionsByLine() {
+            XCTAssertLessThan(line.bounds(for: proxy.page).maxX, 290)
+        }
+        XCTAssertFalse(PDFTextSelectionGeometry.needsRegionSelection(on: proxy.page))
+        XCTAssertEqual(source.string, originalText)
+        XCTAssertEqual(source.characterBounds(at: 0), originalBounds)
+    }
+
+    @MainActor
     func testMalformedMetricsRecoverTextAndGeometryWithoutChangingSourceAtEveryRotation() throws {
         for rotation in [0, 90, 180, 270] {
             let document = try makeDocument(ascent: 67_306_242, rotation: rotation)
@@ -126,6 +211,21 @@ final class PDFNativeSelectionProxyTests: XCTestCase {
         try XCTUnwrap(PDFDocument(data: PDFMalformedSelectionTestFixture.data(ascent: ascent, rotation: rotation)))
     }
 
+    private func formFixtureData(content formContent: String, rotation: Int = 0) -> Data {
+        let content = "q 1 0 0 1 -33 -33 cm /Fm0 Do Q q 1 0 0 1 -33 -33 cm /Fm0 Do Q "
+            + "BT /F1 12 Tf 90 400 Td (Alpha bravo charlie.) Tj 0 -30 Td (Delta echo foxtrot.) Tj ET "
+            + "BT /F1 12 Tf 90 90 Td (Recovered bottom line.) Tj ET"
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 500] /CropBox [30 60 330 440] /Rotate \(rotation) /Resources << /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >> /Contents 5 0 R >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream",
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 400 500] /Length \(formContent.utf8.count) >>\nstream\n\(formContent)\nendstream"
+        ]
+        return PDFMalformedSelectionTestFixture.pdfData(objects: objects)
+    }
+
     private func assertEqual(
         _ actual: CGRect,
         _ expected: CGRect,
@@ -153,6 +253,10 @@ enum PDFMalformedSelectionTestFixture {
             "<< /Type /FontDescriptor /FontName /SelectionFixtureFont /Flags 32 /FontBBox [0 -200 1000 800] /ItalicAngle 0 /Ascent \(ascent) /Descent -200 /CapHeight 700 /StemV 80 >>",
             "<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream"
         ]
+        return pdfData(objects: objects)
+    }
+
+    static func pdfData(objects: [String]) -> Data {
         var data = Data("%PDF-1.4\n".utf8)
         var offsets: [Int] = []
         for (index, object) in objects.enumerated() {

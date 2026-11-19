@@ -10,6 +10,19 @@ struct PDFEditNavigationSnapshot: Equatable {
     let selectedPages: Set<Int>
 }
 
+/// Explicit owned UI message metadata. Literal/plugin/user operation names
+/// stay literal; translated strings are never reverse-matched to guess a key.
+struct PDFEditActionLocalization {
+    let key: String
+    var integerArguments: [Int] = []
+    func resolve() -> String {
+        let format = L10n.string(key)
+        guard !integerArguments.isEmpty else { return format }
+        return String(format: format, locale: L10n.currentLanguage.locale,
+                      arguments: integerArguments.map { $0 as CVarArg })
+    }
+}
+
 /// A single already-performed PDF mutation and its inverse.
 ///
 /// The closures intentionally capture only the changed PDF pages or
@@ -20,10 +33,13 @@ final class PDFEditCommand {
     // [학습 04] 명령 패턴(command pattern)은 "무엇을 되돌릴지"를 값과 클로저(closure)로 묶습니다.
     // 클로저가 이력을 소유한 workspace를 강하게 참조하면 서로를 유지해 해제되지 않을 수 있으므로,
     // 호출부는 필요한 페이지·주석·좌표만 캡처(capture)해야 합니다.
-    let actionName: String
+    private let originalActionName: String
+    private let actionLocalization: PDFEditActionLocalization?
+    var actionName: String { actionLocalization?.resolve() ?? originalActionName }
     let beforeNavigation: PDFEditNavigationSnapshot
     let afterNavigation: PDFEditNavigationSnapshot
     let invalidatesDocumentSelections: Bool
+    let affectedPageIndexes: Set<Int>?
     /// Number of detached/removed pages kept alive solely for this command.
     /// Pages still present in the open document use a cost of zero.
     let retainedPageCost: Int
@@ -35,19 +51,23 @@ final class PDFEditCommand {
 
     fileprivate init(
         actionName: String,
+        actionLocalization: PDFEditActionLocalization?,
         beforeNavigation: PDFEditNavigationSnapshot,
         afterNavigation: PDFEditNavigationSnapshot,
         invalidatesDocumentSelections: Bool,
+        affectedPageIndexes: Set<Int>?,
         retainedPageCost: Int,
         beforeStateID: UUID,
         afterStateID: UUID,
         undoMutation: @escaping () throws -> Void,
         redoMutation: @escaping () throws -> Void
     ) {
-        self.actionName = actionName
+        self.originalActionName = actionName
+        self.actionLocalization = actionLocalization
         self.beforeNavigation = beforeNavigation
         self.afterNavigation = afterNavigation
         self.invalidatesDocumentSelections = invalidatesDocumentSelections
+        self.affectedPageIndexes = affectedPageIndexes
         self.retainedPageCost = max(0, retainedPageCost)
         self.beforeStateID = beforeStateID
         self.afterStateID = afterStateID
@@ -99,6 +119,9 @@ final class PDFEditHistory {
     var isAtSavedState: Bool { currentStateID == savedStateID }
     var undoCount: Int { undoStack.count }
     var redoCount: Int { redoStack.count }
+    /// Identifies PDF content, independently of view or localization refreshes.
+    /// A background save marks the state it captured, even if editing continued.
+    var checkpoint: UUID { currentStateID }
 
     /// Starts a new document history and makes that initial state the saved
     /// baseline. Existing commands are released immediately.
@@ -116,12 +139,18 @@ final class PDFEditHistory {
         savedStateID = currentStateID
     }
 
+    func markSaved(at checkpoint: UUID) {
+        savedStateID = checkpoint
+    }
+
     @discardableResult
     func register(
         actionName: String,
+        actionLocalization: PDFEditActionLocalization? = nil,
         beforeNavigation: PDFEditNavigationSnapshot,
         afterNavigation: PDFEditNavigationSnapshot,
         invalidatesDocumentSelections: Bool = false,
+        affectedPageIndexes: Set<Int>? = nil,
         retainedPageCost: Int = 0,
         undo: @escaping () throws -> Void,
         redo: @escaping () throws -> Void
@@ -133,9 +162,11 @@ final class PDFEditHistory {
         let nextStateID = UUID()
         let command = PDFEditCommand(
             actionName: actionName,
+            actionLocalization: actionLocalization,
             beforeNavigation: beforeNavigation,
             afterNavigation: afterNavigation,
             invalidatesDocumentSelections: invalidatesDocumentSelections,
+            affectedPageIndexes: affectedPageIndexes,
             retainedPageCost: retainedPageCost,
             beforeStateID: currentStateID,
             afterStateID: nextStateID,

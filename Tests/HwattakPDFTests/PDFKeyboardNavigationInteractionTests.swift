@@ -76,21 +76,62 @@ final class PDFKeyboardNavigationInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testCommandControlAndCombinedModifiersRemainAvailableToOtherHandlers() throws {
-        let fixture = try makeFixture(navigation: .horizontalPaging)
-        defer { fixture.detach() }
-
-        for modifiers: NSEvent.ModifierFlags in [.command, .control, [.shift, .option]] {
-            XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(124, modifiers: modifiers)))
-            XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
-            XCTAssertTrue(fixture.view.currentPage === fixture.workspace.document?.page(at: 0))
-            XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+    func testAllDirectionsTurnPagesAndSpreadsAtAnyZoomAndRespectDocumentEnds() throws {
+        for columns in [1, 2] {
+            for scale: CGFloat in [0.75, 2.5] {
+                let fixture = try makeFixture(scale: scale, navigation: .allDirectionsPaging, columns: columns)
+                defer { fixture.detach() }
+                for modifiers: NSEvent.ModifierFlags in [[], .shift, .option] {
+                    for (forward, backward): (UInt16, UInt16) in [(125, 126), (124, 123)] {
+                        XCTAssertTrue(fixture.view.handlePageNavigationKey(try arrow(backward, modifiers: modifiers)))
+                        XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
+                        XCTAssertTrue(fixture.view.handlePageNavigationKey(try arrow(forward, modifiers: modifiers)))
+                        XCTAssertEqual(fixture.workspace.currentPageIndex, columns)
+                        XCTAssertEqual(fixture.workspace.selectedPages, [columns])
+                        XCTAssertTrue(fixture.view.handlePageNavigationKey(try arrow(backward, modifiers: modifiers)))
+                        XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
+                    }
+                }
+                for _ in 0..<6 { _ = fixture.view.handlePageNavigationKey(try arrow(125)) }
+                XCTAssertEqual(fixture.workspace.currentPageIndex, columns == 1 ? 3 : 2)
+                XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+            }
         }
     }
 
     @MainActor
-    func testOptionArrowsYieldToNativePDFKitInBothNavigationModes() throws {
-        for navigation: PDFPageNavigationMode in [.verticalScroll, .horizontalPaging] {
+    func testOptionAllDirectionKeysWorkInEveryWorkspaceMode() throws {
+        for mode in [PDFWorkspaceMode.viewer, .editing, .study] {
+            let fixture = try makeFixture(navigation: .allDirectionsPaging)
+            defer { fixture.detach() }
+            fixture.workspace.setMode(mode)
+            fixture.view.configure(with: fixture.workspace)
+            for (keyCode, expectedPage): (UInt16, Int) in [(124, 1), (125, 2), (123, 1), (126, 0)] {
+                XCTAssertTrue(fixture.view.handlePageNavigationKey(try arrow(keyCode, modifiers: .option)))
+                XCTAssertEqual(fixture.workspace.currentPageIndex, expectedPage)
+                XCTAssertEqual(fixture.workspace.selectedPages, [expectedPage])
+            }
+        }
+    }
+
+    @MainActor
+    func testCommandControlAndCombinedModifiersRemainAvailableToOtherHandlers() throws {
+        for navigation in [PDFPageNavigationMode.horizontalPaging, .allDirectionsPaging] {
+            let fixture = try makeFixture(navigation: navigation)
+            defer { fixture.detach() }
+
+            for modifiers: NSEvent.ModifierFlags in [.command, .control, [.shift, .option]] {
+                XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(124, modifiers: modifiers)))
+                XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
+                XCTAssertTrue(fixture.view.currentPage === fixture.workspace.document?.page(at: 0))
+                XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+            }
+        }
+    }
+
+    @MainActor
+    func testOptionArrowsYieldToNativePDFKitInLegacyNavigationModes() throws {
+        for navigation in [PDFPageNavigationMode.verticalScroll, .horizontalPaging] {
             let fixture = try makeFixture(navigation: navigation)
             defer { fixture.detach() }
             let clip = try XCTUnwrap(fixture.view.firstDocumentScrollView()).contentView
@@ -106,20 +147,56 @@ final class PDFKeyboardNavigationInteractionTests: XCTestCase {
 
     @MainActor
     func testShiftAndOptionArrowsLeaveNativeTextSelectionUntouched() throws {
-        let fixture = try makeFixture(navigation: .horizontalPaging)
-        defer { fixture.detach() }
-        let page = try XCTUnwrap(fixture.workspace.document?.page(at: 0))
-        let selection = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 6)))
-        fixture.view.setCurrentSelection(selection, animate: false)
-        fixture.workspace.currentSelection = selection
-        let bounds = selection.bounds(for: page)
+        for navigation in [PDFPageNavigationMode.horizontalPaging, .allDirectionsPaging] {
+            let fixture = try makeFixture(navigation: navigation)
+            defer { fixture.detach() }
+            let page = try XCTUnwrap(fixture.workspace.document?.page(at: 0))
+            let selection = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 6)))
+            fixture.view.setCurrentSelection(selection, animate: false)
+            fixture.workspace.currentSelection = selection
+            let bounds = selection.bounds(for: page)
 
-        for modifiers: NSEvent.ModifierFlags in [.shift, .option] {
-            for keyCode: UInt16 in [123, 124, 125, 126] {
-                XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(keyCode, modifiers: modifiers)))
-                XCTAssertEqual(fixture.view.currentSelection?.string, selection.string)
-                XCTAssertEqual(fixture.view.currentSelection?.bounds(for: page), bounds)
-                XCTAssertTrue(fixture.workspace.currentSelection === selection)
+            for modifiers: NSEvent.ModifierFlags in [.shift, .option] {
+                for keyCode: UInt16 in [123, 124, 125, 126] {
+                    XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(keyCode, modifiers: modifiers)))
+                    XCTAssertEqual(fixture.view.currentSelection?.string, selection.string)
+                    XCTAssertEqual(fixture.view.currentSelection?.bounds(for: page), bounds)
+                    XCTAssertTrue(fixture.workspace.currentSelection === selection)
+                    XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
+                    XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testFieldEditorRetainsArrowKeysWhileFocusedInsideThePDFView() throws {
+        for navigation in [PDFPageNavigationMode.horizontalPaging, .allDirectionsPaging] {
+            let fixture = try makeFixture(navigation: navigation)
+            defer { fixture.detach() }
+            let window = NSWindow(
+                contentRect: fixture.view.frame, styleMask: [.titled], backing: .buffered, defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.contentView = fixture.view
+            defer {
+                window.makeFirstResponder(nil)
+                window.contentView = nil
+                window.close()
+            }
+            let editor = NSTextView(frame: CGRect(x: 20, y: 20, width: 150, height: 30))
+            editor.isFieldEditor = true
+            editor.string = "Editable field"
+            editor.setSelectedRange(NSRange(location: 3, length: 0))
+            fixture.view.addSubview(editor)
+            XCTAssertTrue(window.makeFirstResponder(editor))
+
+            for modifiers: NSEvent.ModifierFlags in [[], .shift, .option] {
+                XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(
+                    124, modifiers: modifiers, windowNumber: window.windowNumber
+                )))
+                XCTAssertTrue(window.firstResponder === editor)
+                XCTAssertEqual(editor.selectedRange(), NSRange(location: 3, length: 0))
                 XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
                 XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
             }
@@ -127,40 +204,38 @@ final class PDFKeyboardNavigationInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testFieldEditorRetainsArrowKeysWhileFocusedInsideThePDFView() throws {
-        let fixture = try makeFixture(navigation: .horizontalPaging)
+    func testAllDirectionsLeavesSidebarSearchAndNoteEditorFocusAlone() throws {
+        let fixture = try makeFixture(navigation: .allDirectionsPaging)
         defer { fixture.detach() }
-        let window = NSWindow(
-            contentRect: fixture.view.frame, styleMask: [.titled], backing: .buffered, defer: false
-        )
+        let window = NSWindow(contentRect: fixture.view.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.contentView = fixture.view
+        let container = NSView(frame: fixture.view.frame)
+        window.contentView = container
+        container.addSubview(fixture.view)
+        let editor = NSTextView(frame: CGRect(x: 20, y: 20, width: 180, height: 40))
+        editor.string = "Search or note draft"
+        container.addSubview(editor)
+        XCTAssertTrue(window.makeFirstResponder(editor))
         defer {
             window.makeFirstResponder(nil)
             window.contentView = nil
             window.close()
         }
-        let editor = NSTextView(frame: CGRect(x: 20, y: 20, width: 150, height: 30))
-        editor.isFieldEditor = true
-        editor.string = "Editable field"
-        editor.setSelectedRange(NSRange(location: 3, length: 0))
-        fixture.view.addSubview(editor)
-        XCTAssertTrue(window.makeFirstResponder(editor))
-
-        for modifiers: NSEvent.ModifierFlags in [[], .shift, .option] {
-            XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(
-                124, modifiers: modifiers, windowNumber: window.windowNumber
-            )))
-            XCTAssertTrue(window.firstResponder === editor)
-            XCTAssertEqual(editor.selectedRange(), NSRange(location: 3, length: 0))
-            XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
-            XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+        for modifiers: NSEvent.ModifierFlags in [[], .option] {
+            for keyCode: UInt16 in [123, 124, 125, 126] {
+                XCTAssertFalse(fixture.view.handlePageNavigationKey(try arrow(
+                    keyCode, modifiers: modifiers, windowNumber: window.windowNumber
+                )))
+                XCTAssertEqual(fixture.workspace.currentPageIndex, 0)
+                XCTAssertTrue(window.firstResponder === editor)
+                XCTAssertFalse(fixture.view.arrowKeyRepeater.isRepeating)
+            }
         }
     }
 
     @MainActor
     func testComparisonViewsRetainNativeArrowHandling() throws {
-        let fixture = try makeFixture()
+        let fixture = try makeFixture(navigation: .allDirectionsPaging)
         defer { fixture.detach() }
         fixture.view.viewportContext = .comparison
         let clip = try XCTUnwrap(fixture.view.firstDocumentScrollView()).contentView

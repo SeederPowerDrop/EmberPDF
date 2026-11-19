@@ -15,7 +15,7 @@ import PDFKit
 /// could deliberately preserve every metadata field. The app's goal here is to
 /// prevent accidental data loss when Preview, a cloud client, or another editor
 /// saves the same PDF while HwattakPDF still has an older copy in memory.
-struct PDFSourceFileVersion: Equatable {
+struct PDFSourceFileVersion: Equatable, Sendable {
     let canonicalURL: URL
     let fileSize: UInt64
     let contentModificationDate: Date
@@ -95,7 +95,7 @@ struct PDFSourceFileVersion: Equatable {
 /// different app can create or replace that path while HwattakPDF serializes a
 /// large document. Requiring the same `nil`/version state at commit prevents us
 /// from silently replacing those newly arrived external bytes.
-struct PDFDestinationPrecondition {
+struct PDFDestinationPrecondition: Sendable {
     let destination: URL
     private let expectedVersion: PDFSourceFileVersion?
 
@@ -157,7 +157,7 @@ enum PDFSourceFileAccess {
         let version: PDFSourceFileVersion
     }
 
-    struct SavedDocument {
+    struct SavedDocument: Sendable {
         let url: URL
         let version: PDFSourceFileVersion
     }
@@ -178,14 +178,14 @@ enum PDFSourceFileAccess {
                 // coordinator protects against cooperating writers; the second
                 // capture also detects an uncoordinated replacement during open.
                 let before = try PDFSourceFileVersion.capture(at: coordinatedURL)
-                guard let document = PDFDocument(url: coordinatedURL) else {
+                guard let document = PDFRawStreamProvenance.documentForGuardedLoader(at: coordinatedURL, before: before) else {
                     throw WorkspaceError.invalidPDF(url)
                 }
                 let after = try PDFSourceFileVersion.capture(at: coordinatedURL)
                 guard before == after else {
                     throw WorkspaceError.cannotOpen(url)
                 }
-                return LoadedDocument(document: document, version: after)
+                return loadedDocument(document, url: coordinatedURL, version: after)
             }
         }
 
@@ -211,8 +211,12 @@ enum PDFSourceFileAccess {
     static func overwriteDocument(
         _ document: PDFDocument,
         at url: URL,
-        expectedVersion: PDFSourceFileVersion
+        expectedVersion: PDFSourceFileVersion,
+        destinationPrecondition: PDFDestinationPrecondition? = nil,
+        checkCancellation: (() throws -> Void)? = nil
     ) throws -> SavedDocument {
+        try checkCancellation?()
+        try PDFSaveCancellation.checkCurrent()
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         var operationResult: Result<SavedDocument, Error>?
@@ -227,7 +231,9 @@ enum PDFSourceFileAccess {
                     document,
                     at: coordinatedURL,
                     reportedURL: url,
-                    expectedVersion: expectedVersion
+                    expectedVersion: expectedVersion,
+                    destinationPrecondition: destinationPrecondition,
+                    checkCancellation: checkCancellation
                 )
             }
         }
@@ -238,7 +244,9 @@ enum PDFSourceFileAccess {
                     document,
                     at: url,
                     reportedURL: url,
-                    expectedVersion: expectedVersion
+                    expectedVersion: expectedVersion,
+                    destinationPrecondition: destinationPrecondition,
+                    checkCancellation: checkCancellation
                 )
             }
             throw WorkspaceError.cannotSave(url)
@@ -257,23 +265,36 @@ enum PDFSourceFileAccess {
 
     private static func loadDocumentWithoutCoordination(at url: URL) throws -> LoadedDocument {
         let before = try PDFSourceFileVersion.capture(at: url)
-        guard let document = PDFDocument(url: url) else {
+        guard let document = PDFRawStreamProvenance.documentForGuardedLoader(at: url, before: before) else {
             throw WorkspaceError.invalidPDF(url)
         }
         let after = try PDFSourceFileVersion.capture(at: url)
         guard before == after else {
             throw WorkspaceError.cannotOpen(url)
         }
-        return LoadedDocument(document: document, version: after)
+        return loadedDocument(document, url: url, version: after)
+    }
+
+    /// Both the packaged coordinated reader and the metadata-guarded test
+    /// fallback must establish the same lazy raw-stream provenance.
+    private static func loadedDocument(_ document: PDFDocument, url: URL,
+                                       version: PDFSourceFileVersion) -> LoadedDocument {
+        PDFRawStreamProvenance.bindOpened(document, url: url, version: version)
+        return LoadedDocument(document: document, version: version)
     }
 
     private static func overwriteWithoutCoordination(
         _ document: PDFDocument,
         at destination: URL,
         reportedURL: URL,
-        expectedVersion: PDFSourceFileVersion
+        expectedVersion: PDFSourceFileVersion,
+        destinationPrecondition: PDFDestinationPrecondition?,
+        checkCancellation: (() throws -> Void)?
     ) throws -> SavedDocument {
         func validateCurrentVersion() throws {
+            try checkCancellation?()
+            try PDFSaveCancellation.checkCurrent()
+            try destinationPrecondition?.validate()
             guard
                 let currentVersion = try? PDFSourceFileVersion.capture(at: destination),
                 currentVersion == expectedVersion
@@ -289,7 +310,10 @@ enum PDFSourceFileAccess {
         let resultingURL = try AtomicPDFWriter.write(
             document,
             to: destination,
-            validateDestinationBeforeCommit: validateCurrentVersion
+            validateDestinationBeforeCommit: validateCurrentVersion,
+            allowDirectOverwriteFallback: false,
+            destinationPrecondition: destinationPrecondition,
+            checkCancellation: checkCancellation
         )
         let savedVersion = try PDFSourceFileVersion.capture(at: resultingURL)
         return SavedDocument(url: resultingURL, version: savedVersion)

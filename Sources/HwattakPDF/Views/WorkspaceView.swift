@@ -19,6 +19,8 @@ struct WorkspaceView: View {
     let isActive: Bool
     let isFocusMode: Bool
     let setFocusMode: (Bool) -> Void
+    let canCompareDocuments: Bool
+    let compareDocuments: () -> Void
 
     /// 부모 탭이 주입한 단일 문서 모델. EnvironmentObject는 깊은 자식에게 같은
     /// 인스턴스를 전달할 때 initializer 인자 폭증을 줄여 준다.
@@ -30,6 +32,7 @@ struct WorkspaceView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("pageOverviewPlacement") private var pageOverviewPlacementValue = PageOverviewPlacement.left.rawValue
     @AppStorage("fourPagePagingDirection") private var gridPagingDirectionValue = PDFGridPagingDirection.vertical.rawValue
+    @AppStorage("compactContinuousSpreads") private var compactContinuousSpreads = true
     /// Presentation belongs to one window scene. AppStorage broadcast panel
     /// dismissal across every PDF window, which removed another window's
     /// sidebar and triggered its request-cancellation lifecycle.
@@ -47,6 +50,14 @@ struct WorkspaceView: View {
     private var preferredPageSidebarWidth = PageSidebarResizeMetrics.defaultVerticalPanelWidth
     @AppStorage(PageSidebarPreferences.horizontalPanelHeightKey)
     private var preferredPageSidebarHeight = PageSidebarResizeMetrics.defaultHorizontalPanelHeight
+    @AppStorage(PageSidebarPreferences.automaticallyFitsWidthKey)
+    private var automaticallyFitsPageSidebarWidth = true
+    @AppStorage(PageSidebarPreferences.automaticallyFitsHeightKey)
+    private var automaticallyFitsPageSidebarHeight = true
+    @AppStorage("searchSidebar.verticalPanelWidth")
+    private var preferredSearchSidebarWidth = 250.0
+    @AppStorage("searchSidebar.horizontalPanelHeight")
+    private var preferredSearchSidebarHeight = 210.0
     @AppStorage(PageSidebarPreferences.compactHorizontalPanelMigrationKey)
     private var didMigrateCompactHorizontalPanelHeight = false
     // 아래 @State는 모두 현재 화면 수명에만 필요한 presentation state다.
@@ -62,7 +73,9 @@ struct WorkspaceView: View {
     // not observe objectWillChange; `PageScrollHUDOverlay` is the sole observer.
     @State private var pageScrollHUDController = PageScrollHUDController()
     @State private var pageSidebarResizeBaseline: Double?
+    @GestureState private var isPageSidebarResizeGestureActive = false
     @State private var livePageSidebarDimension: Double?
+    @State private var livePageSidebarThumbnailScale: Double?
     @State private var isPageSidebarDividerHovered = false
     @State private var sidebarMode = DocumentSidebarMode.pages
 
@@ -75,7 +88,9 @@ struct WorkspaceView: View {
         clearRecentDocuments: @escaping () -> Void,
         isActive: Bool = true,
         isFocusMode: Bool = false,
-        setFocusMode: @escaping (Bool) -> Void = { _ in }
+        setFocusMode: @escaping (Bool) -> Void = { _ in },
+        canCompareDocuments: Bool = false,
+        compareDocuments: @escaping () -> Void = {}
     ) {
         self.multiDocumentWorkspace = multiDocumentWorkspace
         self.openDocument = openDocument
@@ -86,9 +101,11 @@ struct WorkspaceView: View {
         self.isActive = isActive
         self.isFocusMode = isFocusMode
         self.setFocusMode = setFocusMode
+        self.canCompareDocuments = canCompareDocuments
+        self.compareDocuments = compareDocuments
     }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
 
     var body: some View {
         presentedWorkspace
@@ -113,6 +130,14 @@ struct WorkspaceView: View {
         }
         .background(theme.canvas)
         .safeAreaInset(edge: .bottom) {
+            if workspace.isPreparingPDFCompression {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.string("compression.preparing", defaultValue: "PDF를 준비하고 있습니다…"))
+                    Spacer()
+                    Button(L10n.string("action.cancel")) { workspace.cancelPDFCompression() }
+                }.padding(10).background(.regularMaterial)
+            }
             if let warning = workspace.recoveryWarning {
                 Label(warning, systemImage: "exclamationmark.triangle")
                     .font(.caption).padding(8).background(.regularMaterial)
@@ -149,11 +174,12 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: workspace.currentPageIndex) { _, newValue in
-            if workspace.pageColumns > 2 {
+            if workspace.pageColumns > 2, !workspace.isPageGalleryVisible {
                 gridVisiblePageIndex = newValue
             }
         }
         .onChange(of: workspace.pageColumns) { _, newValue in
+            workspace.isPageGalleryVisible = false
             resetPageScrollHUD()
             if newValue > 2 {
                 beginGridTransition(anchoredAt: workspace.currentPageIndex)
@@ -164,6 +190,33 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: workspace.twoPageDisplayMode) { _, _ in
+            workspace.isPageGalleryVisible = false
+            resetPageScrollHUD()
+        }
+        .onChange(of: workspace.pageFitMode) { _, _ in
+            workspace.isPageGalleryVisible = false
+        }
+        .onChange(of: workspace.isPageGalleryVisible) { _, isVisible in
+            resetPageSidebarResizeInteraction()
+            resetPageScrollHUD()
+            gridTransitionToken = UUID()
+            isTransitioningGridMode = false
+            gridTransitionTargetPageIndex = nil
+            gridVisiblePageIndex = nil
+            if !isVisible {
+                // The gallery can navigate or reorder pages while PDFKit is
+                // absent. Restore the current page instead of its old offset.
+                workspace.invalidatePDFViewportScrollPosition()
+                if workspace.pageColumns > 2 {
+                    beginGridTransition(anchoredAt: workspace.currentPageIndex)
+                }
+            }
+        }
+        .onChange(of: usesCompactContinuousSpreads) { _, _ in
+            // The compact and PDFKit canvases have different scroll geometry.
+            // Keep the current page, but never reuse a whole-document offset
+            // captured by the other layout.
+            workspace.invalidatePDFViewportScrollPosition()
             resetPageScrollHUD()
         }
         .onChange(of: workspace.gridLayoutMode) { _, _ in
@@ -176,6 +229,15 @@ struct WorkspaceView: View {
         }
         .onChange(of: pageOverviewPlacementValue) { _, _ in
             resetPageSidebarResizeInteraction()
+        }
+        .onChange(of: sidebarMode) { _, _ in
+            resetPageSidebarResizeInteraction()
+        }
+        .onChange(of: pageSidebarThumbnailScaleValue) { _, _ in
+            fitPageSidebarToThumbnails()
+        }
+        .onChange(of: pageSidebarLayoutModeValue) { _, _ in
+            fitPageSidebarToThumbnails()
         }
         .onChange(of: workspace.sidebarVisible) { _, _ in
             resetPageSidebarResizeInteraction()
@@ -199,7 +261,6 @@ struct WorkspaceView: View {
             sidebarMode = .pages
         }
         .onChange(of: workspace.documentURL) { _, _ in
-            workspace.aiAssistantSession.documentDidChange()
             workspace.pluginPanelRequest = nil
         }
         .onChange(of: workspace.hasOpenDocument) { _, _ in
@@ -207,12 +268,14 @@ struct WorkspaceView: View {
         }
         .onChange(of: isActive) { _, newValue in
             if !newValue {
+                resetPageSidebarResizeInteraction()
                 resetPageScrollHUD()
                 workspace.pluginPanelRequest = nil
             }
         }
         .onChange(of: scenePhase) { _, newValue in
             if newValue != .active {
+                resetPageSidebarResizeInteraction()
                 resetPageScrollHUD()
                 workspace.pluginPanelRequest = nil
             }
@@ -230,8 +293,16 @@ struct WorkspaceView: View {
                 workspace.pluginPanelRequest = nil
             }
         }
+        .onChange(of: pluginManager.permissionRevision) { _, _ in
+            if let request = workspace.pluginPanelRequest,
+               !pluginManager.isAuthorized(pluginIdentifier: request.pluginIdentifier,
+                   manifestDigest: request.manifestDigest, actionID: request.actionID) {
+                workspace.pluginPanelRequest = nil
+            }
+        }
         .onChange(of: workspace.pluginPanelRequest) { _, newValue in
             if newValue != nil {
+                workspace.studyNotesVisible = false
                 if aiPanelVisible {
                     workspace.aiAssistantSession.cancelActiveRequest()
                 }
@@ -245,6 +316,15 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: workspace.revision) { _, newRevision in
+            if let request = workspace.pendingImageInsertion, request.documentRevision != newRevision {
+                workspace.cancelImageInsertion()
+            }
+            let compressionIsStale = workspace.pendingPDFCompression.map {
+                $0.documentRevision != newRevision
+            } ?? false
+            if workspace.isPreparingPDFCompression || compressionIsStale {
+                workspace.cancelPDFCompression()
+            }
             if let request = workspace.pluginPanelRequest,
                request.documentRevision != newRevision {
                 workspace.pluginPanelRequest = nil
@@ -260,6 +340,8 @@ struct WorkspaceView: View {
             workspace.aiAssistantSession.cancelActiveRequest()
             workspace.pluginPanelRequest = nil
             workspace.cancelProtectedPDFExport()
+            workspace.cancelImageInsertion()
+            workspace.cancelPDFCompression()
         }
         .onReceive(pluginManager.$installedPlugins) { plugins in
             guard let request = workspace.pluginPanelRequest else { return }
@@ -285,15 +367,9 @@ struct WorkspaceView: View {
 
     private var presentedWorkspace: some View {
         lifecycleWorkspace
-        .sheet(item: $workspace.pendingTextEdit) { edit in
-            TextEditSheet(
-                edit: edit,
-                onCommit: workspace.commitPendingText,
-                onDraftChanged: { text in
-                    workspace.updatePendingTextDraft(id: edit.id, text: text)
-                },
-                onCancel: workspace.cancelPendingText
-            )
+        .background {
+            StudyNoteFloatingEditorHost(workspace: workspace, isActive: isActive)
+                .frame(width: 0, height: 0)
         }
         .sheet(isPresented: $showingSignature) {
             SignatureSheet(
@@ -304,6 +380,16 @@ struct WorkspaceView: View {
         }
         .sheet(isPresented: $showingOCR) {
             OCRSheet(workspace: workspace, onExport: exportOCRCopy)
+        }
+        .sheet(item: $workspace.pendingImageInsertion) { request in
+            ImageInsertionOptionsSheet(urls: request.urls,
+                onCancel: workspace.cancelImageInsertion,
+                onInsert: { workspace.approveImageInsertion(request, images: $0) })
+        }
+        .sheet(item: $workspace.pendingPDFCompression) { request in
+            PDFCompressionSheet(documentData: request.documentData, originalBytes: request.originalBytes,
+                onSave: { saveCompressedPDF($0, request: request) },
+                onCancel: workspace.cancelPDFCompression)
         }
         .sheet(item: $workspace.pendingProtectedExport) { presentation in
             PDFSecurityExportSheet(
@@ -317,7 +403,7 @@ struct WorkspaceView: View {
             PDFShareNoteSheet(note: note)
         }
         .alert(
-            "HwattakPDF",
+            "EmberPDF",
             isPresented: Binding(
                 get: { workspace.presentedError != nil },
                 set: { if !$0 { workspace.clearError() } }
@@ -354,7 +440,9 @@ struct WorkspaceView: View {
                 showSignature: { showingSignature = true },
                 showOCR: { showingOCR = true },
                 shareNote: prepareShareNote,
-                enterFocusMode: { setFocusMode(true) }
+                enterFocusMode: { setFocusMode(true) },
+                canCompareDocuments: canCompareDocuments,
+                compareDocuments: compareDocuments
             )
             .frame(height: isFocusMode ? 0 : nil)
             .opacity(isFocusMode ? 0 : 1)
@@ -363,13 +451,19 @@ struct WorkspaceView: View {
             .accessibilityHidden(isFocusMode)
             // 학습 팔레트는 capability 정책이 허용한 mode에서만 만들어진다.
             // 숨김 처리와 달리 다른 mode의 포커스·접근성 트리에서도 빠진다.
-            if !isFocusMode, modeToolsVisible, workspace.allows(.studyTools) {
+            if !isFocusMode, !workspace.isPageGalleryVisible,
+               modeToolsVisible, workspace.allows(.studyTools) {
                 StudyModePalette(
                     workspace: workspace,
                     providerSettings: aiSettings,
                     documentCollection: multiDocumentWorkspace,
                     onOpenAssistant: openAIAssistant,
                     showOCR: { showingOCR = true },
+                    showStudyNotes: {
+                        workspace.pluginPanelRequest = nil
+                        aiPanelVisible = false
+                        workspace.studyNotesVisible.toggle()
+                    },
                     shareNote: prepareShareNote
                 )
             }
@@ -377,35 +471,26 @@ struct WorkspaceView: View {
         }
     }
 
-    @ViewBuilder
     private var workspaceWithAIAssistant: some View {
-        // The binding is a remembered presentation preference, not authority.
-        // Check the current tab policy again at the render boundary so a mode
-        // shortcut cannot leave an AI panel visible for Editing mode.
-        if !isFocusMode, let request = activePluginPanelRequest {
-            HSplitView {
-                workspacePages
-                    .frame(
-                        minWidth: max(520, workspacePagesMinimumWidth),
-                        maxWidth: .infinity,
-                        maxHeight: .infinity
-                    )
-
+        // Keep the PDF viewport at one stable structural identity as companion
+        // panels open and close. Recreating it would discard OCR selections.
+        HSplitView {
+            workspacePages
+                .frame(minWidth: workspacePagesMinimumWidth, maxWidth: .infinity, maxHeight: .infinity)
+            if !isFocusMode, workspace.studyNotesVisible || (workspace.pendingTextEdit != nil && !workspace.noteEditorFloating) {
+                StudyNotesSidebar(workspace: workspace, documents: multiDocumentWorkspace,
+                                  onClose: { workspace.studyNotesVisible = false })
+                    .frame(minWidth: 320, idealWidth: 380, maxWidth: 560)
+            } else if !isFocusMode, let request = activePluginPanelRequest {
                 PluginPanelHostView(
                     request: request,
+                    workspace: workspace,
+                    collection: multiDocumentWorkspace,
+                    onOpenRelated: openRelatedPDF,
                     onClose: { workspace.pluginPanelRequest = nil }
                 )
                 .frame(minWidth: 360, idealWidth: 440, maxWidth: 680)
-            }
-        } else if !isFocusMode, aiPanelVisible, workspace.allows(.aiAssistance) {
-            HSplitView {
-                workspacePages
-                    .frame(
-                        minWidth: max(520, workspacePagesMinimumWidth),
-                        maxWidth: .infinity,
-                        maxHeight: .infinity
-                    )
-
+            } else if !isFocusMode, aiPanelVisible, workspace.allows(.aiAssistance) {
                 AIAssistantSidebar(
                     viewModel: workspace.aiAssistantSession,
                     workspace: workspace,
@@ -419,8 +504,6 @@ struct WorkspaceView: View {
                 )
                 .frame(minWidth: 350, idealWidth: 410, maxWidth: 540)
             }
-        } else {
-            workspacePages
         }
     }
 
@@ -429,6 +512,8 @@ struct WorkspaceView: View {
         GeometryReader { geometry in
             workspacePagesContent(availableSize: geometry.size)
         }
+        .environment(\.isPDFViewportResizing,
+                     pageSidebarResizeBaseline != nil || livePageSidebarThumbnailScale != nil)
         .frame(
             minWidth: workspacePagesMinimumWidth,
             minHeight: workspacePagesMinimumHeight
@@ -508,7 +593,8 @@ struct WorkspaceView: View {
                 PageSidebarView(
                     workspace: workspace,
                     placement: pageOverviewPlacement,
-                    sidebarMode: $sidebarMode
+                    sidebarMode: $sidebarMode,
+                    onThumbnailScalePreview: { livePageSidebarThumbnailScale = $0 }
                 )
             case .search:
                 SearchNavigatorSidebarView(
@@ -525,7 +611,19 @@ struct WorkspaceView: View {
     private var documentCanvas: some View {
         let scrollActivityHandler = pageScrollActivityHandler
         return Group {
-            if workspace.pageColumns <= 2 {
+            if workspace.isPageGalleryVisible {
+                PDFPageGalleryView(
+                    workspace: workspace,
+                    exportCombined: exportSelectedPagesCombined,
+                    exportIndividually: exportSelectedPagesIndividually,
+                    close: closePageGallery
+                )
+            } else if usesCompactContinuousSpreads {
+                PDFCompactSpreadView(
+                    workspace: workspace,
+                    onScrollActivity: scrollActivityHandler
+                )
+            } else if workspace.pageColumns <= 2 {
                 PDFKitViewer(
                     workspace: workspace,
                     onScrollActivity: scrollActivityHandler
@@ -545,14 +643,23 @@ struct WorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(\.layoutDirection, .leftToRight)
         .overlay {
-            PageScrollHUDOverlay(
-                controller: pageScrollHUDController,
-                pageRange: pageDisplayRange,
-                pageCount: workspace.pageCount,
-                trailingPadding: pageHUDTrailingPadding,
-                theme: theme
-            )
+            if !workspace.isPageGalleryVisible {
+                PageScrollHUDOverlay(
+                    controller: pageScrollHUDController,
+                    pageRange: pageDisplayRange,
+                    pageCount: workspace.pageCount,
+                    trailingPadding: pageHUDTrailingPadding,
+                    theme: theme
+                )
+            }
         }
+    }
+
+    private var usesCompactContinuousSpreads: Bool {
+        compactContinuousSpreads
+            && workspace.pageColumns == 2
+            && workspace.twoPageDisplayMode == .continuous
+            && (PDFPageNavigationMode(rawValue: gridPagingDirectionValue) ?? .defaultValue) != .horizontalPaging
     }
 
     private var pageOverviewPlacement: PageOverviewPlacement {
@@ -564,7 +671,9 @@ struct WorkspaceView: View {
     }
 
     private var pageSidebarThumbnailScale: Double {
-        PageSidebarPreferences.clampedThumbnailScale(pageSidebarThumbnailScaleValue)
+        PageSidebarPreferences.clampedThumbnailScale(
+            livePageSidebarThumbnailScale ?? pageSidebarThumbnailScaleValue
+        )
     }
 
     private var pageSidebarMinimumDimension: Double {
@@ -574,6 +683,18 @@ struct WorkspaceView: View {
                 layoutMode: pageSidebarLayoutMode,
                 thumbnailScale: pageSidebarThumbnailScale
             )
+    }
+
+    private var pageSidebarReferenceAspect: Double {
+        // A stable reference keeps the strip from changing height as pages
+        // scroll. Read one crop box, never scan/render a whole document during
+        // a resize. Individual groups still fit their own (possibly tall) pages.
+        guard let page = workspace.document?.page(at: 0) else { return 1.414 }
+        let size = page.bounds(for: .cropBox).size
+        guard size.width.isFinite, size.height.isFinite,
+              size.width > 0, size.height > 0 else { return 1.414 }
+        return abs(page.rotation % 180) == 90
+            ? Double(size.width / size.height) : Double(size.height / size.width)
     }
 
     private func enforcingSidebarModeMinimum(_ dimension: Double) -> Double {
@@ -598,10 +719,21 @@ struct WorkspaceView: View {
 
     private func resolvedPageSidebarDimension(availableSize: CGSize) -> CGFloat {
         guard effectiveSidebarVisible else { return 0 }
-        let preferred = livePageSidebarDimension ?? (
-            pageOverviewPlacement.usesHorizontalPageStrip
-                ? preferredPageSidebarHeight
-                : preferredPageSidebarWidth
+        let horizontal = pageOverviewPlacement.usesHorizontalPageStrip
+        let automaticallyFits = sidebarMode == .pages
+            && (horizontal ? automaticallyFitsPageSidebarHeight : automaticallyFitsPageSidebarWidth)
+        let storedDimension = sidebarMode == .pages
+            ? (horizontal ? preferredPageSidebarHeight : preferredPageSidebarWidth)
+            : (horizontal ? preferredSearchSidebarHeight : preferredSearchSidebarWidth)
+        let preferred = livePageSidebarDimension ?? PageSidebarResizeMetrics.preferredDimension(
+            storedDimension: storedDimension,
+            automaticallyFitsThumbnails: automaticallyFits,
+            placement: pageOverviewPlacement,
+            layoutMode: pageSidebarLayoutMode,
+            // Keep the popover's anchor still while dragging its slider.
+            // Thumbnails preview locally; fit the panel once on release.
+            thumbnailScale: pageSidebarThumbnailScaleValue,
+            maximumPageAspect: pageSidebarReferenceAspect
         )
         let availableLength = pageOverviewPlacement.usesHorizontalPageStrip
             ? availableSize.height
@@ -646,6 +778,16 @@ struct WorkspaceView: View {
                 currentDimension: Double(currentDimension)
             )
         )
+        .onChange(of: isPageSidebarResizeGestureActive) { _, isDragging in
+            guard !isDragging else { return }
+            // GestureState also resets when AppKit cancels a drag, without an
+            // onEnded callback. Defer cleanup until normal mouse-up commits.
+            DispatchQueue.main.async {
+                if !isPageSidebarResizeGestureActive, pageSidebarResizeBaseline != nil {
+                    resetPageSidebarResizeInteraction()
+                }
+            }
+        }
         .onHover(perform: updatePageSidebarDividerHover)
         .focusable()
         .onMoveCommand { direction in
@@ -689,6 +831,9 @@ struct WorkspaceView: View {
         currentDimension: Double
     ) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .updating($isPageSidebarResizeGestureActive) { _, isDragging, _ in
+                isDragging = true
+            }
             .onChanged { value in
                 if pageSidebarResizeBaseline == nil {
                     pageSidebarResizeBaseline = currentDimension
@@ -788,11 +933,29 @@ struct WorkspaceView: View {
     }
 
     private func persistPageSidebarDimension(_ dimension: Double) {
+        if sidebarMode == .search {
+            if pageOverviewPlacement.usesHorizontalPageStrip {
+                preferredSearchSidebarHeight = dimension
+            } else {
+                preferredSearchSidebarWidth = dimension
+            }
+            return
+        }
         if pageOverviewPlacement.usesHorizontalPageStrip {
             preferredPageSidebarHeight = dimension
+            automaticallyFitsPageSidebarHeight = false
         } else {
             preferredPageSidebarWidth = dimension
+            automaticallyFitsPageSidebarWidth = false
         }
+    }
+
+    private func fitPageSidebarToThumbnails() {
+        // Commit once after a slider/pinch, keeping the popover stable during
+        // preview without broadcasting writes to every open window.
+        automaticallyFitsPageSidebarWidth = true
+        automaticallyFitsPageSidebarHeight = true
+        resetPageSidebarResizeInteraction()
     }
 
     private func migrateLegacyHorizontalPageSidebarHeightIfNeeded() {
@@ -848,6 +1011,7 @@ struct WorkspaceView: View {
             set: { visible in
                 if visible {
                     workspace.pluginPanelRequest = nil
+                    workspace.studyNotesVisible = false
                 }
                 aiPanelVisible = visible
             }
@@ -857,11 +1021,8 @@ struct WorkspaceView: View {
     private var activePluginPanelRequest: PluginPanelRequest? {
         guard let request = workspace.pluginPanelRequest,
               request.documentRevision == workspace.revision,
-              pluginManager.installedPlugins.contains(where: {
-                  $0.isEnabled
-                      && $0.id == request.pluginIdentifier
-                      && $0.manifestDigest == request.manifestDigest
-              }),
+              pluginManager.isAuthorized(pluginIdentifier: request.pluginIdentifier,
+                  manifestDigest: request.manifestDigest, actionID: request.actionID),
               request.kind != .translation || workspace.allows(.translation) else {
             return nil
         }
@@ -869,7 +1030,7 @@ struct WorkspaceView: View {
     }
 
     private var effectiveSidebarVisible: Bool {
-        workspace.sidebarVisible && !isFocusMode
+        workspace.sidebarVisible && !isFocusMode && !workspace.isPageGalleryVisible
     }
 
     private var gridLayoutModeBinding: Binding<PDFGridLayoutMode> {
@@ -931,7 +1092,8 @@ struct WorkspaceView: View {
         let acceptsActivity = isActive && scenePhase == .active
         let workspace = workspace
         return { metrics in
-            guard acceptsActivity, workspace.pageCount > 0 else { return }
+            guard acceptsActivity, workspace.pageCount > 0,
+                  !workspace.isPageGalleryVisible else { return }
             controller.recordScroll(metrics)
         }
     }
@@ -940,11 +1102,16 @@ struct WorkspaceView: View {
         pageScrollHUDController.reset()
     }
 
+    private func closePageGallery() {
+        workspace.invalidatePDFViewportScrollPosition()
+        workspace.isPageGalleryVisible = false
+    }
+
     private func handleGridVisiblePageChange(_ index: Int) {
         // Ignore initial/teardown geometry reports until the requested page is
         // positioned in the newly-created or reflowed grid. Otherwise page 1
         // can overwrite the page that was current before the layout change.
-        guard workspace.pageColumns > 2 else { return }
+        guard workspace.pageColumns > 2, !workspace.isPageGalleryVisible else { return }
         if isTransitioningGridMode {
             guard isMatchingGridTransitionTarget(index) else { return }
             isTransitioningGridMode = false
@@ -966,15 +1133,17 @@ struct WorkspaceView: View {
 
     private func handleGridPageGroupChange(_ requestedIndex: Int) {
         guard
-            workspace.pageColumns == PDFGridPageGroup.pageCountPerGroup,
+            !workspace.isPageGalleryVisible,
+            workspace.pageColumns > 2,
+            workspace.pageColumns == PDFGridPageGroup.pageCountPerGroup
+                || gridPagingDirection == .allDirections,
             workspace.pageCount > 0
         else {
             return
         }
-        let groupStart = PDFGridPageGroup(
-            containing: requestedIndex,
-            documentPageCount: workspace.pageCount
-        ).startIndex
+        let groupSize = max(3, min(12, workspace.pageColumns))
+        let safeIndex = min(max(0, requestedIndex), workspace.pageCount - 1)
+        let groupStart = (safeIndex / groupSize) * groupSize
 
         if workspace.currentPageIndex != groupStart {
             // Suppress stale visibility reports while ScrollViewReader moves
@@ -1020,6 +1189,7 @@ struct WorkspaceView: View {
     }
 
     private func beginGridTransition(anchoredAt pageIndex: Int) {
+        guard !workspace.isPageGalleryVisible else { return }
         let clampedIndex = min(max(0, pageIndex), max(0, workspace.pageCount - 1))
         let token = UUID()
         gridTransitionToken = token
@@ -1055,7 +1225,7 @@ struct WorkspaceView: View {
             ),
             title: L10n.string("panel.title.save_selected_pages_combined")
         ) {
-            workspace.exportSelectedPagesAsCombinedPDF(to: url)
+            Task { await workspace.exportSelectedPagesAsCombinedPDFAsynchronously(to: url) }
         }
     }
 
@@ -1068,15 +1238,21 @@ struct WorkspaceView: View {
                 workspace.selectedPages.count
             )
         ) {
-            workspace.exportSelectedPagesAsIndividualPDFs(to: directory)
+            Task { await workspace.exportSelectedPagesAsIndividualPDFsAsynchronously(to: directory) }
         }
     }
 
     private func insertImage() {
         guard workspace.allows(.imageInsertion) else { return }
-        if let url = WorkspaceFilePanels.chooseImages().first {
-            workspace.insertImage(url: url)
-        }
+        workspace.requestImageInsertion(urls: WorkspaceFilePanels.chooseImages(allowsMultipleSelection: true))
+    }
+
+    private func saveCompressedPDF(_ data: Data, request: PDFCompressionRequest) {
+        let base = SelectedPagePDFExporter.documentBaseName(for: request.sourceURL)
+        guard let url = WorkspaceFilePanels.chooseSavePDF(suggestedName: "\(base)-smaller.pdf",
+            title: L10n.string("compression.menu", defaultValue: "PDF 용량 줄이기…"),
+            directoryURL: request.sourceURL?.deletingLastPathComponent()) else { return }
+        workspace.saveCompressedCopy(data, request: request, to: url)
     }
 
     private func exportOCRCopy() async -> Bool {
@@ -1131,6 +1307,7 @@ struct WorkspaceView: View {
     /// 기존 AI sidebar를 연다. 실제 외부 전송은 sidebar의 확인 sheet에서만 한다.
     private func openAIAssistant() {
         withAnimation(.easeInOut(duration: 0.16)) {
+            workspace.studyNotesVisible = false
             workspace.pluginPanelRequest = nil
             aiPanelVisible = true
         }

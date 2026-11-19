@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import Combine
 import Foundation
 import PDFKit
 import XCTest
@@ -8,6 +9,259 @@ import XCTest
 
 @MainActor
 final class AIAssistantSessionModelTests: XCTestCase {
+    func testDisabledConfirmationSendsFrozenRequestOnceWithoutPublishingConsent() async throws {
+        var contextContinuation: CheckedContinuation<PDFAIContextBundle, Never>?
+        var requestedScope: PDFAIContextScope?
+        var captured: [(AICompletionRequest, AIProviderConfiguration)] = []
+        let model = AIAssistantSessionModel(
+            complete: { request, configuration in
+                captured.append((request, configuration))
+                return AICompletionResponse(text: "Snapshot response", provider: configuration.kind)
+            },
+            extractContext: { _, scope in
+                requestedScope = scope
+                return await withCheckedContinuation { contextContinuation = $0 }
+            },
+            searchRelatedPDFs: { _, _, _ in [] }
+        )
+        var observedPhases: [AIAssistantPhase] = []
+        var publishedConsentCount = 0
+        let phaseObservation = model.$phase.sink { observedPhases.append($0) }
+        let consentObservation = model.$pendingConsent.sink {
+            if $0 != nil { publishedConsentCount += 1 }
+        }
+        defer {
+            phaseObservation.cancel()
+            consentObservation.cancel()
+        }
+        var selectedConfiguration = configuration(kind: .openAI)
+        selectedConfiguration.isWebSearchEnabled = true
+        selectedConfiguration.remoteMCPServers = [
+            AIRemoteMCPServer(
+                label: "trusted",
+                serverURL: URL(string: "https://mcp.example.com")!
+            )
+        ]
+        let expectedConfiguration = selectedConfiguration
+        let expectedContext = contextBundle(scope: .currentPage)
+        model.prompt = "Request-time question"
+        model.allowsWebSearch = true
+        model.allowsMCPTools = true
+
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: false
+        )
+        XCTAssertFalse(model.allowsWebSearch)
+        XCTAssertFalse(model.allowsMCPTools)
+        await waitUntil { contextContinuation != nil }
+
+        model.prompt = "Changed during extraction"
+        model.scope = .wholeDocument
+        selectedConfiguration.model = "changed-model"
+        selectedConfiguration.baseURL = URL(string: "https://changed.example.com/v1")!
+        contextContinuation?.resume(returning: expectedContext)
+        await waitUntil { captured.count == 1 && model.phase == .idle }
+        model.confirmPendingConsent()
+        await Task.yield()
+
+        XCTAssertEqual(captured.count, 1)
+        let sent = try XCTUnwrap(captured.first)
+        XCTAssertEqual(sent.0.prompt, "Request-time question")
+        XCTAssertEqual(sent.0.context, expectedContext.promptText)
+        XCTAssertEqual(sent.1, expectedConfiguration)
+        XCTAssertEqual(requestedScope, .currentPage)
+        XCTAssertTrue(sent.0.allowsWebSearch)
+        XCTAssertTrue(sent.0.allowsMCPTools)
+        XCTAssertFalse(sent.0.systemPrompt?.isEmpty ?? true)
+        XCTAssertEqual(publishedConsentCount, 0, "The confirmation sheet must never flash.")
+        XCTAssertFalse(observedPhases.contains(.awaitingConsent))
+        XCTAssertTrue(observedPhases.contains(.requesting))
+        XCTAssertFalse(model.allowsWebSearch)
+        XCTAssertFalse(model.allowsMCPTools)
+        XCTAssertEqual(model.messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(model.messages.last?.localCitations.first?.pageNumber, 1)
+    }
+
+    func testReenablingConfirmationAppliesToNextRequestAndKeepsOptionalToolsOff() async {
+        var completionCallCount = 0
+        let model = makeModel { _, configuration in
+            completionCallCount += 1
+            return AICompletionResponse(text: "First response", provider: configuration.kind)
+        }
+        var selectedConfiguration = configuration(kind: .openAI)
+        selectedConfiguration.isWebSearchEnabled = true
+        model.prompt = "First request"
+        model.allowsWebSearch = true
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: false
+        )
+        await waitUntil { completionCallCount == 1 && model.phase == .idle }
+
+        model.prompt = "Review this request"
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: true
+        )
+        await waitUntil { model.phase == .awaitingConsent }
+
+        XCTAssertEqual(completionCallCount, 1)
+        XCTAssertEqual(model.pendingConsent?.prompt, "Review this request")
+        XCTAssertEqual(model.pendingConsent?.conversation.count, 2)
+        XCTAssertFalse(model.pendingConsent?.allowsWebSearch ?? true)
+        XCTAssertFalse(model.pendingConsent?.allowsMCPTools ?? true)
+        model.confirmPendingConsent()
+        await waitUntil { completionCallCount == 2 && model.phase == .idle }
+    }
+
+    func testDisabledConfirmationRejectsCancelledOrStaleContextBeforeSending() async {
+        for changesDocument in [false, true] {
+            var contextContinuation: CheckedContinuation<PDFAIContextBundle, Never>?
+            var didReturnContext = false
+            var completionCallCount = 0
+            let workspace = PDFWorkspaceState()
+            let model = AIAssistantSessionModel(
+                complete: { _, configuration in
+                    completionCallCount += 1
+                    return AICompletionResponse(text: "Must not send", provider: configuration.kind)
+                },
+                extractContext: { _, _ in
+                    let context = await withCheckedContinuation { contextContinuation = $0 }
+                    didReturnContext = true
+                    return context
+                },
+                searchRelatedPDFs: { _, _, _ in [] }
+            )
+            model.prompt = "Cancelled or stale request"
+            model.beginRequest(
+                action: nil,
+                workspace: workspace,
+                documentCollection: nil,
+                configuration: configuration(),
+                hasAPIKey: true,
+                requiresTransmissionConfirmation: false
+            )
+            await waitUntil { contextContinuation != nil }
+
+            if changesDocument {
+                let originalRevision = workspace.revision
+                workspace.close()
+                XCTAssertNotEqual(workspace.revision, originalRevision)
+            } else {
+                model.cancelActiveRequest()
+            }
+            contextContinuation?.resume(returning: contextBundle(scope: .currentPage))
+            await waitUntil { didReturnContext && model.phase == .idle }
+
+            XCTAssertEqual(completionCallCount, 0)
+            XCTAssertNil(model.pendingConsent)
+            XCTAssertTrue(model.messages.isEmpty)
+            if changesDocument { XCTAssertNotNil(model.errorMessage) }
+        }
+    }
+
+    func testDisabledConfirmationKeepsProviderConversationsIsolated() async {
+        var captured: [AICompletionRequest] = []
+        let model = makeModel { request, configuration in
+            captured.append(request)
+            return AICompletionResponse(text: "Private provider response", provider: configuration.kind)
+        }
+        var selectedConfiguration = configuration()
+        model.prompt = "First provider"
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: false
+        )
+        await waitUntil { captured.count == 1 && model.phase == .idle }
+
+        selectedConfiguration.baseURL = URL(string: "https://other.example.com/v1")!
+        model.prompt = "Second provider"
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: false
+        )
+        await waitUntil { captured.count == 2 && model.phase == .idle }
+
+        XCTAssertTrue(captured.last?.conversation.isEmpty == true)
+        XCTAssertEqual(model.messages.first?.text, "Second provider")
+        XCTAssertEqual(model.messages.count, 2)
+    }
+
+    func testDisabledTransmissionConfirmationStillRequiresMCPApproval() async {
+        let serverURL = URL(string: "https://mcp.example.com")!
+        let approval = AIMCPApprovalRequest(
+            approvalRequestID: "approval-automatic-send",
+            name: "read",
+            arguments: "{}",
+            serverLabel: "trusted",
+            serverURL: serverURL
+        )
+        var approvalCallCount = 0
+        let model = AIAssistantSessionModel(
+            complete: { _, configuration in
+                AICompletionResponse(
+                    text: "",
+                    provider: configuration.kind,
+                    responseID: "response-automatic-send",
+                    pendingMCPApprovals: [approval]
+                )
+            },
+            resolveApprovals: { _, _, configuration in
+                approvalCallCount += 1
+                return AICompletionResponse(text: "Approved response", provider: configuration.kind)
+            },
+            extractContext: { _, scope in self.contextBundle(scope: scope) },
+            searchRelatedPDFs: { _, _, _ in [] }
+        )
+        var selectedConfiguration = configuration(kind: .openAI)
+        selectedConfiguration.remoteMCPServers = [
+            AIRemoteMCPServer(label: "trusted", serverURL: serverURL)
+        ]
+        model.prompt = "Request a tool"
+        model.allowsMCPTools = true
+        model.beginRequest(
+            action: nil,
+            workspace: PDFWorkspaceState(),
+            documentCollection: nil,
+            configuration: selectedConfiguration,
+            hasAPIKey: true,
+            requiresTransmissionConfirmation: false
+        )
+        await waitUntil { model.phase == .awaitingMCPApproval }
+
+        XCTAssertNil(model.pendingConsent)
+        XCTAssertTrue(model.mcpApprovalDecisions.isEmpty)
+        model.submitMCPApprovalDecisions()
+        await Task.yield()
+        XCTAssertEqual(approvalCallCount, 0)
+        XCTAssertEqual(model.phase, .awaitingMCPApproval)
+
+        model.setMCPDecision(approval, true)
+        model.submitMCPApprovalDecisions()
+        await waitUntil { approvalCallCount == 1 && model.phase == .idle }
+    }
+
     func testRequestRequiresConsentBeforeCompletionAndDropsContextAfterCancel() async {
         var completionCallCount = 0
         let model = makeModel { _, configuration in
@@ -942,19 +1196,25 @@ final class AIAssistantSessionModelTests: XCTestCase {
         var selectedConfiguration = configuration(kind: .openAI)
         selectedConfiguration.requiresAPIKey = true
 
-        model.beginRequest(
-            action: .relatedPDFs,
-            workspace: workspace,
-            documentCollection: collection,
-            configuration: selectedConfiguration,
-            hasAPIKey: false
-        )
-        await waitUntil { model.phase == .idle && relatedSearchCallCount == 1 }
+        for requiresConfirmation in [true, false] {
+            let expectedSearchCount = relatedSearchCallCount + 1
+            model.beginRequest(
+                action: .relatedPDFs,
+                workspace: workspace,
+                documentCollection: collection,
+                configuration: selectedConfiguration,
+                hasAPIKey: false,
+                requiresTransmissionConfirmation: requiresConfirmation
+            )
+            await waitUntil {
+                model.phase == .idle && relatedSearchCallCount == expectedSearchCount
+            }
 
-        XCTAssertEqual(completionCallCount, 0)
-        XCTAssertEqual(capturedQuery, contextBundle(scope: .currentPage).promptText)
-        XCTAssertNil(model.pendingConsent)
-        XCTAssertEqual(model.messages.last?.role, .notice)
+            XCTAssertEqual(completionCallCount, 0)
+            XCTAssertEqual(capturedQuery, contextBundle(scope: .currentPage).promptText)
+            XCTAssertNil(model.pendingConsent)
+            XCTAssertEqual(model.messages.last?.role, .notice)
+        }
     }
 
     func testSolveRequestCarriesMarkdownAndDelimitedLatexFormattingContract() async {

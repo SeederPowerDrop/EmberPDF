@@ -16,6 +16,7 @@ enum AtomicPDFWriter {
     // Documentation/Learning/05-SAVING-OCR.md에서 저장 단계와 실패 경로를 함께 읽어 보세요.
     private enum StagingFailure: Error {
         case pdfKitReturnedFalse
+        case flushFailed(Error)
     }
 
     /// 성공하면 실제 destination을 반환하고, 어느 단계든 검증이 실패하면
@@ -29,34 +30,100 @@ enum AtomicPDFWriter {
         validateDestinationBeforeCommit: (() throws -> Void)? = nil,
         validateStagedPDF: ((URL, Int) throws -> Void)? = nil,
         allowDirectOverwriteFallback: Bool = true,
-        onDirectWriteFallback: (() -> Void)? = nil
+        onDirectWriteFallback: (() -> Void)? = nil,
+        synchronizeStagedFile: (URL) throws -> Void = PDFSaveDurability.synchronizeStagedFile,
+        destinationPrecondition capturedDestination: PDFDestinationPrecondition? = nil,
+        checkCancellation: (() throws -> Void)? = nil
     ) throws -> URL {
+        func checkpoint() throws {
+            try checkCancellation?()
+            try PDFSaveCancellation.checkCurrent()
+        }
+        try checkpoint()
+        // A factory capture refusal cannot silently fall through to SDK output.
+        try PDFCatalogStructurePreserver.validateOutlineStyleReconstruction(in: document)
+        // Restoring raw page content cannot be combined with flattening,
+        // image rewriting or encrypted output requested through write options.
+        if let writeOptions, !writeOptions.isEmpty,
+           (PDFBodyTextPageSnapshot.requiresPageContentPreservation(document)
+            || PDFCatalogStructurePreserver.requiresCatalogSemantics(document)) {
+            throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
+        }
+        // Capture before catalog preparation or serialization, both of which
+        // can take time. A target changed while preparing must not be replaced.
+        let destinationPrecondition = try capturedDestination ?? PDFDestinationPrecondition(destination: destination)
+        if writeOptions?.isEmpty ?? true {
+            // Direct synchronous saves do not pass through a recovery snapshot.
+            // Capture the original catalog before SDK serialization and select
+            // its graph writer only after preparation succeeds.
+            try PDFCatalogStructurePreserver.prepareForOrdinaryWriting(document)
+            try PDFAnnotationRelationshipPreserver.prepareForWriting(document)
+            try PDFCatalogStructurePreserver.validateEditedPageTags(in: document)
+        }
         let fileManager = FileManager.default
         let parent = destination.deletingLastPathComponent()
-        // Capture before any potentially long PDFKit serialization. This state
-        // represents exactly what the user approved in the save panel: either
-        // a particular existing file version or an absent destination.
-        let destinationPrecondition = try PDFDestinationPrecondition(
-            destination: destination
-        )
         let temporary = parent.appendingPathComponent(
             ".HwattakPDF-\(UUID().uuidString).tmp"
         )
+        var preservedBodyData: Data?
 
         do {
-            guard write(document, to: temporary, options: writeOptions) else {
-                // PDFKit exposes only Bool here. The catch block performs one
-                // zero-byte sibling probe to distinguish sandbox permission
-                // denial from ENOSPC/EIO/invalid serialization before deciding
-                // whether the less-safe file-scoped fallback is appropriate.
-                throw StagingFailure.pdfKitReturnedFalse
+            if writeOptions?.isEmpty ?? true {
+                do {
+                    preservedBodyData = try PDFNativeStagingWriter.dataIfEligible(document)
+                    if preservedBodyData == nil, !PDFCanonicalFormMaterializer.shouldMaterialize(document) {
+                        preservedBodyData = try PDFBodyTextPageSnapshot.directlyPreservingBodyContentsIfEligible(document)
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch let error as PDFCatalogStructurePreserver.EditedPageTagSaveFailure {
+                    throw error
+                } catch {
+                    throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
+                }
             }
+            try checkpoint()
+            if let preservedBodyData {
+                try preservedBodyData.write(to: temporary, options: [])
+            } else {
+                let written = write(document, to: temporary, options: writeOptions)
+                try checkpoint()
+                guard written else {
+                    // PDFKit exposes only Bool here. The catch block performs
+                    // a sibling probe before any file-scoped fallback.
+                    throw StagingFailure.pdfKitReturnedFalse
+                }
+            }
+            try checkpoint()
+            if preservedBodyData == nil, (PDFCanonicalFormMaterializer.shouldMaterialize(document)
+                || PDFBodyTextPageSnapshot.requiresPageContentPreservation(document)
+                || PDFCatalogStructurePreserver.needsMaterialization(document)) {
+                let serialized = try Data(contentsOf: temporary, options: .mappedIfSafe)
+                let canonical = try materializedFormData(serialized, for: document,
+                    preservingCatalog: writeOptions?.isEmpty ?? true, checkCancellation: checkpoint)
+                try checkpoint()
+                if canonical != serialized { try canonical.write(to: temporary, options: []) }
+            }
+            try checkpoint()
+            try PDFSerializationCrossReferenceRepair.repair(at: temporary)
+            try checkpoint()
             try validatePDF(
                 at: temporary,
                 expectedPageCount: document.pageCount,
                 validateSerializedDocument: validateSerializedDocument
             )
+            try checkpoint()
             try validateStagedPDF?(temporary, document.pageCount)
+            try checkpoint()
+            // Validation can read freshly written bytes from the OS cache.
+            // Flush the completed staging file before replacing the original;
+            // recheck destination conflicts afterward because flushing can wait.
+            do {
+                try synchronizeStagedFile(temporary)
+            } catch {
+                throw StagingFailure.flushFailed(error)
+            }
+            try checkpoint()
             // Serializing a very large PDF can take seconds. Revalidate only
             // after the complete temporary file is ready so an external save
             // during that interval cannot be silently replaced at commit time.
@@ -64,6 +131,7 @@ enum AtomicPDFWriter {
             // 검사 시점은 직렬화(serialization) 이후입니다. 큰 파일을 쓰는 동안 저장 대상 파일이 달라질 수 있습니다.
             try validateDestinationBeforeCommit?()
             try destinationPrecondition.validate()
+            try checkpoint()
             if fileManager.fileExists(atPath: destination.path) {
                 _ = try fileManager.replaceItemAt(destination, withItemAt: temporary)
             } else {
@@ -72,6 +140,18 @@ enum AtomicPDFWriter {
             return destination
         } catch let atomicError {
             try? fileManager.removeItem(at: temporary)
+            // Cancellation is never a permission failure and can never enter
+            // the file-scoped path that truncates an existing destination.
+            if atomicError is CancellationError { throw atomicError }
+            try checkpoint()
+
+            // A flush failure is never permission to truncate the original,
+            // even when a mounted volume reports EPERM/EACCES. Preserve the
+            // underlying diagnostic and bypass file-scoped fallback entirely.
+            if let failure = atomicError as? StagingFailure,
+               case .flushFailed(let underlying) = failure {
+                throw underlying
+            }
 
             // Semantic validation failures (external edit, Save Copy alias,
             // invalid staged PDF) are intentional stops. Falling back after
@@ -97,16 +177,14 @@ enum AtomicPDFWriter {
                 throw atomicError
             }
 
-            // A direct fallback truncates an existing inode before the final
-            // reopen check can finish. Security-sensitive exports opt out of
-            // that trade-off: if the sandbox prevents an atomic sibling-file
-            // replacement, preserve the existing destination and report the
-            // save failure instead of risking a partial protected copy.
+            // Ordinary saves and protected exports require atomic replacement
+            // of existing files. A direct write can truncate them before an
+            // out-of-space error is reported.
             if
                 !allowDirectOverwriteFallback,
                 fileManager.fileExists(atPath: destination.path)
             {
-                throw WorkspaceError.cannotSave(destination)
+                throw WorkspaceError.operationFailed(L10n.string("error.choose_save_location"))
             }
 
             // A sandbox extension granted for a user-selected file permits
@@ -122,12 +200,15 @@ enum AtomicPDFWriter {
                 document,
                 to: destination,
                 writeOptions: writeOptions,
+                preservedBodyData: preservedBodyData,
+                allowOverwrite: allowDirectOverwriteFallback,
                 validateSerializedDocument: validateSerializedDocument,
                 validateDestinationBeforeCommit: {
                     try validateDestinationBeforeCommit?()
                     try destinationPrecondition.validate()
                 },
-                onDirectWriteCommit: onDirectWriteFallback
+                onDirectWriteCommit: onDirectWriteFallback,
+                checkCancellation: checkpoint
             )
             return destination
         }
@@ -173,14 +254,29 @@ enum AtomicPDFWriter {
         _ document: PDFDocument,
         to destination: URL,
         writeOptions: [PDFDocumentWriteOption: Any]?,
+        preservedBodyData: Data?,
+        allowOverwrite: Bool,
         validateSerializedDocument: ((PDFDocument, Int) throws -> Void)?,
         validateDestinationBeforeCommit: (() throws -> Void)?,
-        onDirectWriteCommit: (() -> Void)?
+        onDirectWriteCommit: (() -> Void)?,
+        checkCancellation: () throws -> Void
     ) throws {
-        guard
-            let data = dataRepresentation(of: document, options: writeOptions),
-            let staged = PDFDocument(data: data)
-        else {
+        try checkCancellation()
+        let data: Data
+        if let preservedBodyData {
+            data = PDFSerializationCrossReferenceRepair.repair(preservedBodyData)
+        } else {
+            guard let serialized = dataRepresentation(of: document, options: writeOptions) else {
+                throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
+            }
+            try checkCancellation()
+            data = PDFSerializationCrossReferenceRepair.repair(
+                try materializedFormData(serialized, for: document,
+                    preservingCatalog: writeOptions?.isEmpty ?? true, checkCancellation: checkCancellation)
+            )
+        }
+        try checkCancellation()
+        guard let staged = PDFDocument(data: data) else {
             throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
         }
         try validate(
@@ -188,13 +284,16 @@ enum AtomicPDFWriter {
             expectedPageCount: document.pageCount,
             validateSerializedDocument: validateSerializedDocument
         )
+        try checkCancellation()
 
         // Do not request `.atomic` here: Foundation would create another
         // sibling file, recreating the sandbox failure this is handling.
         try validateDestinationBeforeCommit?()
         try validateIsolatedRegularFileForDirectWrite(at: destination)
+        try checkCancellation()
         onDirectWriteCommit?()
-        try data.write(to: destination, options: [])
+        // An external file could appear after the final destination check.
+        try data.write(to: destination, options: allowOverwrite ? [] : .withoutOverwriting)
         try validatePDF(
             at: destination,
             expectedPageCount: document.pageCount,
@@ -267,6 +366,42 @@ enum AtomicPDFWriter {
             return document.write(to: url, withOptions: options)
         }
         return document.write(to: url)
+    }
+
+    private static func materializedFormData(_ data: Data, for document: PDFDocument,
+                                             preservingCatalog: Bool = true,
+                                             checkCancellation: () throws -> Void) throws -> Data {
+        try checkCancellation()
+        var result = data
+        if preservingCatalog, PDFCatalogStructurePreserver.needsMaterialization(document) {
+            do { result = try PDFBodyTextPageSnapshot.preservingCatalog(in: result, from: document, plan: PDFCatalogStructurePreserver.plan(for: document)) }
+            catch is CancellationError { throw CancellationError() }
+            catch let error as PDFCatalogStructurePreserver.EditedPageTagSaveFailure { throw error }
+            catch {
+                #if DEBUG
+                print("PDF_CATALOG_GRAPH_ERROR", String(reflecting: type(of: error)), String(describing: error))
+                #endif
+                throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
+            }
+        } else if PDFBodyTextPageSnapshot.requiresPageContentPreservation(document) {
+            do { result = try PDFBodyTextPageSnapshot.preservingPageContents(in: result, from: document) }
+            catch is CancellationError { throw CancellationError() }
+            catch {
+                // A failed semantic repair must never enable direct overwrite.
+                throw WorkspaceError.operationFailed(L10n.string("error.validate_saved_pdf"))
+            }
+        }
+        try checkCancellation()
+        guard PDFCanonicalFormMaterializer.shouldMaterialize(document) else { return result }
+        do {
+            let canonical = try PDFCanonicalFormMaterializer.materialize(result)
+            try checkCancellation()
+            return canonical
+        }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            throw WorkspaceError.operationFailed(L10n.string("page_structure.error.form_fields"))
+        }
     }
 
     private static func dataRepresentation(

@@ -101,12 +101,14 @@ enum PageSidebarPreferences {
     static let thumbnailScaleKey = "pageSidebar.thumbnailScale"
     static let verticalPanelWidthKey = "pageSidebar.verticalPanelWidth"
     static let horizontalPanelHeightKey = "pageSidebar.horizontalPanelHeight"
+    static let automaticallyFitsWidthKey = "pageSidebar.automaticallyFitsWidth"
+    static let automaticallyFitsHeightKey = "pageSidebar.automaticallyFitsHeight"
     static let compactHorizontalPanelMigrationKey =
         "pageSidebar.compactHorizontalPanelHeightMigrationV1"
 
     static let defaultThumbnailScale = 1.0
-    static let minimumThumbnailScale = 0.65
-    static let maximumThumbnailScale = 1.35
+    static let minimumThumbnailScale = 0.5
+    static let maximumThumbnailScale = 3.0
     static let thumbnailScaleStep = 0.1
 
     static func clampedThumbnailScale(_ value: Double) -> Double {
@@ -122,33 +124,16 @@ enum PageSidebarPreferences {
         layoutMode: PageSidebarLayoutMode,
         thumbnailScale: Double
     ) -> Double {
-        let scale = clampedThumbnailScale(thumbnailScale)
-        let slotCount = layoutMode == .single ? 1.0 : 2.0
-        let baseThumbnailWidth = layoutMode == .single ? 148.0 : 72.0
-        let slotWidth = baseThumbnailWidth * scale + 16
-        let groupSpacing = layoutMode == .single ? 0 : 6
-        let groupPadding = layoutMode == .single ? 0 : 10
-        let scrollerPadding = 26.0
-        let contentWidth = slotWidth * slotCount
-            + Double(groupSpacing + groupPadding)
-            + scrollerPadding
-        let universalMinimum = layoutMode == .single ? 196.0 : 220.0
-        return max(universalMinimum, contentWidth)
+        // Thumbnails can fit a manually narrowed panel. Only controls impose
+        // a hard minimum; the selected zoom determines the automatic size.
+        124
     }
 
     static func minimumHorizontalPanelHeight(
         layoutMode: PageSidebarLayoutMode,
         thumbnailScale: Double
     ) -> Double {
-        let baseThumbnailWidth = layoutMode == .single ? 108.0 : 72.0
-        let metrics = PageSidebarLayoutMetrics.horizontalPanel(
-            thumbnailWidth: baseThumbnailWidth * clampedThumbnailScale(thumbnailScale),
-            isGrouped: layoutMode != .single
-        )
-        return max(
-            PageSidebarLayoutMetrics.minimumHorizontalPanelHeight,
-            metrics.estimatedThumbnailCardHeight
-        )
+        PageSidebarLayoutMetrics.minimumHorizontalPanelHeight
     }
 }
 
@@ -209,6 +194,49 @@ struct PageSidebarResizeMetrics {
         return PageSidebarPreferences.minimumVerticalPanelWidth(
             layoutMode: layoutMode,
             thumbnailScale: thumbnailScale
+        )
+    }
+
+    /// Fit the intended thumbnail size before applying window constraints.
+    /// This is independent of the current panel size, avoiding layout feedback
+    /// when a slider or divider is dragged.
+    static func automaticDimension(
+        for placement: PageOverviewPlacement,
+        layoutMode: PageSidebarLayoutMode,
+        thumbnailScale: Double,
+        maximumPageAspect: Double = 1.414
+    ) -> Double {
+        let scale = PageSidebarPreferences.clampedThumbnailScale(thumbnailScale)
+        let grouped = layoutMode != .single
+        if placement.usesHorizontalPageStrip {
+            return PageSidebarLayoutMetrics.horizontalPanel(
+                thumbnailWidth: (grouped ? 72 : 108) * scale,
+                maximumPageAspect: maximumPageAspect,
+                isGrouped: grouped
+            ).idealHorizontalPanelHeight
+        }
+        let columns = grouped ? 2.0 : 1.0
+        let width = ((grouped ? 72.0 : 148.0) * scale + 16) * columns
+            + (grouped ? 16 : 0) + 26
+        return max(124, width)
+    }
+
+    static func preferredDimension(
+        storedDimension: Double,
+        automaticallyFitsThumbnails: Bool,
+        placement: PageOverviewPlacement,
+        layoutMode: PageSidebarLayoutMode,
+        thumbnailScale: Double,
+        maximumPageAspect: Double = 1.414
+    ) -> Double {
+        if !automaticallyFitsThumbnails, storedDimension.isFinite, storedDimension > 0 {
+            return storedDimension
+        }
+        return automaticDimension(
+            for: placement,
+            layoutMode: layoutMode,
+            thumbnailScale: thumbnailScale,
+            maximumPageAspect: maximumPageAspect
         )
     }
 
@@ -296,7 +324,7 @@ struct PageSidebarResizeMetrics {
 
 struct PageSidebarLayoutMetrics: Equatable {
     static let defaultHorizontalPanelHeight = 188.0
-    static let minimumHorizontalPanelHeight = 188.0
+    static let minimumHorizontalPanelHeight = 112.0
     static let defaultMaximumHorizontalPanelHeight = 276.0
     static let horizontalScrollerTopPadding = 8.0
     static let horizontalScrollerBottomPadding = 8.0
@@ -317,9 +345,15 @@ struct PageSidebarLayoutMetrics: Equatable {
     ) -> Double {
         let horizontal = placement.usesHorizontalPageStrip
         let grouped = layoutMode != .single
-        let reference = PageSidebarResizeMetrics.defaultDimension(for: placement)
-        let dimension = panelDimension.isFinite ? max(1, panelDimension) : reference
+        let dimension = panelDimension.isFinite ? max(1, panelDimension)
+            : PageSidebarResizeMetrics.defaultDimension(for: placement)
         let scale = PageSidebarPreferences.clampedThumbnailScale(thumbnailScale)
+        let reference = PageSidebarResizeMetrics.automaticDimension(
+            for: placement,
+            layoutMode: layoutMode,
+            thumbnailScale: scale,
+            maximumPageAspect: maximumPageAspect
+        )
         let baseWidth = grouped ? 72.0 : (horizontal ? 108.0 : 148.0)
         let preferredWidth = baseWidth * scale * dimension / reference
         let fittedWidth: Double
@@ -343,7 +377,8 @@ struct PageSidebarLayoutMetrics: Equatable {
         isGrouped: Bool
     ) -> PageSidebarLayoutMetrics {
         let safeWidth = thumbnailWidth.isFinite ? max(1, thumbnailWidth) : 108
-        let safeAspect = maximumPageAspect.isFinite ? max(0.1, maximumPageAspect) : 1.414
+        let safeAspect = maximumPageAspect.isFinite && maximumPageAspect > 0
+            ? maximumPageAspect : 1.414
         // Image + PageThumbnailView's label spacing/line + page button padding
         // + ScrollView padding. Grouped cards add their own 5pt top/bottom.
         let estimatedCardHeight = safeWidth * safeAspect
@@ -351,10 +386,10 @@ struct PageSidebarLayoutMetrics: Equatable {
             + 16
             + horizontalScrollerTopPadding + horizontalScrollerBottomPadding
             + (isGrouped ? 10 : 0)
-        let idealHeight = min(380, max(defaultHorizontalPanelHeight, estimatedCardHeight))
+        let idealHeight = max(minimumHorizontalPanelHeight, estimatedCardHeight)
         let maximumHeight = max(
             defaultMaximumHorizontalPanelHeight,
-            min(420, idealHeight + 24)
+            idealHeight + 24
         )
         return PageSidebarLayoutMetrics(
             idealHorizontalPanelHeight: idealHeight,

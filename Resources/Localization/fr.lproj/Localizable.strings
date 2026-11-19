@@ -9,7 +9,9 @@
 "settings.language.title" = "Langue";
 "settings.language.description" = "Choisissez la langue des menus et des fonctionnalités.";
 "settings.icon.title" = "Icône de l’app";
-"settings.icon.description" = "Choisissez l’icône affichée pour HwattakPDF.";
+"settings.icon.description" = "Choisissez l’icône affichée pour EmberPDF.";
+"settings.icon.ember.title" = "Braise";
+"settings.icon.ember.subtitle" = "Une lueur chaleureuse pour vos documents";
 "settings.icon.stack.title" = "Pile de pages";
 "settings.icon.stack.subtitle" = "Organiser et modifier plusieurs pages";
 "settings.icon.markup.title" = "Annotation";
@@ -27,13 +29,13 @@
 "mode.viewer.summary" = "Privilégie la lecture, la sélection, les commentaires, les signatures, la traduction, l’IA et le partage de notes.";
 "mode.editing.title" = "Mode édition";
 "mode.editing.short" = "Modifier";
-"mode.editing.summary" = "Ajoutez du texte superposé ou remplacez visuellement des glyphes, puis modifiez signatures, images, écriture et pages.";
+"mode.editing.summary" = "Modifiez, supprimez et ajoutez du texte dans le PDF, puis modifiez signatures, images, écriture et pages.";
 "mode.study.title" = "Mode étude";
 "mode.study.short" = "Étudier";
 "mode.study.summary" = "Utilisez l’IA, la traduction, l’aide aux termes et aux calculs, les notes, l’écriture, le soulignement et le surlignage.";
 "status.mode_changed" = "Passage à %@.";
 "tool.comment_note" = "Note de commentaire";
-"tool.pdf_text" = "Texte PDF";
+"tool.pdf_text" = "Modifier le texte";
 "tool.study_note" = "Note d’étude";
 "toolbar.share_note" = "Partager les notes";
 "share_note.title" = "Annoter puis partager";
@@ -66,7 +68,7 @@
 "help.item.mode_viewer.title" = "Mode lecture";
 "help.item.mode_viewer.detail" = "Lisez et sélectionnez du texte, ajoutez commentaires ou signatures, traduisez ou résumez avec l’IA, puis partagez vos notes. La modification directe du texte est désactivée.";
 "help.item.mode_editing.title" = "Mode édition";
-"help.item.mode_editing.detail" = "Saisissez du texte directement sur le PDF ou couvrez les glyphes existants avec une superposition pour les remplacer visuellement, puis placez signatures et images, écrivez à la main et organisez les pages. Le texte du flux de contenu d’origine reste présent ; les superpositions sont annulables et enregistrées avec le PDF.";
+"help.item.mode_editing.detail" = "Avec Sélection, faites glisser sur le texte, puis cliquez sur Modifier le texte (가T) pour le modifier directement. Avec Modifier le texte, cliquez dans une zone vide pour insérer du texte. Ajoutez des signatures, des images et de l’écriture manuscrite, ou organisez les pages. Les modifications sont annulables et incluses à l’enregistrement.";
 "help.item.mode_study.title" = "Mode étude";
 "help.item.mode_study.detail" = "Associez explications de l’IA, traduction et aide aux termes et calculs aux notes saisies, à l’écriture, au soulignement et au surlignage réglable.";
 "help.shortcut.mode_viewer" = "Passer au mode lecture";
@@ -143,8 +145,8 @@
 /* Opérations générales */
 "PNG 파일을 저장할 폴더를 선택하세요." = "Choisissez un dossier pour les fichiers PNG.";
 "한국어" = "Coréen";
-"좌우 비교" = "Comparaison côte à côte";
-"위아래 비교" = "Comparaison verticale";
+"좌우 비교" = "Côte à côte";
+"위아래 비교" = "Empiler verticalement";
 "세로 분할" = "Division verticale";
 "가로 분할" = "Division horizontale";
 "새 탭" = "Nouvel onglet";
@@ -219,34 +221,34 @@
 "현재 PDF 페이지에 추가할 이미지를 선택하세요." = "Choisissez une image à ajouter à la page PDF actuelle.";
 
 /* Comparaison */
-"PDF 비교 설정" = "Réglages de comparaison PDF";
+"PDF 비교 설정" = "Réglages de Voir ensemble";
 "함께 볼 문서 2~4개와 배치 방식을 선택하세요." = "Choisissez 2 à 4 documents à afficher ensemble ainsi qu’une disposition.";
-"비교할 PDF" = "PDF à comparer";
-"비교할 PDF가 없습니다" = "Aucun PDF à comparer";
+"비교할 PDF" = "PDF à voir ensemble";
+"비교할 PDF가 없습니다" = "Aucun PDF à voir ensemble";
 "먼저 두 개 이상의 PDF를 탭으로 열어 주세요." = "Ouvrez d’abord au moins deux PDF dans des onglets.";
-"비교하려면 PDF 탭을 하나 더 열어 주세요." = "Ouvrez un onglet PDF supplémentaire pour lancer une comparaison.";
+"비교하려면 PDF 탭을 하나 더 열어 주세요." = "Ouvrez un onglet PDF supplémentaire pour les voir ensemble.";
 "편집됨" = "Modifié";
 "선택 안 됨" = "Non sélectionné";
 "앞으로 이동" = "Avancer";
 "뒤로 이동" = "Reculer";
 "배치" = "Disposition";
 "분할선 방향까지 함께 표시합니다." = "Affiche également l’orientation des séparateurs.";
-"비교 배치" = "Disposition de comparaison";
-"PDF 비교 배치" = "Disposition de la comparaison PDF";
+"비교 배치" = "Disposition de Voir ensemble";
+"PDF 비교 배치" = "Disposition de Voir ensemble";
 "트랙패드 스크롤" = "Défilement au trackpad";
 "문서 위치 함께 이동" = "Faire défiler les documents ensemble";
 "한 패널을 스크롤하면 잠기지 않은 PDF들이 같은 비율로 이동합니다." = "Lorsque vous faites défiler un volet, les PDF déverrouillés se déplacent dans la même proportion.";
-"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "Dans la comparaison, un document verrouillé ne déplace pas les autres documents et ne les suit pas.";
+"비교 화면의 자물쇠를 켠 문서는 다른 문서를 움직이지도, 다른 문서를 따라 움직이지도 않습니다." = "Dans Voir ensemble, un PDF figé ne déplace pas les autres documents et ne les suit pas.";
 "취소" = "Annuler";
-"비교 시작" = "Démarrer la comparaison";
+"비교 시작" = "Démarrer Voir ensemble";
 "세로 분할선으로 화면을 나눠 PDF를 왼쪽에서 오른쪽 순서로 배치합니다." = "Divise l’écran avec des séparateurs verticaux et dispose les PDF de gauche à droite.";
 "가로 분할선으로 화면을 나눠 PDF를 위에서 아래 순서로 배치합니다." = "Divise l’écran avec des séparateurs horizontaux et dispose les PDF de haut en bas.";
-"비교 종료" = "Terminer la comparaison";
-"PDF 비교" = "Comparer les PDF";
+"비교 종료" = "Quitter Voir ensemble";
+"PDF 비교" = "Voir ensemble";
 "스크롤 동기화" = "Synchroniser le défilement";
 "잠기지 않은 PDF의 트랙패드 스크롤 위치를 함께 맞춥니다." = "Aligne la position de défilement au trackpad des PDF déverrouillés.";
 "문서 선택" = "Choisir les documents";
-"비교할 PDF가 부족합니다" = "Pas assez de PDF à comparer";
+"비교할 PDF가 부족합니다" = "Pas assez de PDF à voir ensemble";
 "열려 있는 PDF 중 2~4개를 다시 선택해 주세요." = "Sélectionnez à nouveau 2 à 4 PDF ouverts.";
 "저장하지 않은 변경 사항" = "Modifications non enregistrées";
 "동기 스크롤에서 제외됨" = "Exclu du défilement synchronisé";
@@ -347,8 +349,8 @@
 /* Onglets */
 "PDF를 새 탭으로 열기" = "Ouvrir le PDF dans un nouvel onglet";
 "CPU 및 메모리 사용 보기" = "Afficher l’utilisation du processeur et de la mémoire";
-"PDF 비교 닫기" = "Fermer la comparaison PDF";
-"열린 PDF 비교" = "Comparer les PDF ouverts";
+"PDF 비교 닫기" = "Quitter Voir ensemble";
+"열린 PDF 비교" = "Voir ensemble";
 "예: 연구 자료" = "Exemple : Recherche";
 "저장" = "Enregistrer";
 "PDF 탭을 주제별로 묶어 접거나 펼칠 수 있습니다." = "Regroupez les onglets PDF par thème pour les réduire ou les développer.";
@@ -419,7 +421,7 @@
 "실측" = "Mesuré";
 "상주 메모리 (RSS)" = "Mémoire résidente (RSS)";
 "측정 중…" = "Mesure…";
-"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "Les valeurs ci-dessus correspondent à l’utilisation réelle de la mémoire RSS et du processeur par l’ensemble du processus HwattakPDF. Un processeur à 100 % représente un cœur logique.";
+"위 값은 HwattakPDF 프로세스 전체의 실제 RSS와 CPU 사용량입니다. CPU 100%는 논리 코어 1개를 뜻합니다." = "Les valeurs ci-dessus correspondent à l’utilisation réelle de la mémoire RSS et du processeur par l’ensemble du processus EmberPDF. Un processeur à 100 % représente un cœur logique.";
 "PDF 탭별 부담" = "Charge par onglet PDF";
 "추정" = "Estimé";
 "파일 크기×1.5 + 페이지당 384KiB + 열린 문서 기본 8MiB로 계산한 상대적 예상 부담입니다. 실제 RSS를 탭별로 배분한 값이 아닙니다." = "Cette estimation relative utilise la taille du fichier × 1,5 + 384 Kio par page + une base de 8 Mio par document ouvert. Elle ne répartit pas la mémoire RSS réelle par onglet.";
@@ -464,7 +466,7 @@
 "가볍게 한 손가락으로 그리세요 · 입력을 끝내려면 트랙패드를 클릭하세요." = "Dessinez légèrement avec un doigt · Cliquez sur le trackpad pour terminer";
 "트랙패드 입력 계속" = "Continuer la saisie au trackpad";
 "주석 내용" = "Texte de l’annotation";
-"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "Enregistré comme annotation de texte libre PDF standard. La réorganisation des objets existants est prévue dans le moteur d’édition avancé.";
+"PDF 표준 자유 텍스트 주석으로 저장됩니다. 기존 본문 객체의 재배치는 고급 편집 엔진에서 지원할 예정입니다." = "Enregistré comme annotation de texte libre PDF standard. Pour modifier le texte existant, sélectionnez-le par glissement avec Sélection en mode Édition, puis cliquez sur Modifier le texte (가T).";
 "텍스트 추가" = "Ajouter du texte";
 "텍스트 수정" = "Modifier le texte";
 "페이지 위에 읽기 쉬운 텍스트 주석을 배치합니다." = "Place une annotation textuelle lisible sur la page.";
@@ -546,7 +548,7 @@
 
 /* Clés sémantiques pour l’interface formatée */
 "menu.settings" = "Réglages…";
-"app.version" = "Version %@ de HwattakPDF";
+"app.version" = "Version %@ de EmberPDF";
 "comparison.side_by_side" = "Côte à côte";
 "comparison.stacked" = "De haut en bas";
 "comparison.vertical_split" = "Division verticale";
@@ -557,8 +559,8 @@
 "document.edited_title" = "%@ — Modifié";
 "error.cannot_open_file" = "Impossible d’ouvrir le fichier : %@";
 "error.cannot_save_file" = "Impossible d’enregistrer le fichier : %@";
-"error.external_file_modified" = "« %@ » a été modifié hors de HwattakPDF après son ouverture. Le fichier plus récent n’a pas été remplacé. Enregistrez plutôt une copie.";
-"새 HwattakPDF 창으로 분리" = "Détacher dans une nouvelle fenêtre HwattakPDF";
+"error.external_file_modified" = "« %@ » a été modifié hors de EmberPDF après son ouverture. Le fichier plus récent n’a pas été remplacé. Enregistrez plutôt une copie.";
+"새 HwattakPDF 창으로 분리" = "Détacher dans une nouvelle fenêtre EmberPDF";
 "error.invalid_pdf" = "PDF non valide : %@";
 "error.no_document" = "Ouvrez d’abord un PDF.";
 "error.no_pages_selected" = "Sélectionnez au moins une page.";
@@ -825,7 +827,15 @@
 "ai.api_key_required" = "Enregistrez une clé API pour ce fournisseur dans les réglages.";
 "ai.empty.title" = "Posez des questions sur votre PDF";
 "ai.empty.message" = "Le contenu n’est envoyé à une IA externe qu’après sélection de l’étendue et vérification de l’aperçu. La recherche de PDF connexes reste sur ce Mac.";
+"ai.empty.message.direct" = "Choisissez l’étendue à joindre à votre question pour l’envoyer directement au fournisseur d’IA sélectionné. La recherche de PDF connexes reste sur ce Mac.";
 "ai.external_notice.short" = "Vous vérifierez à nouveau le contenu et le fournisseur avant l’envoi.";
+"ai.display_options" = "Options de l’IA";
+"ai.external_notice.show" = "Afficher l’avis d’envoi";
+"ai.external_notice.hide" = "Masquer l’avis";
+"ai.confirmation.show" = "Confirmer avant l’envoi";
+"ai.confirmation.setting_help" = "Si cette option est désactivée, les requêtes sont envoyées directement au fournisseur choisi, avec l’étendue sélectionnée.";
+"ai.send.direct" = "Envoyer à l’IA";
+"ai.external_notice.direct" = "Les requêtes sont envoyées directement au fournisseur choisi, avec l’étendue sélectionnée.";
 "ai.send" = "Vérifier et envoyer à l’IA";
 "ai.cancel_request" = "Arrêter la requête IA";
 "ai.clear" = "Effacer la conversation";
@@ -844,7 +854,7 @@
 "ai.draft.apply_confirmation.message" = "Vous pouvez vérifier le texte dans un éditeur avant de l’ajouter. Le fichier d’origine n’est pas modifié tant que vous n’avez pas choisi Enregistrer.";
 "ai.draft.review_and_apply" = "Vérifier et ajouter comme texte";
 "ai.consent.title" = "Vérifier avant l’envoi à une IA externe";
-"ai.consent.message" = "Le contenu PDF ci-dessous sera envoyé au serveur du fournisseur d’IA sélectionné. HwattakPDF n’inclut jamais votre clé API dans le contenu de la requête.";
+"ai.consent.message" = "Le contenu PDF ci-dessous sera envoyé au serveur du fournisseur d’IA sélectionné. EmberPDF n’inclut jamais votre clé API dans le contenu de la requête.";
 "ai.consent.preview" = "Aperçu du contenu";
 "ai.consent.acknowledge" = "J’accepte d’envoyer le contenu PDF affiché et la question au fournisseur indiqué ci-dessus.";
 "ai.consent.send" = "Accepter et envoyer";
@@ -888,9 +898,10 @@
 "ai.settings.api_key_placeholder" = "Saisir une nouvelle clé API";
 "ai.settings.key_saved" = "Stockée en toute sécurité dans le Trousseau";
 "ai.settings.key_missing" = "Une clé API est requise pour ce fournisseur.";
+"ai.settings.key_access_requires_reentry" = "Impossible d’accéder à la clé API enregistrée. Enregistrez à nouveau la clé API de ce fournisseur dans Réglages > IA. Si le trousseau de session est verrouillé, déverrouillez-le d’abord.";
 "ai.settings.key_deleted" = "La clé API enregistrée a été supprimée.";
 "ai.settings.web_search" = "Autoriser la recherche Web du fournisseur";
-"ai.settings.billing_note" = "Les abonnements ChatGPT, Claude ou Gemini peuvent être distincts de l’utilisation et de la facturation des API développeur. L’envoi du document est confirmé pour chaque requête du panneau IA.";
+"ai.settings.billing_note" = "Les abonnements ChatGPT, Claude ou Gemini peuvent être distincts de l’utilisation et de la facturation des API développeur.";
 "ai.settings.mcp_title" = "Serveurs MCP distants";
 "ai.settings.mcp_label" = "Libellé du serveur";
 "ai.settings.mcp_approval_note" = "Seuls les serveurs HTTPS publics sont connectés, et chaque appel d’outil MCP doit être vérifié et approuvé avant son exécution.";
@@ -901,21 +912,35 @@
 "ai.error.duplicate_mcp" = "Ce serveur MCP est déjà enregistré.";
 
 /* About */
-"about.menu" = "À propos de HwattakPDF";
-"about.title" = "À propos de HwattakPDF";
+"about.menu" = "À propos de EmberPDF";
+"about.title" = "À propos de EmberPDF";
 "about.close" = "Fermer";
 "about.confirm" = "Fermer";
-"about.github" = "GitHub · github.com/SeederPowerDrop/HwattakPDF";
-"about.support" = "Soutenir HwattakPDF";
-"about.introduction.1" = "J’utilisais un autre logiciel PDF que j’avais acheté, mais même ses fonctions les plus basiques ont fini par passer à un abonnement. Cela m’a tellement agacé que j’ai créé HwattakPDF en faisant du « vibe coding ».";
-"about.introduction.2" = "Je comprends que cette entreprise doit elle aussi gagner sa vie, mais cette décision m’a semblé profondément injuste envers les personnes qui avaient déjà payé le logiciel. C’est pour cela que j’ai décidé de créer HwattakPDF.";
-"about.introduction.3" = "J’espère que HwattakPDF permettra à beaucoup de personnes de travailler plus facilement avec leurs PDF.";
-"about.introduction.4" = "Je ferai de mon mieux pour que HwattakPDF reste gratuit à vie et pour continuer à le maintenir. Je n’accepterai que de petits pourboires facultatifs.";
-"about.introduction.5" = "Et ERW FWS WRG";
-"about.support.title" = "Le soutien qui permet à HwattakPDF de rester gratuit";
-"about.support.detail" = "HwattakPDF ne comporte ni abonnement ni publicité. Les dons volontaires sont le seul soutien qui me permette de poursuivre gratuitement son développement et sa maintenance.";
+"about.github" = "GitHub · SeederPowerDrop";
+"about.support" = "Soutenir EmberPDF";
+"about.introduction.1" = "Une application de lecture et d’édition de PDF que j’avais payée cher est passée à un modèle d’abonnement, et je ne pouvais plus utiliser les fonctions dont je me servais jusque-là. Cela m’a mis en colère, alors j’ai créé EmberPDF en vibe coding.";
+"about.introduction.2" = "J’ai donc commencé à la créer sous le coup de la colère, mais sans m’en rendre compte, ce sentiment s’est calmé, comme un feu réduit à des braises. Je me suis dit que beaucoup de personnes avaient sans doute vécu la même chose. J’ai créé cette application en espérant qu’elle serait maintenue longtemps pour ces personnes.";
+"about.introduction.3" = "J’ai aussi ajouté des extensions, avec l’envie de créer un équivalent d’Obsidian pour les PDF. J’espère que chacun pourra ajouter les fonctions dont il a besoin et que nous élargirons ensemble les possibilités.";
+"about.introduction.4" = "J’espère qu’EmberPDF sera utile à tous pendant longtemps, comme une braise qui garde sa chaleur. Je continuerai à le partager gratuitement et à en prendre soin aussi longtemps que je le pourrai.";
+"about.introduction.5" = "Merci.\nEt ERW FWS WRG";
+"about.support.title" = "Soutenir le projet";
+"about.support.detail" = "Je crée des outils gratuits pour tous, dans l’esprit de transmettre l’aide que j’ai reçue. Si EmberPDF vous a été utile, un petit don peut soutenir son développement et sa maintenance.";
 "about.image_accessibility" = "Illustration de personnage en noir et blanc fournie par le créateur";
 "about.image_unavailable" = "Impossible de charger l’illustration de présentation";
+"about.tagline" = "Un outil PDF pour macOS que chacun peut utiliser librement.";
+"about.guide" = "Guide d’utilisation";
+"about.rights.title" = "Droits fondamentaux liés aux logiciels";
+"about.rights.detail" = "Je pense que chacun devrait pouvoir utiliser librement et gratuitement les outils informatiques essentiels. J’espère que le savoir que nous partageons sera un point de départ pour d’autres, et que les humains et l’IA pourront apprendre, créer et ouvrir de nouvelles possibilités ensemble.";
+"about.licenses" = "Licences open source";
+"about.licenses.detail" = "EmberPDF est distribué sous la Mozilla Public License 2.0. Vous pouvez également consulter les licences et les mentions de droits d’auteur des composants open source utilisés.";
+"about.licenses.project" = "Licence d’EmberPDF";
+"about.licenses.components" = "Composants et droits d’auteur";
+"about.bitcoin" = "Bitcoin (BTC)";
+"about.bitcoin.detail" = "Vous pouvez faire un don en Bitcoin (BTC) à l’adresse ci-dessous.";
+"about.bitcoin.copy" = "Copier l’adresse";
+"about.bitcoin.copied" = "Adresse copiée";
+"about.bitcoin.qr" = "Code QR de l’adresse de don Bitcoin";
+"about.support.optional" = "Les dons sont facultatifs et ne changent pas les fonctions de l’application auxquelles vous avez accès.";
 "page.sidebar.layout" = "Regroupement des pages";
 "page.sidebar.layout.single" = "Une page";
 "page.sidebar.layout.facing" = "2 pages côte à côte";
@@ -932,11 +957,12 @@
 "settings.pdf_input.keyboard_speed.slow" = "Lente";
 "settings.pdf_input.keyboard_speed.normal" = "Normale";
 "settings.pdf_input.keyboard_speed.fast" = "Rapide";
-"settings.pdf_input.keyboard_speed.help" = "Règle la vitesse de déplacement lorsqu’une touche fléchée est maintenue. Maintenez aussi Maj (⇧) pour une vitesse environ 2,2 fois supérieure. Option (⌥)+flèche conserve la navigation habituelle entre les pages.";
+"settings.pdf_input.keyboard_speed.help" = "Règle la vitesse lorsqu’une flèche est maintenue. Maintenez aussi Maj (⇧) pour une vitesse environ 2,2 fois supérieure. En mode toutes les flèches, Option (⌥)+flèche change aussi de page. Les autres modes, la saisie et la sélection de texte conservent les raccourcis Option habituels.";
 "pdf.navigation.label" = "Navigation dans le document";
 "pdf.navigation.vertical" = "Défilement vertical";
 "pdf.navigation.horizontal" = "Changement de pages horizontal";
-"pdf.navigation.help" = "Choisissez le défilement vertical ou le changement de pages horizontal. En mode horizontal, utilisez ←/→ ou balayez à gauche ou à droite ; les vues à deux et quatre pages passent au groupe suivant ou précédent.";
+"pdf.navigation.all_directions" = "Utiliser toutes les touches fléchées";
+"pdf.navigation.help" = "Choisissez le défilement vertical, le changement de pages horizontal (←/→ ou balayages latéraux) ou toutes les flèches. Dans ce dernier mode, sur le PDF, ↑/← recule et ↓/→ avance d’une page ou d’un groupe affiché, aussi avec Option (⌥). La souris et le trackpad défilent comme d’habitude.";
 "settings.pdf_input.zoom_modifier.label" = "Touche de zoom par défilement";
 "settings.pdf_input.zoom_modifier.option" = "Option (⌥)";
 "settings.pdf_input.zoom_modifier.command" = "Commande (⌘)";
@@ -949,8 +975,8 @@
 "page.jump.help" = "Saisissez un numéro de page, puis appuyez sur Retour.";
 
 /* Help tutorial */
-"help.title" = "Guide d’utilisation de HwattakPDF";
-"help.menu" = "Guide d’utilisation de HwattakPDF";
+"help.title" = "Guide d’utilisation de EmberPDF";
+"help.menu" = "Guide d’utilisation de EmberPDF";
 "help.subtitle" = "Découvrez les icônes, les gestes, les raccourcis et les méthodes sûres pour travailler sur vos documents.";
 "help.search" = "Rechercher une fonction ou un raccourci";
 "help.no_results.title" = "Aucun résultat";
@@ -966,16 +992,16 @@
 "help.item.open.title" = "Ouvrir un PDF";
 "help.item.open.detail" = "Utilisez l’icône de dossier ou ⌘O. Si vous sélectionnez plusieurs PDF, chacun s’ouvre dans son propre onglet.";
 "help.item.layout.title" = "Comprendre l’écran";
-"help.item.layout.detail" = "La barre supérieure gère les espaces de travail, les onglets, la comparaison et les ressources. La barre d’outils située dessous contrôle les pages, les modes d’affichage, l’édition, l’OCR, l’IA et la recherche.";
+"help.item.layout.detail" = "La barre supérieure gère les onglets et les espaces de travail. La barre de lecture permet de naviguer, de modifier la disposition et de lancer Voir ensemble.";
 "help.item.resume.title" = "Reprendre votre travail";
-"help.item.resume.detail" = "Après une fermeture normale, les fichiers, espaces de travail, ordre et piles d’onglets, pages actives, réglages d’affichage et disposition de comparaison sont restaurés. Les modifications du PDF doivent néanmoins être enregistrées.";
+"help.item.resume.detail" = "Après une fermeture normale, les documents, onglets, positions de lecture et dispositions de Voir ensemble sont restaurés. Enregistrez les modifications du PDF séparément.";
 
 "help.topic.tabs.title" = "Onglets, piles et espaces de travail";
 "help.topic.tabs.summary" = "Organisez de nombreux documents sans perdre leur état individuel.";
 "help.item.tab_stack.title" = "Créer et réorganiser une pile d’onglets";
 "help.item.tab_stack.detail" = "Déposez un onglet au centre d’un autre pour les empiler. Déposez-le près d’un bord pour simplement modifier leur ordre.";
 "help.item.unstack.title" = "Retirer un onglet d’une pile";
-"help.item.unstack.detail" = "Faites glisser un onglet empilé à la fin de la rangée principale pour le rendre autonome, ou déposez-le dans la zone du document pour transférer la session telle quelle vers une nouvelle fenêtre HwattakPDF.";
+"help.item.unstack.detail" = "Faites glisser un onglet empilé à la fin de la rangée principale pour le rendre autonome, ou déposez-le dans la zone du document pour transférer la session telle quelle vers une nouvelle fenêtre EmberPDF.";
 "help.item.workspace.title" = "Séparer les espaces de travail";
 "help.item.workspace.detail" = "Utilisez le menu aux carrés empilés pour créer, renommer, changer ou supprimer des espaces de travail, et déplacer ensemble les onglets associés.";
 "help.item.resources.title" = "Surveiller l’utilisation des ressources";
@@ -992,14 +1018,14 @@
 "help.item.thumbnails.title" = "Régler les groupes de vignettes";
 "help.item.thumbnails.detail" = "Le panneau des pages peut afficher des pages seules, des paires gauche-droite fixes ou des groupes de quatre pages. Utilisez son curseur, les boutons plus et moins ou le geste de zoom du trackpad, puis faites glisser une vraie vignette de page pour la réorganiser.";
 
-"help.topic.compare.title" = "Comparer des PDF";
+"help.topic.compare.title" = "Voir ensemble";
 "help.topic.compare.summary" = "Lisez deux à quatre documents ouverts côte à côte ou verticalement.";
-"help.item.compare_start.title" = "Démarrer une comparaison";
-"help.item.compare_start.detail" = "Ouvrez au moins deux PDF, puis sélectionnez l’icône aux rectangles superposés et choisissez les documents à comparer.";
+"help.item.compare_start.title" = "Démarrer Voir ensemble";
+"help.item.compare_start.detail" = "Ouvrez au moins deux PDF, cliquez sur Voir ensemble dans la barre de lecture, puis choisissez deux à quatre documents.";
 "help.item.compare_layout.title" = "Réorganiser et redimensionner les panneaux";
-"help.item.compare_layout.detail" = "Choisissez une disposition côte à côte ou empilée. Faites glisser l’en-tête d’un panneau pour le réorganiser et le séparateur pour ajuster la largeur ou la hauteur des panneaux voisins.";
-"help.item.compare_sync.title" = "Synchroniser ou verrouiller le défilement";
-"help.item.compare_sync.detail" = "Activez la synchronisation du défilement pour suivre la progression relative dans les documents. Verrouillez tout panneau qui doit rester en place.";
+"help.item.compare_layout.detail" = "Choisissez une disposition horizontale, verticale ou en grille, ou activez Modifier la disposition et faites glisser les PDF. Déposez sur un bord pour diviser la zone ou au centre pour échanger les places. Faites glisser les séparateurs pour redimensionner.";
+"help.item.compare_sync.title" = "Déplacer ensemble et figer";
+"help.item.compare_sync.detail" = "Activez Déplacer ensemble pour faire défiler et changer de page en conservant les positions relatives de chaque PDF. Figez les PDF qui doivent rester immobiles.";
 
 "help.topic.edit.title" = "Modifier et annoter";
 "help.topic.edit.summary" = "Ajoutez des annotations PDF standard et gérez les pages en toute sécurité.";
@@ -1030,7 +1056,7 @@
 "help.item.ai_actions.title" = "Choisir une action et une portée";
 "help.item.ai_actions.detail" = "Le bouton à étincelles propose le résumé, l’analyse, la résolution de problèmes, un brouillon à remplir, la recherche de PDF associés et la recherche web à partir du texte sélectionné, de pages ou d’un contexte représentatif du document.";
 "help.item.ai_privacy.title" = "Vérifier avant l’envoi";
-"help.item.ai_privacy.detail" = "Avant chaque requête, HwattakPDF affiche le texte et la conversation qui quitteront le Mac. Le PDF brut n’est jamais téléversé automatiquement ; les outils web et MCP sont facultatifs, et chaque appel MCP doit être approuvé.";
+"help.item.ai_privacy.detail" = "Avant chaque requête, EmberPDF affiche le texte et la conversation qui quitteront le Mac. Le PDF brut n’est jamais téléversé automatiquement ; les outils web et MCP sont facultatifs, et chaque appel MCP doit être approuvé.";
 
 "help.topic.save.title" = "Enregistrer en toute sécurité";
 "help.topic.save.summary" = "Distinguez les changements apportés au fichier PDF des seuls réglages mémorisés dans l’espace de travail.";
@@ -1041,10 +1067,10 @@
 "help.item.save_close.title" = "Fermer sans perdre votre travail";
 "help.item.save_close.detail" = "À la fermeture d’un onglet modifié, d’une fenêtre ou de l’app, vous pouvez écraser l’original, enregistrer une copie, ignorer les modifications ou annuler. Annuler laisse le document ouvert.";
 "help.item.session_vs_pdf.title" = "La restauration de session n’enregistre pas le PDF";
-"help.item.session_vs_pdf.detail" = "Les piles d’onglets, espaces de travail, fenêtres, dispositions de comparaison, pages et positions d’affichage sont mémorisés automatiquement. Les annotations et modifications de pages ne sont écrites dans le fichier PDF qu’après son enregistrement.";
+"help.item.session_vs_pdf.detail" = "Les onglets, espaces de travail, positions de lecture et dispositions de Voir ensemble sont mémorisés automatiquement. Enregistrez les notes et les modifications de pages dans le fichier PDF.";
 
 "help.topic.shortcuts.title" = "Raccourcis clavier";
-"help.topic.shortcuts.summary" = "Commandes courantes actuellement prises en charge par HwattakPDF.";
+"help.topic.shortcuts.summary" = "Commandes courantes actuellement prises en charge par EmberPDF.";
 "help.shortcut.new_tab" = "Nouvel onglet";
 "help.shortcut.open" = "Ouvrir un PDF";
 "help.shortcut.close" = "Fermer l’onglet actif";
@@ -1055,7 +1081,7 @@
 "help.shortcut.previous_tab" = "Onglet précédent";
 "help.shortcut.settings" = "Ouvrir Réglages";
 "help.shortcut.signature_undo" = "Annuler le dernier trait de signature";
-"help.shortcut.compare_exit" = "Quitter la comparaison ou annuler";
+"help.shortcut.compare_exit" = "Annuler la disposition ou quitter Voir ensemble";
 "help.shortcut.help" = "Ouvrir ce guide d’utilisation";
 
 "help.topic.accessibility.title" = "Accessibilité et confort";
@@ -1077,7 +1103,7 @@
 "status.undo_completed" = "%@ annulé";
 "status.redo_completed" = "%@ rétabli";
 "help.item.undo_redo.title" = "Annuler et rétablir les modifications du PDF";
-"help.item.undo_redo.detail" = "Utilisez ⌘Z pour annuler et ⇧⌘Z pour rétablir. HwattakPDF conserve jusqu’à 22 actions réversibles par PDF, notamment le stylo, les annotations, les objets ajoutés et les opérations sur les pages, sans garder 22 copies complètes du PDF.";
+"help.item.undo_redo.detail" = "Utilisez ⌘Z pour annuler et ⇧⌘Z pour rétablir. EmberPDF conserve jusqu’à 22 actions réversibles par PDF, notamment le stylo, les annotations, les objets ajoutés et les opérations sur les pages, sans garder 22 copies complètes du PDF.";
 "help.shortcut.undo" = "Annuler la dernière modification du PDF";
 "help.shortcut.redo" = "Rétablir la dernière modification annulée du PDF";
 
@@ -1090,16 +1116,18 @@
 "search.navigator.clear" = "Effacer la recherche";
 "search.navigator.compact_position" = "%d/%d";
 "search.navigator.show_results" = "Afficher le navigateur des résultats";
+"search.navigator.hide_results" = "Masquer le navigateur des résultats";
 "search.navigator.results_count" = "%d résultats";
 "search.navigator.query" = "« %@ »";
 "search.navigator.query_accessibility" = "Recherche : %@";
 "search.navigator.cancel" = "Annuler";
 "search.navigator.progress_label" = "Progression de la recherche";
 "search.navigator.current_position" = "Résultat %d sur %d";
-"search.navigator.enter_query_message" = "Appuyez sur ⌘F, saisissez une recherche, puis appuyez sur Retour.";
+"search.navigator.enter_query_message" = "Appuyez sur ⌘F et saisissez une recherche.";
 "search.navigator.no_position" = "Aucun résultat à sélectionner.";
 "search.navigator.progress" = "%d pages recherchées sur %d";
 "search.navigator.page_heading" = "Page %@ · %d résultats";
+"search.navigator.file_page_detail" = "Page %d sur %d du fichier";
 "search.navigator.result_accessibility" = "Page %@, résultat %d sur %d : %@";
 "search.navigator.result_hint" = "Active cette correspondance et va à son emplacement exact dans la page.";
 "search.navigator.current_result" = "Résultat actuel";
@@ -1140,7 +1168,9 @@
 "study.ai.prompt.study_points" = "Organisez les concepts importants, les relations à mémoriser et les confusions fréquentes utiles pour réviser ou passer un examen.";
 "study.ai.prompt.quiz" = "Créez un court quiz sur ce contenu et placez les réponses séparément à la fin pour qu’elles ne soient pas immédiatement visibles.";
 "study.ai.current_page_help" = "Prépare un aperçu de la page actuelle. Rien n’est envoyé à une IA externe avant votre confirmation.";
+"study.ai.current_page_help.direct" = "Envoie la page actuelle directement au fournisseur d’IA sélectionné.";
 "study.ai.selection_help" = "Prépare un aperçu du texte sélectionné. Rien n’est envoyé à une IA externe avant votre confirmation.";
+"study.ai.selection_help.direct" = "Envoie le texte sélectionné directement au fournisseur d’IA.";
 "study.note.typed" = "Note saisie";
 "study.note.typed_help" = "Cliquez dans le PDF pour ajouter une annotation de révision au clavier.";
 "study.note.handwriting" = "Écriture manuscrite";
@@ -1160,7 +1190,7 @@
 "study.status.underline_added" = "Soulignement ajouté.";
 
 /* Éditeur de texte intégré au mode Édition */
-"inline_text.editor" = "Éditeur de texte intégré au PDF";
+"inline_text.editor" = "Éditeur de texte PDF";
 "inline_text.font" = "Police";
 "inline_text.font_size" = "Taille de police";
 "inline_text.text_color" = "Couleur du texte";
@@ -1180,10 +1210,10 @@
 "inline_text.visual_replacement_warning" = "Remplacement visuel uniquement. Le texte PDF original reste recherchable et copiable ; ce n’est pas une censure sécurisée.";
 "status.inline_text_updated" = "Le texte et l’apparence ont été mis à jour.";
 "status.visual_text_replacement_added" = "Un remplacement visuel a été ajouté ; le texte original reste dessous.";
-"help.item.inline_text.title" = "Saisir directement dans le PDF";
-"help.item.inline_text.detail" = "En mode Édition, cliquez avec l’outil Texte pour saisir sur place. Double-cliquez le texte créé par l’app pour le modifier. Réglez police, taille, couleurs, fond et alignement ; Return ou ⌘Return applique, Shift-Return ajoute une ligne et Esc annule.";
-"help.item.visual_text_replacement.title" = "Remplacement visuel d’un texte existant";
-"help.item.visual_text_replacement.detail" = "Sélectionnez le texte puis cliquez dans la sélection avec l’outil Texte pour poser un cache FreeText. Le texte original reste accessible à la recherche, à la copie et aux technologies d’assistance. Ne l’utilisez pas comme censure sécurisée.";
+"help.item.inline_text.title" = "Modifier le texte et en ajouter";
+"help.item.inline_text.detail" = "En mode Édition, faites glisser sur le texte avec Sélection, puis cliquez sur Modifier le texte (가T) pour modifier directement la sélection. Tapez pour la remplacer, ou cliquez et utilisez les flèches pour déplacer le curseur pendant la modification. Retour insère un saut de ligne, ⌘Retour applique et Échap annule. Pour insérer du texte, choisissez Modifier le texte et cliquez dans une zone vide. Les annotations de texte libre existantes se modifient comme des annotations.";
+"help.item.visual_text_replacement.title" = "Portée de la modification et suppression";
+"help.item.visual_text_replacement.detail" = "L’éditeur affiche l’objet texte entier enregistré dans le PDF, parfois plus large que le mot sélectionné. Effacez tout puis appliquez pour le supprimer. Les modifications enregistrées sont prises en compte pour la recherche et la copie. La redistribution des paragraphes, les textes inclinés ou transformés de façon complexe et les lettres des images numérisées ne sont pas pris en charge. Le texte sous les anciennes annotations de remplacement visuel reste intact.";
 "help.item.study_palette.title" = "Raccourcis d’étude et contrôle de confidentialité";
 "help.item.study_palette.detail" = "Sélectionnez du texte pour préparer traduction, explication, résumé, résolution détaillée, points à retenir ou quiz ; sans sélection, seule la page actuelle est utilisée. L’envoi à une IA externe ne commence qu’après confirmation de l’aperçu. La saisie crée une annotation de révision et l’écriture utilise la souris, le trackpad ou le pointeur Apple Pencil via Sidecar. Réglez couleur, épaisseur et opacité, puis annulez avec Commande-Z.";
 "help.item.study_markup_interop.title" = "Compatibilité des annotations réglables";
@@ -1199,7 +1229,7 @@
 "error.image_unsafe_file" = "Seuls les fichiers image ordinaires peuvent être ajoutés.";
 
 "menu.plugins" = "Extensions";
-"plugins.manager.title" = "Extensions HwattakPDF";
+"plugins.manager.title" = "Extensions EmberPDF";
 "plugins.manager.summary" = "%d extensions · %d actions activées";
 "plugins.install" = "Installer une extension…";
 "plugins.install.confirm" = "Installer";
@@ -1224,17 +1254,17 @@
 "plugins.permissions.none" = "Aucune autorisation sur le document";
 "plugins.permission.document_metadata" = "Lire le nom du document et les informations de page";
 "plugins.permission.selected_text" = "Lire le texte sélectionné par l’utilisateur";
-"plugins.permission.clipboard" = "Écrire du texte dans le presse-papiers";
+"plugins.permission.clipboard" = "Écrire du texte et des images dans le presse-papiers";
 "plugins.permission.external_url" = "Ouvrir des liens HTTPS externes après confirmation";
 
-"plugins.safety.title" = "Extensions déclaratives sûres";
-"plugins.safety.detail" = "Les actions de modèle v1 ne peuvent pas accéder directement au code arbitraire, aux shells, au trousseau, aux octets PDF bruts, au réseau ni au GPU. Les panneaux web v2 affichent des sites externes vérifiés par l’app dans des sessions temporaires, mais scripts distants, cookies et suivi peuvent fonctionner. Les limites de la barre d’adresse et de la navigation principale ne sont ni un bloqueur de traqueurs ni un pare-feu.";
+"plugins.safety.title" = "Une plateforme d’extensions avec contrôle des autorisations";
+"plugins.safety.detail" = "Les autorisations par fonction et les empreintes des paquets et du code sont vérifiées. Le code des extensions exécutables s’exécute dans un processus séparé. Les signatures et l’identité des éditeurs ne sont pas vérifiées. Même les panneaux web examinés peuvent exécuter des scripts distants, cookies et traceurs de sites externes pendant la session.";
 "plugins.resources.title" = "Politique de ressources et de stabilité";
-"plugins.resources.detail" = "Les limites sont de %d extensions installées, %d actions par extension et %d Mo par paquet. Les actions ne s’exécutent qu’à la demande et ne créent aucune charge CPU ou GPU résidente.";
+"plugins.resources.detail" = "Les limites sont de %d extensions installées, %d actions par extension et %d Mo par paquet. Les extensions de fenêtre autorisées peuvent fonctionner en arrière-plan tant que leur fenêtre est ouverte, avec un maximum de 8 processus isolés pour toute l’app.";
 
 "plugins.review.install_title" = "Examiner l’installation de l’extension";
 "plugins.review.update_title" = "Examiner la mise à jour de l’extension";
-"plugins.review.unsigned_notice" = "La signature de l’éditeur n’est pas vérifiée. Les paquets v1 ne contiennent aucun code exécutable et utilisent seulement les actions limitées ci-dessus. Les panneaux web v2 ne s’installent que s’ils correspondent à une copie vérifiée incluse dans l’app, mais scripts distants, cookies et suivi peuvent fonctionner pendant la session.";
+"plugins.review.unsigned_notice" = "Examinez les autorisations par fonction avant l’installation. Les empreintes des paquets et du code sont vérifiées, mais pas les signatures ni l’identité des éditeurs. Le code des extensions exécutables s’exécute dans un processus séparé. Les panneaux web doivent correspondre exactement à une copie examinée incluse dans l’app pour être installés, mais les scripts distants, cookies et traceurs de sites externes peuvent fonctionner pendant la session.";
 "plugins.review.package_info" = "%d fichiers · %d Ko · SHA-256 %@";
 
 "plugins.external_url.title" = "Ouvrir un lien externe ?";
@@ -1247,7 +1277,7 @@
 "plugins.error.title" = "Erreur d’extension";
 "plugins.error.invalid_package" = "Paquet d’extension non valide : %@";
 "plugins.error.invalid_manifest" = "Manifeste d’extension non valide : %@";
-"plugins.error.incompatible" = "Cette extension nécessite HwattakPDF %@ ou une version ultérieure. Version actuelle : %@";
+"plugins.error.incompatible" = "Cette extension nécessite EmberPDF %@ ou une version ultérieure. Version actuelle : %@";
 "plugins.error.already_installed" = "L’extension « %@ » est déjà installée.";
 "plugins.error.package_changed" = "Le paquet de l’extension a changé après l’examen. Sélectionnez-le de nouveau.";
 "plugins.error.limit" = "Vous pouvez installer jusqu’à %d extensions.";
@@ -1270,7 +1300,7 @@
 "action.stop" = "Arrêter le chargement";
 "plugins.browser.address_placeholder" = "Rechercher ou saisir une adresse HTTPS";
 "plugins.browser.privacy" = "La barre d’adresse et la navigation de premier niveau sont limitées au HTTPS public. Ce n’est ni un bloqueur de traqueurs ni un pare-feu pour les sous-ressources, fetch, WebSocket ou DNS.";
-"plugins.bundled.title" = "Extensions HwattakPDF intégrées";
+"plugins.bundled.title" = "Extensions EmberPDF intégrées";
 "plugins.bundled.detail" = "Incluses dans l’app · Autorisations à vérifier avant installation";
 "plugins.bundled.review_install" = "Vérifier et installer";
 "plugins.bundled.translation.name" = "Assistant de traduction";
@@ -1346,7 +1376,7 @@
 "settings.plugins.title" = "Extensions";
 "settings.plugins.description" = "Installez des paquets .hwattakplugin validés et gérez leurs autorisations et leur état d’activation.";
 "settings.plugins.installed_count" = "%d extensions installées · %d actions activées";
-"settings.plugins.safety_note" = "Seules les actions de modèle limitées que vous lancez peuvent s’exécuter ; aucun code exécutable ni travail résident n’est utilisé.";
+"settings.plugins.safety_note" = "Le code des extensions autorisées s’exécute dans un processus séparé avec contrôle des permissions et limites d’exécution et de taille. Même les panneaux web examinés peuvent utiliser les scripts, cookies et traceurs des sites externes pendant la session.";
 "settings.plugins.resource_note" = "Les actions de modèle v1 sont limitées en nombre et en taille et n’accèdent directement ni au réseau ni au GPU. Les panneaux web v2 se connectent à des sites vérifiés ; leurs limites de navigation ne sont ni un bloqueur de traqueurs ni un pare-feu.";
 
 "help.topic.plugins.title" = "Extensions";
@@ -1533,7 +1563,7 @@
 
 "pen.pressure.enabled" = "Utiliser la pression du stylet";
 
-"pen.pressure.help" = "Utilise la pression transmise par Sidecar ou une tablette. Les traits sont enregistrés comme tampons PDF ; la souris garde une épaisseur fixe.";
+"pen.pressure.help" = "Les traits à la souris ont une épaisseur fixe. Avec l’Apple Pencil via Sidecar ou une tablette sensible à la pression, l’épaisseur varie selon la pression exercée.";
 
 "recovery.title" = "Récupérer le travail…";
 
@@ -1562,19 +1592,19 @@
 
 // Default PDF app association
 "settings.default_pdf.title" = "App PDF par défaut";
-"settings.default_pdf.description" = "Ouvrez les PDF avec HwattakPDF lorsque vous double-cliquez dessus dans le Finder.";
+"settings.default_pdf.description" = "Ouvrez les PDF avec EmberPDF lorsque vous double-cliquez dessus dans le Finder.";
 "settings.default_pdf.current" = "App par défaut actuelle : %@";
 "settings.default_pdf.unknown" = "Impossible à déterminer";
-"settings.default_pdf.active" = "Cette copie de HwattakPDF est votre app PDF par défaut.";
+"settings.default_pdf.active" = "Cette copie de EmberPDF est votre app PDF par défaut.";
 "settings.default_pdf.set" = "Configurer dans le Finder…";
 "settings.default_pdf.refresh" = "Actualiser l’état de l’association";
 "settings.default_pdf.failed" = "Impossible de préparer la configuration de l’association : %@";
-"settings.default_pdf.requires_app" = "Disponible depuis l’app HwattakPDF.app installée. Placez-la dans le dossier Applications et lancez-la.";
+"settings.default_pdf.requires_app" = "Disponible depuis l’app EmberPDF.app installée. Placez-la dans le dossier Applications et lancez-la.";
 "settings.default_pdf.location_hint" = "Nous vous recommandons de placer l’app dans le dossier Applications avant de la définir par défaut. Si vous la déplacez ou la supprimez ensuite, il peut être nécessaire de rétablir l’association.";
 "settings.default_pdf.manual_title" = "Définir l’app PDF par défaut";
-"settings.default_pdf.manual_help" = "Le bouton ci-dessous sélectionne un PDF de configuration dans le Finder. Choisissez Lire les informations (⌘I) → sélectionnez HwattakPDF dans Ouvrir avec → cliquez sur Tout modifier. L’association est vérifiée à nouveau à votre retour dans l’app.";
+"settings.default_pdf.manual_help" = "Le bouton ci-dessous sélectionne un PDF de configuration dans le Finder. Choisissez Lire les informations (⌘I) → sélectionnez EmberPDF dans Ouvrir avec → cliquez sur Tout modifier. L’association est vérifiée à nouveau à votre retour dans l’app.";
 "settings.default_pdf.manual_note" = "Les associations de fichiers macOS sont confirmées dans le Finder. Si un fichier possède une association individuelle, vérifiez également sa fenêtre Lire les informations.";
-"settings.default_pdf.revealed" = "Ouvrez Lire les informations (⌘I) pour le PDF sélectionné dans le Finder, choisissez HwattakPDF dans Ouvrir avec, puis cliquez sur Tout modifier.";
+"settings.default_pdf.revealed" = "Ouvrez Lire les informations (⌘I) pour le PDF sélectionné dans le Finder, choisissez EmberPDF dans Ouvrir avec, puis cliquez sur Tout modifier.";
 
 /* Local region text selection */
 "selection.region_drag" = "Mode de sélection de zone. Tracez un rectangle autour du texte à traduire.";
@@ -1691,3 +1721,701 @@
 "translation.local.error.runtimeMissing" = "Argos Translate est absent de l’environnement Python de l’assistant. Installez-le dans cet environnement et redémarrez l’assistant.";
 "translation.local.error.timedOut" = "Le délai de traduction locale a été dépassé. Réessayez avec moins de texte.";
 "translation.local.reveal_setup" = "Afficher l’assistant d’installation et de lancement dans Finder";
+
+/* EmberPDF identity and hidden origin story */
+"brand.tagline" = "Une lueur durable pour vos PDF au quotidien.";
+"brand.detail" = "Un lecteur et éditeur PDF pour tous.";
+"brand.origin.title" = "La naissance d’une étincelle";
+"brand.origin.message" = "J’ai créé cette application par pure frustration.\nJ’ai apaisé ce sentiment pour en faire l’énergie nécessaire à la création d’un outil qui simplifie les PDF pour tous.";
+"brand.origin.close" = "Retour aux documents";
+"brand.origin.accessibility" = "L’origine du nom EmberPDF";
+"brand.origin.hint" = "Appuyez cinq fois sur le nom pour découvrir une petite histoire.";
+
+/* Current-page translation preview */
+"plugins.bundled.page_translation.name" = "Traduction de pages";
+"plugins.bundled.page_translation.description" = "Lisez la page actuelle avec le texte traduit superposé à la mise en page d’origine.";
+"plugins.bundled.page_translation.page.title" = "Afficher la page traduite";
+"plugins.bundled.page_translation.page.description" = "Traduisez la page actuelle et prévisualisez-la avec ses images et sa mise en page.";
+"translation.page.preview" = "Aperçu de la page";
+"translation.page.original" = "Original";
+"translation.page.translated" = "Traduction";
+"translation.page.expand" = "Agrandir la page";
+"translation.page.save_pdf" = "Enregistrer la page traduite en PDF";
+"translation.page.number" = "Page %d";
+"translation.page.note" = "Copie traduite destinée à la lecture. Les zones de texte peuvent masquer leur arrière-plan ; les tableaux et formules complexes peuvent nécessiter une vérification.";
+"translation.page.source_note" = "Le texte source reste fixé à son emplacement sur la page. Pour les pages numérisées, lancez d’abord l’OCR.";
+"translation.page.continued" = "Le texte qui ne tient pas dans son emplacement se poursuit sur les pages suivantes.";
+"translation.page.preparing" = "Préparation de la page…";
+"translation.page.preview_error" = "Impossible de préparer la page traduite.";
+"translation.page.close" = "Fermer l’aperçu de la page";
+
+/* Translated-page layout and continuation */
+"translation.layout.error.geometry" = "Impossible de lire avec fiabilité les positions du texte sur cette page. Essayez la vue de traduction du texte.";
+"translation.layout.error.render" = "Impossible d’afficher la page traduite en entier. Aucune page partielle n’a été utilisée.";
+"translation.layout.error.mapping" = "La traduction ne correspond pas à toutes les zones de texte de cette page. Traduisez la page à nouveau.";
+"translation.layout.continuation" = "Suite des traductions intégrales des zones numérotées";
+"translation.layout.region" = "Zone %@";
+"translation.layout.continuation_note" = "La traduction intégrale de chaque zone numérotée figure ci-dessous.";
+"translation.page.html_source" = "Inclure le texte original dans le fichier HTML";
+
+/* Open-document current-page gallery */
+"gallery.title" = "Galerie des PDF ouverts";
+"gallery.subtitle" = "Parcourez les espaces de travail et retrouvez vos documents et leur contenu.";
+"gallery.open" = "Galerie des PDF ouverts";
+"gallery.close" = "Fermer la galerie";
+"gallery.search" = "Rechercher dans les noms ou le contenu";
+"gallery.count" = "%d documents PDF";
+"gallery.current_page" = "Page %d sur %d";
+"gallery.current_document" = "Document actuel";
+"gallery.empty" = "Aucun PDF ouvert dans cet espace de travail.";
+"gallery.no_results" = "Aucun document ne correspond à votre recherche.";
+"gallery.preview_loading" = "Préparation de l’aperçu…";
+"gallery.preview_unavailable" = "Aperçu indisponible.";
+"gallery.preview_locked" = "Ouvrez le document pour le déverrouiller.";
+"gallery.open_document" = "Reprendre la lecture de ce document";
+"gallery.shortcut_hint" = "Sélectionnez une carte pour reprendre la lecture · Échap pour fermer";
+"gallery.modified" = "Modifications non enregistrées";
+
+/* Reading colors */
+"reading.title" = "Couleurs de lecture";
+"reading.original" = "Couleurs d’origine";
+"reading.soft" = "Papier doux";
+"reading.sepia" = "Papier chaud";
+"reading.night" = "Lecture de nuit";
+"reading.description" = "Ajustez les couleurs de l’application et du papier PDF pour lire confortablement plus longtemps.";
+"reading.original.detail" = "Conservez l’apparence actuelle et les couleurs d’origine du PDF.";
+"reading.soft.detail" = "Adoucissez le papier blanc avec une légère teinte ivoire.";
+"reading.sepia.detail" = "Ajoutez des tons chauds à l’application et au papier.";
+"reading.night.detail" = "Réduisez la luminosité avec une application sombre et un papier gris doux.";
+"reading.display_only" = "Les images et les annotations changent aussi d’aspect à l’écran. Les fichiers d’origine, les fichiers enregistrés et les exports restent inchangés.";
+"reading.preview" = "Aperçu de lecture";
+"reading.preview.text" = "Lisez une petite pensée et laissez-la vous porter plus loin.";
+"reading.preview.caption" = "Lire sereinement avec EmberPDF";
+
+/* Gallery workspace navigation and local content search */
+"gallery.all_workspaces" = "Tous les espaces de travail";
+"gallery.workspace_scope" = "Choisir un espace de travail";
+"gallery.all_tabs" = "Tous les onglets";
+"gallery.tab_scope" = "Choisir un onglet";
+"gallery.all_groups" = "Tous les documents";
+"gallery.ungrouped" = "Onglets sans groupe";
+"gallery.group_scope" = "Groupe d’onglets";
+"gallery.search.progress" = "Recherche dans %d/%d documents · %d pages examinées";
+"gallery.search.results" = "%d documents · %d occurrences dans le contenu";
+"gallery.search.stop" = "Arrêter la recherche";
+"gallery.search.retry" = "Relancer la recherche";
+"gallery.search.cancelled" = "Recherche arrêtée. Les résultats déjà trouvés restent consultables.";
+"gallery.search.local" = "Recherchez le texte des PDF ouverts sur cet appareil.";
+"gallery.search.limited" = "Seuls certains résultats sont affichés. Précisez votre recherche ou poursuivez-la dans le document.";
+"gallery.search.unreadable" = "Impossible de rechercher dans le contenu de %d documents.";
+"gallery.search.unreadable_detail" = "Les PDF verrouillés par mot de passe, ceux limitant l’extraction de texte et les scans sans texte sont exclus de la recherche dans le contenu.";
+"gallery.search.filename_only" = "Nom correspondant";
+"gallery.search.content_count" = "%d occurrences dans le contenu";
+"gallery.search.page" = "Page %d";
+"gallery.search.more" = "Afficher %d occurrences de plus";
+"gallery.search.less" = "Réduire";
+"gallery.search.open_result" = "Aller à ce passage";
+"gallery.search.no_results" = "Aucun document ni contenu correspondant trouvé.";
+"gallery.search.no_results_help" = "Essayez une autre recherche ou élargissez la sélection d’espaces de travail ou d’onglets.";
+"gallery.search.waiting" = "Recherche dans le contenu des documents…";
+"gallery.search.clear" = "Effacer la recherche";
+"gallery.search.changed" = "Le document a changé. Relancez la recherche.";
+"gallery.search.unavailable" = "Recherche dans le contenu indisponible";
+"gallery.search.opened_result" = "Le passage correspondant est affiché.";
+"gallery.search.stale_result" = "Le document a changé et l’emplacement du résultat ne peut pas être confirmé. Relancez la recherche dans la galerie.";
+
+/* Host-owned plugin companion panels, schema 4 */
+"plugins.appearance.detail" = "Réglez les couleurs de l’application et du papier. Le PDF original reste intact.";
+"plugins.clip.adjust" = "Ajuster la zone";
+"plugins.clip.copied" = "Image copiée. Collez-la dans une autre application.";
+"plugins.clip.copy" = "Copier l’image";
+"plugins.clip.drag" = "Glissez cette image vers une autre application";
+"plugins.clip.error.authorization" = "Les autorisations ont changé. Vérifiez-les et rouvrez ce panneau.";
+"plugins.clip.error.clipboard" = "Impossible de copier l’image dans le presse-papiers.";
+"plugins.clip.error.copy_restricted" = "Ce PDF interdit la copie d’images.";
+"plugins.clip.error.destination" = "Choisissez un PNG qui ne remplace pas le PDF original.";
+"plugins.clip.error.geometry" = "Choisissez une zone dans la page.";
+"plugins.clip.error.render" = "Impossible de créer l’image de la page.";
+"plugins.clip.error.size" = "L’image est trop grande. Réduisez la zone.";
+"plugins.clip.error.stale" = "Le document a changé. Rouvrez le panneau de capture.";
+"plugins.clip.error.unavailable" = "Ouvrez une page PDF.";
+"plugins.clip.export_note" = "Collez l’image copiée ou enregistrée dans un PDF, une note, Word ou une autre application. Les couleurs d’origine sont conservées.";
+"plugins.clip.full_page" = "Page entière";
+"plugins.clip.height" = "Hauteur";
+"plugins.clip.instructions" = "Glissez sur la page pour découper une zone. Le PDF original reste intact.";
+"plugins.clip.left" = "Gauche";
+"plugins.clip.page" = "Page %d";
+"plugins.clip.save" = "Enregistrer en PNG";
+"plugins.clip.saved" = "Image PNG enregistrée.";
+"plugins.clip.selection" = "Zone de capture. Utilisez Ajuster la zone pour la modifier au clavier.";
+"plugins.clip.top" = "Haut";
+"plugins.clip.width" = "Largeur";
+"plugins.hover.detail" = "Activez cette fonction, puis arrêtez le pointeur sur un mot du PDF. La traduction locale de macOS fonctionne seulement quand ce panneau est ouvert.";
+"plugins.hover.download" = "Lors de la première utilisation, macOS peut proposer de télécharger une langue.";
+"plugins.hover.enable" = "Activer la traduction au survol";
+"plugins.hover.language" = "Langue cible";
+"plugins.hover.requires_system" = "La traduction automatique au survol nécessite macOS 15 ou ultérieur.";
+"plugins.hover.title" = "Traduire au survol";
+"plugins.notes.edit" = "Écrire";
+"plugins.notes.editor" = "Éditeur de notes Markdown";
+"plugins.notes.empty" = "Notez vos idées et rassemblez des passages du PDF.";
+"plugins.notes.error.changed" = "Une autre application a modifié ce fichier. Enregistrez sous un autre nom.";
+"plugins.notes.error.encoding" = "Choisissez un fichier texte UTF-8.";
+"plugins.notes.error.file" = "Choisissez un fichier .md ou .markdown ordinaire. Les alias et liens symboliques sont refusés.";
+"plugins.notes.error.linked" = "Les fichiers liés ne peuvent pas être remplacés. Enregistrez sous un autre nom.";
+"plugins.notes.error.path" = "Seuls les fichiers Markdown locaux que vous choisissez peuvent être ouverts.";
+"plugins.notes.error.size" = "Les notes sont limitées à 1 Mo en UTF-8.";
+"plugins.notes.insert_selection" = "Texte sélectionné";
+"plugins.notes.insert_source" = "Référence de page";
+"plugins.notes.local_only" = "Écrivez sur cet appareil. Liens, images et HTML ne s’ouvrent pas automatiquement.";
+"plugins.notes.mode" = "Vue de la note";
+"plugins.notes.new" = "Nouvelle note";
+"plugins.notes.open" = "Ouvrir un Markdown";
+"plugins.notes.page" = "Page %d";
+"plugins.notes.preview" = "Aperçu";
+"plugins.notes.preview_limit" = "Seul le début de cette longue note est affiché. L’édition et l’enregistrement conservent tout son contenu.";
+"plugins.notes.save" = "Enregistrer le Markdown";
+"plugins.notes.save_as" = "Enregistrer sous";
+"plugins.notes.unsaved.title" = "Enregistrer les modifications de la note ?";
+"plugins.notes.untitled" = "Sans titre.md";
+"plugins.permission.appearance" = "Modifier les couleurs de lecture";
+"plugins.permission.export" = "Enregistrer ou glisser des images vers un emplacement choisi";
+"plugins.permission.files" = "Ouvrir et enregistrer les fichiers Markdown choisis";
+"plugins.permission.hover" = "Lire le mot du PDF sous le pointeur";
+"plugins.permission.local_translation" = "Utiliser la traduction locale de macOS";
+"plugins.permission.notes" = "Lire et écrire des notes locales";
+"plugins.permission.open_documents" = "Rechercher dans les PDF ouverts";
+"plugins.permission.page_image" = "Lire la page PDF actuelle comme image";
+"plugins.related.detail" = "Trouvez des mots communs dans les PDF ouverts. Seules certaines pages sont examinées, sans envoi externe.";
+"plugins.related.empty" = "Aucun passage lié trouvé dans les pages examinées. Essayez d’autres mots-clés.";
+"plugins.related.page" = "Extraire les thèmes de la page actuelle";
+"plugins.related.query" = "Sujet ou mots-clés";
+"plugins.safe_mode.detail" = "Arrête tous les plugins en conservant leur installation et leurs réglages.";
+"plugins.safe_mode.title" = "Mettre tous les plugins en pause";
+
+"plugins.review.action.appearance" = "Ouvre les réglages de couleur de lecture sans modifier le PDF original.";
+"plugins.review.action.notes" = "Rédigez des notes Markdown à côté du PDF. Seuls les fichiers choisis sont ouverts et enregistrés.";
+"plugins.review.action.clip" = "Copie, enregistre ou glisse une zone en PNG, selon les droits de copie du PDF.";
+"plugins.review.action.related" = "Recherche des mots communs dans certaines pages des PDF ouverts, sans transfert externe ni accès à un dossier entier.";
+"plugins.review.action.hover" = "Traduit le mot sous le pointeur avec la traduction locale de macOS, lorsque la fonction est activée. Un téléchargement de langue peut être nécessaire.";
+
+/* Isolated script SDK */
+"plugins.permission.storage" = "Enregistrer les réglages locaux propres au plugin";
+"plugins.review.action.script" = "Exécute le code dans un processus séparé avec les seules API autorisées. Aucun accès direct aux fichiers, au réseau ou au shell.";
+"plugins.script.invalid" = "Le format de la requête du plugin est invalide.";
+"plugins.script.limit" = "Le plugin a dépassé sa limite de taille ou de requêtes.";
+"plugins.script.unavailable" = "L’assistant d’exécution du plugin est introuvable.";
+"plugins.script.revoked" = "Le plugin a été arrêté après une modification des autorisations ou du document.";
+"plugins.script.timeout" = "Le plugin ne répondait plus et a été arrêté. Vous pouvez continuer à travailler sur votre PDF.";
+"plugins.script.running" = "Plugin en cours";
+"plugins.script.stopped" = "Plugin arrêté";
+"plugins.script.stop" = "Arrêter";
+"plugins.script.restart" = "Relancer";
+"plugins.permission.background_execution" = "Fonctionner pendant l’utilisation de l’app";
+"plugins.permission.document_text" = "Lire le texte de tout le document";
+"plugins.runtime.title" = "Extension active avec l’app";
+"plugins.runtime.disclosure" = "Après son installation et son activation, cette extension démarre automatiquement tant que la fenêtre de l’app est ouverte. Les commandes et événements autorisés restent actifs après la fermeture du panneau. Désactivez le plugin ou retirez l’autorisation de fonctionner pendant l’utilisation de l’app pour l’arrêter.";
+"plugins.extensions.title" = "Extensions";
+"plugins.script.contextChanged" = "Le document a changé ; la demande précédente a été annulée.";
+
+/* Native PDF body text editing */
+"body_text.edit_hint" = "Modifiez le texte directement. Cliquez ailleurs sur la page ou appuyez sur ⌘Retour pour appliquer.";
+"status.body_text_updated" = "Texte du PDF modifié.";
+"status.body_text_deleted" = "Texte du PDF supprimé.";
+"status.body_text_added" = "Texte ajouté au PDF.";
+"error.body_text_stale" = "La page a changé pendant la modification. Annulez la modification, puis sélectionnez à nouveau le texte.";
+"body_text.error.restricted" = "Ouvrez ce PDF avec les droits du propriétaire pour modifier son texte.";
+"body_text.error.unreadable" = "Le texte du PDF n’a pas pu être lu sous une forme modifiable.";
+"body_text.error.too_complex" = "Cette page ou ce texte dépasse la taille prise en charge pour la modification.";
+"body_text.error.unsupported" = "La modification du texte ne prend pas encore en charge cette structure de texte ou de page, cette transformation ou cette méthode de rendu.";
+"body_text.error.reading_order" = "Appliquer cette modification pourrait changer l’ordre de lecture du texte de la page. Le PDF est intact et votre brouillon reste dans l’éditeur.";
+"body_text.error.reopen_for_edit" = "Pour conserver les balises d’accessibilité de cette page, annulez le brouillon en cours, puis enregistrez et rouvrez le PDF avant de reprendre la modification.";
+"body_text.error.save_accessibility_tags" = "L’enregistrement a été interrompu car les balises d’accessibilité de la page %d n’ont pas pu être conservées. Les modifications restent dans le document ouvert. Annulez la modification du texte de cette page, puis réessayez.";
+"body_text.error.scan_background" = "Impossible de modifier le texte numérisé sélectionné tout en préservant sa mise en page et son arrière-plan en toute sécurité. Sélectionnez des lignes d’un même paragraphe ou modifiez une ligne à la fois.";
+"body_text.error.scan_selection_fit" = "Le texte dépasse la zone numérisée sélectionnée. Sélectionnez une phrase ou un paragraphe plus large, ou réduisez la taille de police.";
+"body_text.error.changed" = "Le texte original a changé pendant la modification. Sélectionnez-le à nouveau.";
+"body_text.error.failed" = "Le texte du PDF n’a pas pu être modifié. L’original est inchangé.";
+"body_text.error.does_not_fit" = "Le texte ne tient pas dans la zone de modification actuelle. Ajustez la police ou sa taille, ou raccourcissez le texte.";
+
+/* Recent PDF access recovery */
+"recent.reconnect.title" = "Reconnecter le PDF récent";
+"recent.reconnect.choose" = "Sélectionner à nouveau le fichier…";
+"recent.reconnect.message" = "Les informations d’accès enregistrées pour « %@ » ne sont plus disponibles. Cela peut arriver après une mise à jour de l’application ou un déplacement du fichier. Sélectionnez à nouveau le fichier pour le reconnecter.";
+"recent.reconnect.panel" = "Sélectionnez à nouveau « %@ ». S’il a été déplacé, choisissez le PDF à son emplacement actuel.";
+
+/* Study notes, pen and eraser controls, and thumbnail zoom */
+"page.sidebar.settings" = "Réglages des aperçus de page";
+"page.sidebar.thumbnail_reset" = "Rétablir les aperçus à 100 %";
+"pen.opacity" = "Opacité";
+"study.pen.style" = "Épaisseur et opacité du stylo";
+"study.eraser.settings" = "Réglages de la gomme";
+"study.eraser.mode" = "Mode d’effacement";
+"study.eraser.stroke" = "Effacer les traits";
+"study.eraser.partial" = "Effacer partiellement";
+"study.eraser.option_help" = "Maintenez la touche Option pour utiliser l’autre mode d’effacement.";
+"study.eraser.size" = "Taille de la gomme";
+"study.notes.open" = "Notes d’étude";
+"eraser.changed" = "L’écriture manuscrite a été effacée.";
+"study.notes.title" = "Notes";
+"study.notes.add" = "Nouvelle note";
+"study.notes.quote" = "Note à partir de la sélection";
+"study.notes.empty.title" = "Aucune note pour le moment";
+"study.notes.empty.detail" = "Ajoutez des notes en lisant le PDF pour les retrouver toutes ici.";
+"study.notes.scanning" = "Recherche des notes…";
+"study.notes.saved_in_pdf" = "Les notes sont conservées sous forme d’annotations dans ce PDF. Enregistrez le fichier pour les garder.";
+"study.notes.edit" = "Modifier la note";
+"study.notes.reveal" = "Aller à la note";
+"study.notes.delete" = "Supprimer la note";
+"study.notes.delete_unavailable" = "Les notes déjà enregistrées peuvent être supprimées en mode Édition, ou après modification de leur contenu.";
+"study.notes.untitled" = "Note vide";
+"study.notes.editor_hint" = "Une fois appliquée, la note est ajoutée à la page et à la liste des notes. Vous pouvez rouvrir les notes longues depuis la liste pour les lire.";
+"study.notes.deleted" = "La note a été supprimée.";
+"study.notes.count" = "Notes : %d";
+"tool.select.help" = "Faites glisser pour sélectionner du texte dans le PDF. Sur les pages sous forme d’image, le texte de la zone ainsi sélectionnée est reconnu.";
+"tool.select.edit_help" = "Faites glisser pour sélectionner le texte, puis cliquez sur Modifier le texte (가T) pour modifier directement la sélection.";
+
+// Study note editor, appearance, links and pen styles
+"study.notes.editor.float" = "Détacher l’éditeur";
+"study.notes.editor.dock" = "Ancrer l’éditeur";
+"pen.style" = "Type de stylo";
+"pen.style.ink" = "Encre";
+"pen.style.pencil" = "Crayon";
+"pen.style.fountain" = "Stylo-plume";
+"pen.style.highlighter" = "Surligneur";
+"pen.style.ink.help" = "Écrivez des traits fluides qui réagissent à la pression.";
+"pen.style.pencil.help" = "Dessinez avec un grain fin, comme un crayon sur du papier.";
+"pen.style.fountain.help" = "La direction du trait et la pression font varier son épaisseur.";
+"pen.style.highlighter.help" = "Marquez le texte avec un trait large et translucide. Réglez son épaisseur et son opacité après sélection.";
+"study.note.style.title" = "Apparence de la note";
+"study.note.style.background" = "Couleur de fond";
+"study.note.style.foreground" = "Couleur du texte";
+"study.note.style.opacity" = "Opacité du fond";
+"study.note.style.width" = "Largeur";
+"study.note.style.height" = "Hauteur";
+"study.note.style.x" = "Position horizontale";
+"study.note.style.y" = "Position verticale";
+"study.note.style.font_size" = "Taille du texte";
+"study.note.style.units" = "Les dimensions et positions sont exprimées en points. La position verticale se mesure depuis le bas de la page.";
+"study.note.style.move_resize" = "Déplacer et redimensionner sur la page";
+"study.note.style.updated" = "L’apparence de la note a été mise à jour.";
+"study.links.title" = "Liens";
+"study.links.add" = "Ajouter un lien";
+"study.links.empty" = "Reliez une autre page PDF, une note ou un signet.";
+"study.links.local_hint" = "La liste des liens est enregistrée dans EmberPDF sur ce Mac et n’est pas incluse dans les autres applications. Pour conserver les liens entre notes, enregistrez aussi les PDF auxquels des identifiants de notes ont été ajoutés.";
+"study.links.open" = "Ouvrir l’emplacement lié";
+"study.links.reconnect" = "Reconnecter le fichier…";
+"study.links.remove" = "Supprimer le lien";
+"study.links.target" = "Relier à";
+"study.links.pdf" = "PDF ouvert";
+"study.links.page" = "Page";
+"study.links.page_only" = "Cette page";
+"study.links.open_target" = "Ouvrez d’abord dans l’application le PDF à relier.";
+"study.links.save_first" = "Enregistrez les PDF sous forme de fichiers avant de les relier.";
+"study.links.invalid_target" = "Sélectionnez à nouveau la page ou la note de destination.";
+"study.links.duplicate" = "Ces emplacements sont déjà liés.";
+"study.links.limit" = "Le stockage des liens est plein. Supprimez les liens devenus inutiles.";
+"study.links.unavailable" = "Impossible d’ouvrir le PDF lié. Choisissez le fichier avec « Reconnecter le fichier ».";
+"study.links.storage_error" = "Impossible de lire la liste des liens enregistrée. Les données d’origine ont été conservées.";
+"study.links.note_missing" = "La note liée est introuvable ; sa page a été ouverte.";
+"study.links.note_permission" = "Relier cette note nécessite l’autorisation d’enregistrer son identifiant. Créez le lien en mode Étude ou reliez la page.";
+
+"study.notes.insert.selection" = "Insérer le texte sélectionné du PDF au curseur";
+
+"study.notes.insert.time" = "Insérer la date et l’heure actuelles au curseur";
+
+"study.notes.insert.location" = "Insérer le nom et la page du PDF actuel au curseur";
+
+"study.notes.insert.location_format" = "%@ · page %d sur %d";
+
+"study.links.target_load_failed" = "Impossible de charger ce PDF. Vérifiez l’accès au fichier et réessayez.";
+
+"study.links.all_notes" = "Toutes les notes";
+
+"study.links.bookmarks" = "Signets";
+
+"study.links.target_loading" = "Chargement du PDF…";
+
+"study.links.retry" = "Recharger";
+
+"study.links.targets_scanning" = "Recherche de toutes les notes et de tous les signets…";
+
+"study.links.targets_limited" = "Les éléments sont trop nombreux pour tous les afficher. Vous pouvez aussi créer un lien par numéro de page.";
+
+"study.links.filter_targets" = "Rechercher des notes et signets";
+
+"study.links.bookmark_hint" = "Relie la page indiquée par la table des matières ou le signet du PDF.";
+
+"study.links.targets_empty" = "Aucun élément à sélectionner.";
+
+"study.links.total_pages" = "sur %d pages";
+
+"study.links.current_page" = "Position de lecture actuelle : page %d";
+
+"study.links.page_range" = "Saisissez un numéro de page compris entre 1 et %d.";
+
+"study.links.search_text" = "Texte";
+
+"study.links.search_placeholder" = "Chercher dans le texte du PDF sélectionné";
+
+"study.links.search_hint" = "Sélectionnez une page des résultats pour la relier. Recherche dans les pages contenant du texte ou une couche de texte OCR.";
+
+"study.links.search_no_text" = "Aucun texte interrogeable. Appliquez l’OCR aux PDF composés uniquement d’images avant de rechercher.";
+
+"study.links.search_empty" = "Aucun texte correspondant trouvé.";
+
+"study.links.search_copy_restricted" = "Ce PDF limite la copie ; la recherche dans les aperçus de texte est indisponible.";
+
+"study.links.search_changed" = "Le PDF a changé ; mise à jour de la recherche.";
+
+"study.links.search_unavailable" = "Impossible de charger le PDF pour la recherche.";
+
+"study.links.connect_current" = "Relier directement la page actuelle %d";
+
+"study.links.search_pages" = "Trouvé sur %d pages";
+
+"study.links.search_progress" = "Recherche à la page %d sur %d";
+
+"study.links.search_limited" = "Seules les %d premières pages correspondantes sont affichées. Précisez votre recherche.";
+
+"study.links.choose_pdf" = "Choisir un PDF à relier";
+
+"study.note.style.preview" = "Aperçu de la couleur et de l’opacité de la note";
+
+"study.note.style.color_target" = "Choisir la couleur à modifier";
+
+"study.note.style.apply_failed" = "La note n’a pas pu être modifiée. Rouvrez-la et réessayez.";
+
+"study.note.style.apply_hint" = "Vérifiez l’aperçu, puis cliquez sur Appliquer.";
+
+"study.notes.visibility.menu" = "Visibilité des notes";
+
+"study.notes.visibility.hide_all" = "Masquer toutes les notes";
+
+"study.notes.visibility.show_all" = "Afficher toutes les notes";
+
+"study.notes.visibility.hide" = "Masquer la note sur le PDF";
+
+"study.notes.visibility.show" = "Afficher la note sur le PDF";
+
+"study.notes.visibility.hidden" = "Masquée";
+
+"study.notes.visibility.count" = "%d notes · %d masquées";
+
+"study.notes.visibility.hint" = "Les notes masquées restent dans la liste pour être lues et réaffichées. Leur état masqué est aussi enregistré lors de la sauvegarde du PDF.";
+
+"comparison.entry.open" = "Voir ensemble";
+
+"comparison.entry.close" = "Quitter Voir ensemble";
+
+"comparison.entry.help" = "Choisissez 2 à 4 PDF ouverts pour les afficher et les disposer ensemble.";
+
+"comparison.arrange.horizontal" = "Côte à côte";
+
+"comparison.arrange.vertical" = "Empiler verticalement";
+
+"comparison.arrange.grid" = "Disposer en grille";
+
+"comparison.arrange.equal" = "Égaliser les tailles";
+
+"comparison.arrange.hint" = "Faites glisser un titre ou activez Modifier la disposition pour déplacer les PDF. Faites glisser les séparateurs pour les redimensionner.";
+
+"comparison.arrange.panel" = "Disposer ce PDF";
+
+"comparison.arrange.document" = "Disposer %@";
+
+"comparison.arrange.custom" = "Disposition personnalisée · Modifiez l’orientation et la taille de chaque panneau dans Voir ensemble.";
+
+"comparison.motion_sync" = "Déplacer ensemble";
+
+"comparison.motion_sync.help" = "Faites défiler et changez de page ensemble en conservant les positions relatives définies pour chaque PDF.";
+
+"comparison.all_previous" = "Page précédente dans tous les PDF non figés";
+
+"comparison.all_next" = "Page suivante dans tous les PDF non figés";
+
+"comparison.place.left" = "À gauche du PDF sélectionné";
+
+"comparison.place.right" = "À droite du PDF sélectionné";
+
+"comparison.place.above" = "Au-dessus du PDF sélectionné";
+
+"comparison.place.below" = "Sous le PDF sélectionné";
+
+"comparison.place.swap" = "Échanger les places";
+
+"comparison.pin" = "Figer %@";
+
+"comparison.unpin" = "Libérer %@";
+
+"comparison.pin.help" = "Un PDF figé conserve sa position de défilement, sa page et son zoom. Cliquez à nouveau pour le libérer.";
+
+"comparison.pinned" = "Figé";
+
+"comparison.page.previous" = "Page précédente de %@";
+
+"comparison.page.next" = "Page suivante de %@";
+
+"comparison.resize.width" = "Ajuster la largeur du panneau";
+
+"comparison.resize.height" = "Ajuster la hauteur du panneau";
+
+"comparison.arrange.edit" = "Modifier la disposition";
+
+"comparison.arrange.done" = "Terminer la disposition";
+
+"comparison.arrange.edit_hint" = "Faites glisser un PDF vers le bord ou le centre d’un autre PDF. Ensuite, cliquez sur « Terminer la disposition ».";
+
+"comparison.drag.handle" = "Glisser pour disposer";
+
+"comparison.drag.document" = "Faites glisser ce PDF pour le disposer";
+
+"comparison.drag.cancel_hint" = "Appuyez sur Échap pour annuler la disposition";
+
+"comparison.drop.left" = "Gauche";
+
+"comparison.drop.right" = "Droite";
+
+"comparison.drop.above" = "Au-dessus";
+
+"comparison.drop.below" = "En dessous";
+
+"comparison.drop.swap" = "Échanger";
+// Together view document chooser
+"comparison.chooser.gallery" = "Galerie";
+"comparison.chooser.list" = "Liste";
+"comparison.chooser.presentation" = "Présentation des documents";
+"comparison.chooser.preview" = "Page d’aperçu";
+"comparison.chooser.preview.current" = "Page actuelle";
+"comparison.chooser.preview.cover" = "Première page";
+"comparison.chooser.workspace" = "Espace de travail";
+"comparison.chooser.search" = "Chercher par nom de PDF, espace ou groupe";
+"comparison.chooser.selected_order" = "PDF sélectionnés · Ordre d’affichage";
+"comparison.chooser.select_hint" = "Choisissez ci-dessous 2 à 4 PDF à afficher ensemble.";
+"comparison.chooser.remove" = "Retirer de la sélection";
+"comparison.chooser.no_results_help" = "Essayez un autre nom ou élargissez les espaces de travail.";
+"comparison.chooser.tab" = "Onglet %d";
+"comparison.focus.help" = "Masque les onglets et les barres d’outils pour afficher les PDF côte à côte sur toute la fenêtre.";
+
+/* Recent internal validation, with scope and limitations */
+
+/* Continuous spreads with compact page spacing */
+"view.two_page.compact.title" = "Ajuster automatiquement l’écart entre les pages";
+"view.two_page.compact.help" = "Rapproche les pages en défilement continu, même si leurs largeurs diffèrent.";
+
+/* Quick document changes in View Together */
+"comparison.document.add" = "Ajouter un PDF";
+"comparison.document.replace" = "Remplacer le PDF";
+"comparison.document.close" = "Fermer dans Voir ensemble";
+"comparison.document.close.help" = "Retirer uniquement de Voir ensemble. L’onglet PDF d’origine reste ouvert.";
+"comparison.document.open" = "Ouvrir un fichier PDF…";
+"comparison.document.no_candidates" = "Aucun autre PDF ouvert à ajouter";
+"comparison.document.add.help" = "Ajouter un PDF ouvert ou ouvrir un fichier (4 PDF maximum).";
+"comparison.document.replace.help" = "Afficher un autre PDF dans ce volet.";
+"comparison.document.limit" = "Vous pouvez afficher jusqu’à 4 PDF ensemble.";
+"comparison.document.error" = "Impossible de charger le PDF. Les documents existants sont inchangés.";
+
+/* Current-document page gallery and page organization */
+"page_gallery.title" = "Galerie des pages";
+"page_gallery.open" = "Afficher la galerie des pages";
+"page_gallery.close" = "Revenir à la lecture";
+"page_gallery.subtitle" = "%d pages";
+"page_gallery.selected" = "%d pages sélectionnées";
+"page_gallery.select_all" = "Tout sélectionner";
+"page_gallery.deselect_all" = "Tout désélectionner";
+"page_gallery.size" = "Taille des vignettes";
+"page_gallery.hint" = "⌘-clic pour sélectionner plusieurs pages · Maj-clic pour une plage · Double-clic pour lire";
+"page_gallery.edit" = "Modifier les pages";
+"page_gallery.edit_hint" = "Activez la modification pour faire pivoter, déplacer ou supprimer des pages.";
+"page_gallery.extract" = "Extraire";
+"page_gallery.rotate" = "Faire pivoter";
+"page_gallery.move" = "Déplacer";
+"page_gallery.delete" = "Supprimer";
+"page_gallery.move_title" = "Déplacer les pages sélectionnées";
+"page_gallery.move_start" = "Au début";
+"page_gallery.move_end" = "À la fin";
+"page_gallery.move_before" = "Avant";
+"page_gallery.move_after" = "Après";
+"page_gallery.move_page" = "Page de référence";
+"page_gallery.move_apply" = "Déplacer";
+"page_gallery.move_hint" = "Les pages sélectionnées conservent leur ordre.";
+"page_gallery.delete_title" = "Supprimer les %d pages sélectionnées ?";
+"page_gallery.delete_message" = "Vous pouvez les restaurer avec Annuler (⌘Z).";
+"page_gallery.minimum_one" = "Le document doit conserver au moins une page.";
+"page_gallery.drop_end" = "Déposez ici pour déplacer à la fin du document";
+"page_gallery.drag_hint" = "Faites glisser les pages sélectionnées pour les réorganiser.";
+"page_gallery.open_page" = "Lire cette page";
+
+// AI conversation management and rich responses
+"ai.history.open" = "Conversations";
+"ai.history.new" = "Nouvelle conversation";
+"ai.history.rename" = "Renommer la conversation";
+"ai.history.title" = "Nom de la conversation";
+"ai.history.delete_title" = "Supprimer cette conversation ?";
+"ai.history.delete_message" = "L’historique de la conversation enregistré sur ce Mac sera également supprimé.";
+"ai.history.heading" = "Conversations de ce PDF";
+"ai.history.search" = "Rechercher un nom de conversation";
+"ai.history.empty" = "Aucune conversation à afficher.";
+"ai.history.saved_locally" = "L’historique des conversations est enregistré sur ce Mac.";
+"ai.history.memory_only" = "Les conversations de ce PDF sont conservées uniquement tant que l’application est ouverte.";
+"ai.history.message_count" = "%d messages";
+"ai.history.delete" = "Supprimer la conversation";
+"ai.history.options" = "Gérer la conversation";
+"ai.message.copy" = "Copier";
+"ai.message.delete" = "Supprimer le message";
+"ai.message.options" = "Options du message";
+"ai.rich.load_image" = "Charger l’image";
+"ai.rich.loading_image" = "Chargement…";
+"ai.rich.image_failed" = "Impossible de charger l’image.";
+"ai.rich.image_unavailable" = "Cette image n’est pas prise en charge.";
+"ai.history.untitled" = "Nouvelle conversation";
+"ai.history.error.invalid" = "Impossible de lire l’historique des conversations enregistré. Les données existantes ont été conservées.";
+"ai.history.error.large" = "L’historique des conversations a atteint la limite de stockage. Supprimez les conversations dont vous n’avez plus besoin.";
+"ai.history.error.limit" = "Vous pouvez conserver jusqu’à 100 conversations par PDF. Supprimez celles dont vous n’avez plus besoin avant d’en commencer une nouvelle.";
+"ai.history.error.conversation_full" = "Cette conversation a atteint sa limite de stockage. Le contenu existant est conservé. Commencez une nouvelle conversation pour continuer à poser des questions.";
+"ai.rich.image_alt" = "Image de la réponse de l’IA";
+
+"body_text.shortcuts" = "Retour Saut de ligne · ⌘Retour Appliquer · Échap Annuler";
+
+/* Image insertion choices and PDF size reduction. */
+"image.insert.quality.original" = "Privilégier l’original";
+"image.insert.quality.balanced" = "Équilibrée";
+"image.insert.quality.small" = "Petit fichier";
+"image.insert.quality.original.detail" = "Conserve le JPEG original sans recompression lorsque c’est possible. Les grandes images sont réduites à une taille sûre.";
+"image.insert.quality.balanced.detail" = "Réduit à 2 400px maximum et recompresse les photos. Certains détails peuvent changer.";
+"image.insert.quality.small.detail" = "Réduit à 1 600px maximum et compresse davantage les photos. Une perte de qualité peut apparaître lors d’un agrandissement.";
+"image.insert.batch_too_large" = "Les images sélectionnées dépassent la limite de préparation. Choisissez Petit fichier ou ajoutez moins d’images à la fois.";
+"image.insert.options.title" = "Qualité et taille des images";
+"image.insert.options.detail" = "Vérifiez la qualité et la taille estimée avant l’insertion dans le PDF. Ce choix s’applique aux images sélectionnées.";
+"image.insert.quality" = "Qualité des images";
+"image.insert.preparing" = "Préparation des aperçus et estimation de la taille…";
+"image.insert.estimated_size" = "Augmentation estimée du PDF";
+"image.insert.estimate_note" = "La taille réelle peut varier à l’enregistrement. Les fonds transparents sont conservés.";
+"image.insert.confirm" = "Insérer les images";
+"image.insert.source_size" = "Fichier original";
+"image.insert.resized" = "Dimensions ajustées";
+"image.insert.transparency" = "Transparence conservée · compression sans perte";
+"compression.title" = "Réduire la taille du PDF";
+"compression.detail" = "Choisissez la qualité des images, vérifiez la taille réelle, puis enregistrez une copie.";
+"compression.quality" = "Qualité des images";
+"compression.preservation" = "Le texte et les formes sont conservés. Les photos sont recompressées ; leur qualité peut donc varier selon le réglage choisi.";
+"compression.current_size" = "PDF actuel";
+"compression.processing" = "Optimisation des images et calcul de la taille réelle…";
+"compression.result_size" = "Après optimisation";
+"compression.no_reduction" = "Ce réglage ne permet pas de réduire davantage le fichier. Essayez une autre qualité. Le PDF actuel n’a pas été modifié.";
+"compression.preview_help" = "Cliquez sur Calculer la taille pour vérifier la taille du fichier avant de l’enregistrer.";
+"compression.stop" = "Arrêter";
+"compression.preview" = "Calculer la taille";
+"compression.quality.high" = "Haute qualité";
+"compression.quality.balanced" = "Équilibrée";
+"compression.quality.small" = "Petit fichier";
+"compression.quality.high_detail" = "Privilégie la netteté des photos tout en réduisant la taille.";
+"compression.quality.balanced_detail" = "Adaptée à la lecture sur écran et au partage quotidien.";
+"compression.quality.small_detail" = "Réduit davantage la taille. Les photos peuvent être moins nettes à l’agrandissement ou à l’impression.";
+"compression.savings" = "%@ de moins";
+"compression.menu" = "Réduire la taille du PDF…";
+"compression.preparing" = "Préparation du PDF…";
+"compression.document_changed" = "Le document a changé. Veuillez réessayer.";
+"compression.saved" = "Copie plus petite enregistrée : %@";
+"compression.error.unreadable" = "Impossible de lire le PDF pour réduire sa taille.";
+"compression.error.protected" = "Les PDF chiffrés ou signés numériquement ne peuvent pas être réduits.";
+"compression.error.unsupported" = "Ce PDF n’a pas été réduit, car ses structures particulières ne peuvent pas être conservées en toute sécurité.";
+"compression.error.too_large" = "Ce PDF dépasse la limite de traitement actuelle de la réduction de taille.";
+"compression.error.validation_failed" = "Impossible de vérifier que le contenu et les informations d’édition du PDF ont été conservés. L’original est inchangé.";
+
+// Quick writing tools and saved pen presets
+"pen.quick.title" = "Outils d’écriture";
+"pen.quick.settings" = "Réglages du stylo actuel";
+"pen.quick.more" = "Stylos enregistrés";
+"pen.preset.save" = "Enregistrer le stylo actuel";
+"pen.preset.replace" = "Remplacer par les réglages actuels";
+"pen.preset.delete" = "Supprimer le stylo enregistré";
+"pen.preset.limit" = "Vous pouvez enregistrer jusqu’à 8 stylos.";
+"pen.preset.help" = "Cliquez une fois pour utiliser un stylo. Cliquez à nouveau sur le stylo sélectionné pour ouvrir ses réglages.";
+"pen.shape" = "Dessin";
+"pen.shape.freehand" = "À main levée";
+"pen.shape.line" = "Ligne droite";
+"pen.shape.rectangle" = "Rectangle";
+"pen.shape.ellipse" = "Ellipse";
+"pen.pattern" = "Style de trait";
+"pen.pattern.solid" = "Continu";
+"pen.pattern.dashed" = "Tirets";
+"pen.tip" = "Pointe du surligneur";
+"pen.tip.square" = "Pointe carrée";
+"pen.tip.round" = "Pointe ronde";
+"pen.quick.width" = "Choisir l’épaisseur";
+"pen.quick.color" = "Choisir la couleur";
+"pen.quick.draw_help" = "Choisissez le tracé libre ou une forme, puis faites glisser la souris ou le stylet pour dessiner.";
+
+/* Text comparison */
+"comparison.difference.title" = "Modifications du texte";
+"comparison.difference.close" = "Fermer les modifications";
+"comparison.difference.scope" = "Compare le texte extractible et les pages ajoutées ou supprimées. Les images, la mise en page et les annotations ne sont pas comparées.";
+"comparison.difference.before" = "Document original";
+"comparison.difference.after" = "Document révisé";
+"comparison.difference.start" = "Comparer le texte";
+"comparison.difference.restart" = "Comparer à nouveau";
+"comparison.difference.cancel" = "Annuler";
+"comparison.difference.navigation" = "Sélectionnez une modification pour afficher la page correspondante dans les deux documents. Les PDF épinglés conservent leur position.";
+"comparison.difference.ready" = "Choisissez deux PDF pour comparer leur texte.";
+"comparison.difference.reading" = "Lecture du texte : %d / %d pages";
+"comparison.difference.comparing" = "Comparaison du texte…";
+"comparison.difference.cancelled" = "Comparaison annulée. Relancez-la pour afficher les résultats.";
+"comparison.difference.changed" = "Un PDF source a changé. Comparez à nouveau son contenu actuel.";
+"comparison.difference.identical" = "Aucune modification du texte détectée.";
+"comparison.difference.count" = "Modifications du texte : %d";
+"comparison.difference.textless" = "Le texte de %d pages n’a pas pu être extrait ; elles n’ont pas été comparées. Appliquez l’OCR pour comparer le texte numérisé.";
+"comparison.difference.truncated" = "La limite de résultats a été atteinte. Cette liste est incomplète.";
+"comparison.difference.whole_page" = "Page";
+"comparison.difference.page" = "Page %d";
+"comparison.difference.added" = "Ajout";
+"comparison.difference.removed" = "Suppression";
+"comparison.difference.modified" = "Modification";
+"comparison.difference.unavailable" = "Impossible de lire le texte de ces PDF.";
+"comparison.difference.restricted" = "Les deux PDF doivent autoriser la copie du texte pour pouvoir les comparer.";
+"comparison.difference.too_large" = "Ces PDF dépassent la limite de comparaison. Divisez-les en documents plus petits.";
+"comparison.difference.no_text" = "Ces PDF ne contiennent pas de texte extractible. Appliquez l’OCR avant de comparer le texte numérisé.";
+"comparison.difference.timed_out" = "La comparaison a dépassé le temps imparti. Comparez des documents plus petits.";
+
+/* Page structure preservation */
+"page_structure.error.unsupported" = "Ce PDF contient des pièces jointes, calques, balises d’accessibilité, signatures numériques ou autres structures qui ne peuvent pas être conservées en toute sécurité lors de l’assemblage des pages. L’original n’a pas été modifié.";
+"page_structure.error.page_labels" = "Ce PDF utilise des libellés de page personnalisés qui ne peuvent pas encore être conservés lors de l’enregistrement des pages assemblées. L’original n’a pas été modifié.";
+"page_structure.error.destination" = "La page cible d’un lien interne au PDF n’a pas pu être identifiée en toute sécurité. Les pages n’ont pas été assemblées.";
+"page_structure.error.form_fields" = "Des noms de champs en double ou des relations complexes entre les champs empêchent de conserver les valeurs en toute sécurité. Réessayez avec une copie dont les noms de champs ont été ajustés.";
+"page_structure.error.too_complex" = "La structure du plan, des liens ou des formulaires du PDF dépasse les limites permettant d’assembler les pages en toute sécurité.";
+"page_structure.error.copy" = "Les annotations de page et les liens internes n’ont pas pu être copiés de manière indépendante. L’original n’a pas été modifié.";
+"page_structure.imported_document" = "PDF importé";
+
+"pdf.rendering_unavailable" = "L’affichage PDF est indisponible dans cet environnement. Rouvrez EmberPDF dans une session de bureau macOS normale.";
+
+"page_structure.signed_original_notice" = "L’original signé est conservé en pièce jointe. Le nouveau document n’est pas signé.";
+
+/* Asynchronous document saving */
+"action.saving" = "Enregistrement";
+"status.saving_file" = "Enregistrement de %@…";
+"status.save_cancelled" = "Enregistrement annulé.";
+"status.saved_earlier_edits" = "Les modifications précédentes ont été enregistrées dans %@. Les plus récentes ne sont pas encore enregistrées.";
+"error.save_in_progress" = "Un enregistrement est en cours. Réessayez une fois qu’il est terminé.";
+
+"resource.memory_footprint" = "Mémoire de l’app";
+"resource.memory_note" = "La mémoire de l’app inclut la mémoire compressée de ce processus. RSS correspond à la mémoire actuellement résidente. Les processus auxiliaires distincts ne sont pas inclus. Un CPU à 100% représente un cœur logique.";
+
+/* Native menu roles refreshed when the app language changes. */
+"native_menu.file" = "Fichier";
+"native_menu.edit" = "Édition";
+"native_menu.view" = "Présentation";
+"native_menu.window" = "Fenêtre";
+"native_menu.help" = "Aide";
+
+"native_menu.close_all" = "Tout fermer";
+"native_menu.cut" = "Couper";
+"native_menu.copy" = "Copier";
+"native_menu.paste" = "Coller";
+"native_menu.select_all" = "Tout sélectionner";
+
+/* AppKit tab commands use the current application language. */
+"native_menu.show_tab_bar" = "Afficher la barre d’onglets";
+"native_menu.hide_tab_bar" = "Masquer la barre d’onglets";
+"native_menu.show_all_tabs" = "Afficher tous les onglets";
+"native_menu.exit_tab_overview" = "Quitter la vue d’ensemble des onglets";
+"native_menu.enter_full_screen" = "Activer le mode plein écran";
+"native_menu.exit_full_screen" = "Quitter le mode plein écran";

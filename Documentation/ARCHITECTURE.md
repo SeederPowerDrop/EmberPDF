@@ -1,21 +1,35 @@
-# HwattakPDF 아키텍처
+# EmberPDF 아키텍처
+
+> 현재 대상: **0.9.0 (build 90)** · 배포 전 검증 중. 아래 이전 빌드 기록은 이력이며, 최종 설치·지원 범위는 [품질 검사 기록](QUALITY_REPORT.md)을 확인하세요.
+
+> 2026-10-07 build 28 본문 편집: PDFKit은 보기와 문서 상태를 유지하고, PDFium 157.0.8086.0은 분리된 한 페이지에서 기존 텍스트 객체를 수정·삭제합니다. CoreText로 새 검색 가능 텍스트를 만들고 검증된 페이지 교체를 실행 취소 이력에 반영합니다. 지원 범위와 검증 상태는 [본문 편집 기록](PDF-BODY-TEXT-2026-10-07.md)을 따릅니다.
+
+> 2026-10-06 build 27: schema 6은 창별 `PluginExtensionHost`가 패널과 독립적으로 확장 실행 수명을 소유합니다. 플러그인·창별 worker와 명령 범위, 문서 문맥 이벤트·진행 요청 취소, UI 표시 분리, 권한별 페이지 읽기·문서 명령 API를 추가했습니다. 구조와 검증 상태는 [창 수명 확장 기록](EXTENSIONS-2026-10-06.md)을 따릅니다. 이전 schema 5의 패널 수명은 그대로 유지합니다.
+
+> 2026-10-06 build 26: schema 4 호스트 패널과 schema 5 별도 JavaScriptCore helper·JSON API·명령·이벤트·UI를 추가했습니다. 권한별 승인/철회, 안전 모드, 코드 검증과 실행 시간 제한을 포함한 최신 구조는 [확장 플랫폼 기록](PLUGIN-FOUNDATION-2026-10-05.md)과 [플러그인 보안 경계](PLUGIN-SECURITY.md)를 따릅니다. 아래 기존 schema 1·2 중심 설명에 우선합니다.
+
+> 2026-10-05 build 25: 갤러리의 탐색 범위를 워크스페이스·탭 그룹으로 확장하고, 취소 가능한 로컬 본문 검색과 결과 위치 이동을 추가했습니다. 파일·편집·휴면 상태의 보존 범위는 [갤러리 검색 기록](GALLERY-SEARCH-2026-10-05.md)을 확인하세요.
+
+> 2026-10-05 build 24: 독립적인 읽기 색상 설정, 반응형 앱 테마와 PDF 뷰포트·썸네일의 표시 전용 색상 합성을 추가했습니다. 파일·캐시 원본 보존과 밤 읽기의 화면 모드 복원 경계는 [읽기 색상 기록](READING-COLORS-2026-10-05.md)을 확인하세요.
+
+> 2026-10-05 build 23: 활성 편집기를 유지하는 전체 창 갤러리, 휴면 탭을 활성화하지 않는 직렬 미리보기와 메뉴·입력 차단 경계를 추가했습니다. 자세한 구조·상한·검증 상태는 [열린 PDF 갤러리 기록](OPEN-PDF-GALLERY-2026-10-05.md)을 확인하세요.
 
 > 2026-10-01 소스 갱신: 차분한 UI, 패널 크기에 맞춘 미리보기, 방향키 반복 제어와 OCR·선택·번역의 현재 경계를 반영했습니다. 누적 범위와 검증은 [소스 갱신 기록](SOURCE-UPDATE-2026-10-01.md), 사용자 변경 사항은 [릴리스 노트](RELEASE-NOTES-0.9.0.md)를 확인하세요. [9월 23일 소스 기록](SOURCE-UPDATE-2026-09-23.md)과 [9월 22일 패키지 검증](RELEASE-VALIDATION-0.9.0.md)은 당시 기준입니다.
 
 > 2026-09-05 안정화 후속: [수정·성능·복구 검증](STABILIZATION-2026-09-05.md), [schema 3 문서 명령 API와 태블릿 입력](PLUGIN-HOST-API.md). 아래의 이전 단계 설명보다 후속 기록을 우선한다.
 
 > 최초 기준일: 2026-08-28
-> 최신 보완일: 2026-10-01
-> 배포 준비 버전: 0.9.0 (build 20) Developer Preview · 직전 공개 버전: 0.8.0 (build 18)
+> 최신 보완일: 2026-10-19
+> 배포 준비 버전: 0.9.0 (build 89) Developer Preview · 직전 공개 버전: 0.8.0 (build 18)
 > 0.9.0 포함: 이미지·HTML 기반 PDF 만들기와 페이지 이미지형 DOCX/PPTX 내보내기
-> 현재 구현: macOS 14 이상, Swift Package, SwiftUI + AppKit + PDFKit + Vision + WebKit
+> 현재 구현: macOS 14 이상, Swift Package, SwiftUI + AppKit + PDFKit + PDFium + CoreText + Vision + WebKit
 > 목적: 현재 코드가 실제로 보장하는 경계와 다음 단계의 설계 방향을 구분한다.
 
 ## 1. 아키텍처 목표
 
-- PDFKit을 활용해 macOS MVP를 빠르게 제공하되, PDFKit이 제공하지 않는 실제 콘텐츠 객체 편집을 별도 문제로 취급한다.
+- PDFKit의 문서·보기 모델을 유지하고, 실제 본문 텍스트 객체 편집은 분리된 PDFium 서비스에 맡긴다.
 - UI가 살아 있는 `PDFDocument`를 직접 여러 스레드에서 만지지 않게 하고, 긴 작업은 불변 `Data` 스냅샷을 사용한다.
-- 저장 전 직렬화·검증과 같은 폴더의 원자 교체를 우선해 기존 파일 손상 위험을 최소화하고, 파일 단위 샌드박스 권한 때문에 직접 쓰기가 필요한 예외 경로는 한계와 복구 절차를 명시한다.
+- 일반 저장에서 기존 파일은 같은 폴더의 임시 파일을 검증한 뒤 교체한다. 폴더 권한이 부족하면 편집을 보존하고 별도 저장 위치를 안내한다. 직접 쓰기를 허용하는 내보내기 경로는 각각 한계와 복구 절차를 기록한다.
 - 대용량 OCR은 페이지마다 결과를 남겨 취소·충돌·앱 종료 후에도 재개할 기반을 갖춘다.
 - 외부 서비스나 모델이 없어도 기본 읽기·주석·페이지 조립·OCR이 동작한다.
 - 플러그인 schema 1의 엄격한 선언형 텍스트 action 호환성을 유지하고, schema 2는 앱 번들 검토본만 host-owned 웹 패널을 선택하게 해 다운로드한 패키지 코드를 앱 프로세스에 넣지 않는다.
@@ -31,6 +45,12 @@ flowchart TB
     App --> SessionStore["WorkspaceSessionStore · 보안 북마크 + 원자 JSON"]
     App --> Shell["TabbedWorkspaceView"]
     App --> PluginManager["PluginManager · bounded 선언형 registry"]
+    Shell --> ExtensionHost["PluginExtensionHost · 창별 확장 수명"]
+    PluginManager --> ExtensionHost
+    ExtensionHost --> Worker["EmberPluginWorker · 확장별 JavaScriptCore 프로세스"]
+    Worker --> Broker["JSON API · 권한과 문맥 검증"]
+    Broker --> State
+    ExtensionHost --> ExtensionUI["독립 명령 · 패널 표시 · 이벤트 · 저장소"]
     App --> BuilderUI["ImagePDFBuilderView · PDF 변환 작업대"]
     PluginManager --> PluginRunner["PluginActionRunner · host-rendered action"]
     PluginRunner --> PluginEffects["v1 · 대화상자 · 클립보드 · 승인된 기본 브라우저"]
@@ -59,7 +79,8 @@ flowchart TB
     Workspace --> SearchUI["검색 사이드바 · 페이지별 문맥 navigator"]
     Workspace --> ModeUI["WorkspaceToolbar · 뷰어/에디팅/학습"]
     ModeUI --> ModePolicy["PDFWorkspaceModePolicy · capability gate"]
-    Workspace --> InlineText["PDFInlineTextEditingOverlay · bounded FreeText editor"]
+    Workspace --> InlineText["PDFInlineTextEditingOverlay · bounded text editor"]
+    InlineText --> BodyText["PDFBodyTextEditor · PDFium + CoreText"]
     Workspace --> StudyUI["StudyModePalette · AI/메모/표식"]
     Workspace --> ShareNote["PDFShareNoteSheet · bounded plain text"]
     Workspace --> Sign["AppKit 트랙패드 서명 캔버스"]
@@ -118,13 +139,16 @@ flowchart TB
 | 선언형 플러그인 | `Plugins/PluginModels.swift`, `PluginManifestValidator.swift`, `PluginPackageValidator.swift`, `PluginManager.swift`, `PluginActionRunner.swift`, `PluginWebURLPolicy.swift`, `App/PluginCommands.swift`, `Views/PluginManagerView.swift`, `PluginPanelHostView.swift` | schema 1·2의 엄격한 파일·권한·크기 검증, 검토 bytes의 staged 설치·무결성 확인, v1 텍스트/기본 브라우저 action, 번들 identifier+digest가 일치하는 v2 앱 소유 번역·YouTube·공개 HTTPS 패널, scoped WebKit 정책과 lifecycle 폐기 |
 | PDF 비교 | `Models/ComparisonModels.swift`, `Views/PDFComparisonView.swift`, `Views/ComparisonSetupSheet.swift`, `Views/PDFScrollSyncCoordinator.swift` | 열린 세션 2~4개 선택·순서·배치, 좌우/위아래 패널, 정규화 스크롤 동기화와 문서별 잠금 |
 | PDF 보기 입력 | `Models/PDFViewportScrollInteraction.swift`, `Views/SettingsView.swift` | 유한한 스크롤 delta와 정확히 일치하는 수정키 조합을 native·확대·가로 이동 의도로 분류하고, 기본 `⌥` 확대 키를 `⌘` 또는 끔으로 바꾸는 사용자 설정 제공 |
-| PDF 편집 보기 | `Views/PDFKitViewer.swift`, `PDFImageEditingOverlay.swift`, `PDFInlineTextEditingOverlay.swift`, `Models/InlineTextEditing.swift` | SwiftUI와 `PDFView` 연결, 1·2페이지 모드, 페이지/선택 동기화, 포인터 고정형 수정키 확대와 가로 이동, 모드별 텍스트·펜·지우개 입력, bounded 인라인 FreeText 편집, 추가한 텍스트·서명·이미지 선택·이동, 이미지 자르기·레이어 편집 |
+| PDF 편집 보기 | `Views/PDFKitViewer.swift`, `PDFImageEditingOverlay.swift`, `PDFInlineTextEditingOverlay.swift`, `Models/InlineTextEditing.swift` | SwiftUI와 `PDFView` 연결, 1·2페이지 모드, 페이지/선택 동기화, 포인터 고정형 수정키 확대와 가로 이동, 모드별 텍스트·펜·지우개 입력, bounded 본문·기존 FreeText 편집, 주석 텍스트·서명·이미지 선택·이동, 이미지 자르기·레이어 편집 |
+| 본문 텍스트 엔진 | `Services/PDFBodyTextEditor.swift`, `Services/PDFScannedBodyTextEditor.swift`, `Vendor/PDFium/CPDFium.xcframework` | 분리된 한 페이지에서 텍스트 객체 탐색·제거, CoreText Unicode 텍스트 임베딩, 크기·복잡도·변형 검사. OCR 스캔은 줄 영역·배경·대체 글자 범위와 중간 페이지의 외형을 검사한 뒤 결과 페이지 반환 |
 | 다중 페이지 개요 | `Views/PDFGridOverview.swift`, `PDFGridInputMonitor.swift`, `PageThumbnailView.swift` | 3~12열 지연 그리드, 현재 보이는 페이지 추적, 수정키 확대·가로 이동과 네이티브 핀치 연결, `NSCache` 기반 페이지 이미지 캐시 |
+| 읽기 색상 | `Models/PDFReadingTheme.swift`, `Views/PDFReadingAppearance.swift`, `Views/ReadingThemeControls.swift`, `Views/HwattakPDFTheme.swift` | 앱·PDF의 4가지 표시 색상, PDFKit의 제한된 뷰포트 필터와 SwiftUI 래스터 합성, 원본·공유 캐시 보존, 기존 화면 모드를 덮어쓰지 않는 밤 읽기 |
+| 열린 PDF 갤러리 | `Views/PDFDocumentGalleryView.swift`, `Services/PDFDocumentGalleryPreviewService.swift`, `Models/PDFDocumentGalleryPreview.swift` | 워크스페이스·탭·탭 그룹 범위, 문서별 현재 페이지의 전체 이미지, 활성 편집기·배치 유지, 파일 이름·로컬 본문 검색과 결과 위치 이동, 직렬·취소 가능한 미리보기, 휴면 탭의 임시 읽기와 32개·24 MiB 서비스 캐시 상한. 본문 검색 구조·상한은 [갤러리 검색 기록](GALLERY-SEARCH-2026-10-05.md) 참조 |
 | 서명 | `Views/SignatureCaptureView.swift`, `SignatureSheet.swift`, `Services/SecureSignatureStore.swift` | 트랙패드/마우스 입력, 보정·스탬프 출력, 버전형 벡터 서명의 현재 사용자 Keychain 자동 저장·로드·교체·삭제 |
 | 단일 문서 상태·유스케이스 | `Models/PDFWorkspaceState.swift`, `Models/PDFDocumentSearch.swift`, `Models/PDFEditHistory.swift` | 한 탭의 열린 문서, 선택, 취소 가능한 Unicode 검색·진행률·결과 범위, 변경 상태, 페이지 연산, 주석, 서명, 문서별 22단계 델타 이력과 저장 체크포인트, OCR 작업 조율 |
 | 공유 모델 | `Models/WorkspaceModels.swift` | 도구, 잉크·서명·OCR 설정과 결과, 체크포인트, 사용자 오류 |
 | 페이지 연산 | `Services/PDFPageOperations.swift` | `PDFPage` 분리 복사, 정렬된 선택 페이지 추출, 문서 끝 병합 |
-| 저장 | `Services/PDFSourceFileVersion.swift`, `AtomicPDFWriter.swift` | 열기·재개·저장 시 가벼운 원본 버전 기록, 같은 원본 덮어쓰기 직전 coordinated 비교, 같은 부모 폴더의 임시 파일 검증 뒤 move/replace 우선, 파일 단위 권한용 검증 직접 쓰기 fallback |
+| 저장 | `Services/PDFSourceFileVersion.swift`, `AtomicPDFWriter.swift` | 열기·재개·저장 시 원본 버전 기록, 덮어쓰기 직전 파일 조정 및 버전 비교, 같은 부모 폴더의 임시 파일 검증 뒤 교체, 폴더 권한 부족 시 별도 저장 안내 |
 | OCR | `Models/OCRPageSelection.swift`, `OCRRecognitionLanguage.swift`, `Services/VisionOCRService.swift`, `OCRCheckpointStore.swift` | 범위 파싱·고정, 지원 언어 조회, 렌더링, Vision 인식, SHA-256 식별, 범위별 페이지 체크포인트 |
 | OCR 적용·출력 | `Models/OCRExportDestination.swift`, `Services/PDFOCRApplication.swift`, `SearchablePDFExporter.swift` | 새 결과가 있는 페이지만 교체, 현재 문서의 실행 취소 가능한 적용과 전체 문서 사본 저장, 원본 경로 보호 |
 | 이미지 오버레이 | `Services/ImageStampAnnotation.swift`, `Models/ImageAnnotationEditing.swift`, `Models/PDFWorkspaceState+ImageAnnotations.swift` | 원본은 편집 중 메모리에만 두고, 보이는 crop 픽셀만 독립 래스터로 만들어 PDF appearance에 넣는 스탬프 주석, 편집 좌표 계산과 이미지 레이어 재정렬 |
@@ -194,6 +218,10 @@ flowchart TB
 
 각 `PDFWorkspaceState`는 최대 22개의 `PDFEditCommand`를 독립적으로 가진다. 펜·하이라이트·자유 텍스트·서명·이미지·양식 값·페이지 구조 편집은 `⌘Z`와 `⇧⌘Z`로 이동한다. 비교 화면은 읽기 전용이므로 문서 undo/redo와 변이 명령을 차단한다. 일반 문서 창에서 AppKit `NSTextView`가 편집 중이면 해당 native `UndoManager`가 우선하고 서명 캔버스가 열린 sheet에서는 문서 단축키를 등록하지 않는다. 이 이력은 충돌 복구 저널이 아니며 앱 재실행이나 clean 탭 휴면을 넘겨 보존하지 않는다. `UnsavedChangesGuard`도 자동 저장이나 복구 저널을 대체하지 않는다.
 
+일반 저장과 복사본 저장은 `PDFWorkspaceState.saveAsynchronously(as:)`로 시작한다. 화면 스레드에서는 `PDFRecoverySnapshot`의 독립 PDFKit 사본, 목적지·원본 파일 버전과 현재 `PDFEditHistory` 체크포인트를 확보한다. 전체 문서 직렬화·태그와 Catalog 복원·검증·디스크 동기화·파일 교체는 `PDFBackgroundSaveWriter`의 별도 직렬 큐가 담당한다. 복구 큐와 명시적 저장 큐는 분리하며, 진행 중인 복구 계산에는 취소를 전달한다.
+
+저장 완료는 캡처한 이력 위치만 저장됨으로 표시한다. 저장 중 추가 편집이나 아직 deactivation되지 않은 네이티브 양식 값은 덮어쓰지 않는다. 같은 문서의 중복 저장과 교체는 막고 페이지 이동·다른 탭·언어 전환은 허용한다. 탭·창·앱 종료는 비동기 저장 뒤 대상 문서 identity·체크포인트·초안·세션 구성을 다시 확인한 뒤 닫는다. 처음에 비어 있던 탭도 확인 대상이다. 파일 교체 뒤 도착한 취소는 성공적으로 기록된 저장을 실패로 바꾸지 않는다.
+
 ## 5. 보기 계층
 
 읽기 화면의 `HwattakPDFTheme`는 라이트·다크 모두 중립색 표면을 사용하고 브랜드 색을 작은 강조에 남긴다. `WelcomeView`는 파일 열기와 최근 문서 7개를 우선하며, `PDFTabBar`는 기존 스택·재정렬·분리 창 기능을 유지한 채 기본 높이를 줄였다. `WorkspaceToolbar`는 공통 한 줄과 필요할 때 여는 모드 도구를 구분한다. 뷰어에서는 추가 도구를 접고, 에디팅·학습으로 전환하면 해당 도구를 보인다. 이 표시 상태가 기능 capability를 대신하지는 않는다.
@@ -207,10 +235,10 @@ flowchart TB
 | 모드 | 주요 허용 capability |
 | --- | --- |
 | 뷰어 | 읽기·선택·복사/붙여넣기, 댓글형 FreeText, 그래픽 서명, 번역·AI, OCR, bounded 메모 공유 |
-| 에디팅 | 인라인 FreeText, 이미지/서명 이미지 삽입, 그래픽 서명, 펜·지우개, 페이지 조립, OCR |
+| 에디팅 | 본문 텍스트 수정·삭제·추가, 기존 FreeText 편집, 이미지/서명 이미지 삽입, 그래픽 서명, 펜·지우개, 페이지 조립, OCR |
 | 학습 | 댓글형 타이핑 메모, 펜·지우개, 번역·AI 학습 도구, 조절형 표식, OCR, bounded 메모 공유 |
 
-Viewer/Study의 텍스트 도구는 메모 주석이고, Editing에서만 페이지 클릭이 직접 인라인 FreeText editor를 연다. Editing은 이미지와 페이지 구조를 바꿀 수 있지만 외부 AI를 노출하지 않으며, Viewer/Study만 공유 메모를 제공한다. 공급자·개발자 API 키가 없거나 요청별 전송 미리보기에 동의하지 않으면 AI capability가 보여도 네트워크 요청은 시작되지 않는다.
+Viewer/Study의 텍스트 도구는 메모 주석이고, Editing에서는 본문을 드래그한 뒤 본문 편집(가T)을 누르면 페이지 위의 본문 editor를 연다. 드래그만으로 편집을 시작하지 않으며, 명시적 편집에 실패하면 선택을 유지하고 오류를 표시한다. 기존 FreeText는 같은 panel에서 주석 transaction으로 편집한다. Editing은 이미지와 페이지 구조를 바꿀 수 있지만 외부 AI를 노출하지 않으며, Viewer/Study만 공유 메모를 제공한다. 공급자·개발자 API 키가 없거나 요청별 전송 미리보기에 동의하지 않으면 AI capability가 보여도 네트워크 요청은 시작되지 않는다.
 
 ### 5.2 1·2페이지 보기
 
@@ -220,15 +248,16 @@ Viewer/Study의 텍스트 도구는 메모 주석이고, Editing에서만 페이
 - 2열 연속 보기: `twoUpContinuous`
 - 2열 고정 보기: `twoUp`으로 현재 펼침만 렌더링하고 두 페이지 단위로 이동
 - `displaysAsBook = false`를 유지해 첫 페이지를 단독 표지로 빼지 않고 1–2, 3–4 순서로 묶는다. 마지막 홀수 페이지는 빈 슬롯과 함께 한 장만 표시한다.
-- 비교 패널은 정규화된 스크롤 위치만 동기화하므로 2열 고정 선택과 무관하게 기존 연속 모드를 유지한다.
+- 비교 패널은 2열 고정 선택과 무관하게 단일 페이지 연속 모드를 유지한다. 페이지 크기에 따른 상대 스크롤 이동량과 페이지 이동 차이를 동기화한다.
 - 페이지 변경 알림을 `currentPageIndex`에 반영
 - PDFKit 선택을 `currentSelection`에 반영
 - `⌘F` 검색은 페이지별 UTF-16 범위와 문맥만 최대 20,000개 보관하고, 현재 결과 한 건만 `PDFSelection`으로 만들어 `highlightedSelections`와 현재 페이지에 반영
+- 검색 시작 때 현재 페이지를 anchor로 고정하고 `PDFSearchPageOrder`로 마지막 페이지까지, 이어 처음부터 anchor 직전까지 순회한다. 첫 페이지 결과는 즉시 발행하고 사이드바 그룹도 이 순서를 유지한다. `submitSearch`는 새 검색어만 새 작업으로 시작하며 같은 검색어의 Enter·Shift-Enter를 다음·이전 이동으로 처리한다. 검색 중 아직 발행되지 않은 이동은 실제 대상이 발견될 때까지 보관하고, 직접 결과를 클릭하면 대기 이동을 취소한다. 도구줄과 사이드바는 검색 진행률과 이동 버튼을 함께 표시한다.
 - 검색 query·문서 revision·세대 토큰을 함께 확인해 취소·탭 휴면·페이지/주석 변경 뒤 늦게 도착한 결과를 버린다. 텍스트 층이 전혀 없는 문서는 검색 완료 뒤에만 OCR 안내를 표시한다.
 - 수정키 확대는 기본 `⌥`이며 설정에서 `⌥`·`⌘`·끔을 선택한다. 선택한 키만 정확히 누른 스크롤을 확대 의도로 처리하므로 `⌥⇧`, `⌥⌘`, `⌘⇧` 같은 조합은 임의로 소비하지 않는다.
 - 수정키 확대는 현재 포인터 아래의 PDF 페이지 좌표가 화면에서 유지되도록 배율과 clip bounds를 함께 조정한다. 배율은 `PDFView` 자체 한계를 우선하면서 워크스페이스의 5%~2,000% 안전 범위를 넘지 않는다.
 - `⇧`만 누른 세로 휠은 같은 clip view의 가로 이동으로 변환한다. 수정키 없는 세로·가로 스크롤과 PDFKit의 핀치 확대는 원래 이벤트 경로에 남긴다.
-- 뷰어/학습의 텍스트 도구는 클릭 위치에 댓글/학습 FreeText 메모를 추가하고, 에디팅의 텍스트 도구는 클릭 위치에 인라인 editor를 열거나 HwattakPDF가 식별한 FreeText를 같은 경로로 수정
+- 뷰어/학습의 텍스트 도구는 클릭 위치에 댓글/학습 FreeText 메모를 추가한다. 에디팅의 텍스트 도구는 본문의 native text object를 찾거나 빈 곳에 검색 가능한 글자를 추가하며, 식별한 기존 FreeText는 주석으로 수정한다.
 - 펜 도구는 화면 좌표를 페이지 좌표로 변환해 Ink 주석 생성
 - 지우개는 Ink·FreeText·Highlight·Stamp 같은 편집 주석만 제거하며 Widget·Link·Popup·Redact는 제외
 
@@ -244,7 +273,7 @@ Apple PDFKit의 공식 [`PDFDisplayMode`](https://developer.apple.com/documentat
 
 3~12열은 PDFKit의 문서 뷰를 억지로 확장하지 않고 `LazyVGrid`에 페이지 썸네일을 배치한다. 보기 설정 popover는 1·2·4페이지 전환을 제공하며 사용자 지정 1~12열과 개요 방향은 macOS 보기 메뉴에도 남긴다. `PageJumpControl`은 1-based 페이지 번호를 검증한 뒤 `PDFWorkspaceState.setCurrentPage(_:)`의 0-based 인덱스로 변환한다. `WorkspaceView`는 좌·우·상·하에 배치할 수 있는 페이지 패널, 현재 페이지 HUD, 마우스·키보드·VoiceOver로 조절하는 패널 구분선을 조합한다. 세로 배치 폭과 가로 배치 높이는 별도 설정으로 저장된다.
 
-페이지 패널의 1·2·4페이지 묶음은 메인 문서의 열 수와 독립된 탐색 설정이다. `PageSidebarLayoutMetrics`는 세로 패널의 실제 폭·가로 패널의 실제 높이와 사용자가 고른 크기 배율을 받아 썸네일 폭을 계산한다. 스크롤 콘텐츠 바깥의 `GeometryReader`로 가용 공간을 읽고 여백·페이지 번호·crop 비율·회전을 고려해 크기를 제한한다. `PageThumbnailView`는 문서 내용 식별자와 요청 폭을 구분해 폭만 변할 때 기존 이미지를 유지하면서 새 크기를 렌더링한다.
+페이지 패널의 1·2·4페이지 묶음은 메인 문서의 열 수와 독립된 탐색 설정이다. `PageSidebarLayoutMetrics`는 세로 패널의 실제 폭·가로 패널의 실제 높이와 사용자가 고른 크기 배율을 받아 썸네일 폭을 계산한다. 스크롤 콘텐츠 바깥의 `GeometryReader`로 가용 공간을 읽고 여백·페이지 번호·crop 비율·회전을 고려해 크기를 제한한다. `PageThumbnailView`는 논리적 폭(pt)과 SwiftUI의 화면 배율(`displayScale`)을 공통 렌더링 정책에 전달한다. 요청 식별자에 화면 배율을 포함하여 Retina/일반 화면 사이로 창을 옮길 때 새 해상도를 요청한다. 문서 내용 식별자와 렌더링 요청을 구분해 폭·화면 배율만 변할 때 기존 이미지를 유지하면서 새 크기를 렌더링한다. 페이지 개요의 별도 폭 2배 보정은 제거하여 화면 배율을 한 번만 적용한다. 이미지 크기·캐시 상한과 35ms 대기는 유지한다. 세부 원인과 검증 상태는 [build 38 썸네일 기록](THUMBNAIL-QUALITY-2026-10-09.md)에 남긴다.
 
 - 화면에 필요한 셀부터 만들며 세로·가로 스크롤을 허용한다.
 - 캐시는 revision, 페이지 인덱스, 요청 폭, 회전을 키에 포함한다.
@@ -255,20 +284,17 @@ Apple PDFKit의 공식 [`PDFDisplayMode`](https://developer.apple.com/documentat
 
 따라서 3~12열은 **개요 및 페이지 선택 모드**다. 이 모드에서 본문 선택이나 정밀 주석 편집이 가능하다고 가정하면 안 된다.
 
-### 5.4 2~4개 PDF 비교
+### 5.4 2~4개 PDF 함께 보기
 
 `TabbedWorkspaceView`는 열린 문서 세션을 가벼운 `ComparisonDocument`로 감싸 비교 UI에 전달한다. 이 어댑터는 문서를 복사하지 않고 기존 `PDFWorkspaceState`를 참조하므로 비교를 끝내도 원래 탭 상태와 dirty 여부가 유지된다.
 
-`PDFComparisonConfiguration`이 관리하는 값:
+`MultiDocumentWorkspaceState.comparisonDocuments`는 같은 창의 모든 워크스페이스에서 PDF 탭을 모으며 워크스페이스 이름·그룹·탭 순번을 포함한다. `ComparisonSetupSheet`는 갤러리/목록 전환, 메타데이터 검색·워크스페이스 필터와 별도의 선택 순서 목록을 제공한다. 필터는 선택을 변경하지 않는다. 현재 페이지/표지 미리보기는 크기·캐시가 제한된 `PDFDocumentGalleryPreviewService`를 사용하며 휴면 탭을 활성화하지 않는다. 저장·복원은 소유 워크스페이스의 창 범위 안에서 문서 ID를 정규화한다. 분리 창이 먼저 저장되면 이전 메인 기록의 동일 탭 ID를 제거해 중복 복원을 방지한다.
 
-- 선택한 문서 ID 2~4개와 패널 표시 순서
-- 좌우(`sideBySide`) 또는 위아래(`stacked`) 배치
-- 전체 스크롤 동기화 사용 여부
-- 동기화에서 완전히 제외할 잠긴 문서 ID
+`PDFComparisonConfiguration`은 선택한 문서 ID 2~4개, 중첩 가로·세로 분할 트리와 각 비율, 이동 동기화 여부, 고정 문서 ID를 관리한다. 기존 한 방향 배치와 크기 비율은 호환해서 읽는다. `PDFComparisonGeometry`가 최소 크기를 고려한 사각형을 계산하고, 문서 ID가 안정적인 평면 뷰 계층에 배치해 분할 부모 변경으로 PDFView가 다시 만들어지지 않게 한다. 보기 모드 기본 도구줄의 **함께 보기**에서 진입한다. 제목 드래그와 영역별 배치 메뉴로 혼합 배치·자리 교환을 지원하며, **배치 편집** 중에는 문서 위 배치 표면 전체를 잡아 끌 수 있다. 대상 방향과 자리 바꾸기 안내는 드래그 중에만 표시한다. 읽기 상태의 PDFKit 선택·스크롤은 그대로 유지한다.
 
-`PDFScrollSyncCoordinator`는 각 `PDFView` 내부 `NSClipView`의 bounds 변화를 관찰한다. 원본의 문서 프레임과 뷰포트에서 가로·세로 진행률을 0~1로 정규화하고, 대상 문서의 프레임과 뷰포트에 다시 매핑한다. 크기·페이지 수·확대 상태가 다른 문서에서도 절대 픽셀 좌표를 그대로 복사하지 않는다. 잠긴 패널은 다른 패널을 움직이지도 않고 다른 패널을 따라가지도 않는다.
+`PDFScrollSyncCoordinator`는 각 `PDFView` 내부 `NSClipView`의 bounds 변화를 관찰한다. 현재 페이지 크기로 정규화한 가로·세로 이동량을 다른 패널의 페이지 크기에 맞춰 전달하므로 각 문서에서 맞춰 둔 위치 차이가 유지된다. 뷰포트 크기·배율·문서 프레임 변화와 프로그램에 의한 복원은 이동 입력에서 제외한다. 페이지 버튼과 번호 입력은 페이지 차이를 전달하고 각 문서의 처음·끝에서 개별 제한한다. 전체 이전/다음 버튼은 동기화 설정과 별도로 고정되지 않은 패널을 넘긴다.
 
-비교 화면에 들어가면 우발적인 펜·지우개 입력을 막기 위해 각 문서 도구를 선택 모드로 바꾼다. 열린 탭이 닫히면 설정에서 사라진 ID와 잠금을 정리하며, 비교 가능한 문서가 2개 미만이 되거나 사용자가 다른 탭으로 전환하면 비교 모드를 종료한다.
+고정 패널은 다른 패널을 움직이거나 따라가지 않으며 직접 스크롤·페이지 이동·확대도 막고 선택·복사는 허용한다. 비교 화면은 읽기 전용 입력을 사용하되 기존 워크스페이스의 도구 설정을 바꾸지 않는다. 비교 진입 전 기존 편집을 정리하고 작성 중 메모는 초안으로 보존한다. 열린 탭이 닫히면 설정에서 사라진 ID와 잠금을 정리하며, 비교 가능한 문서가 2개 미만이 되거나 사용자가 다른 탭으로 전환하면 비교 모드를 종료한다. 배치·비율·선택·고정 상태는 작업 복원에 포함한다.
 
 이 기능은 **보기와 스크롤 기반 비교**다. 문서 객체나 OCR 텍스트를 분석하는 diff, 변경 영역 강조, 의미 기반 페이지 짝맞춤, 오버레이 비교를 제공하지 않는다.
 
@@ -277,6 +303,8 @@ Apple PDFKit의 공식 [`PDFDisplayMode`](https://developer.apple.com/documentat
 현재 편집은 PDFKit의 `convert(_:to:)`, `convert(_:from:)`로 뷰 좌표와 페이지 좌표를 변환한다. OCR은 Vision의 왼쪽 아래 원점 정규화 좌표를 페이지 크기에 곱한다. 회전, crop/media box, 비영점 원점, 혼합 페이지 크기에서 이 두 경로가 같은 시각 위치를 가리키는지 픽스처 테스트가 더 필요하다.
 
 ### 5.6 선언형 플러그인 경계
+
+schema 6의 독립적인 창 확장은 아래 선언형 action 수명과 구분한다. `PluginExtensionHost`는 사용자가 검토·활성화하고 `backgroundExecution`을 승인한 runtime을 창마다 시작한다. `PluginScriptSession`은 앱 전체 최대 8개의 별도 실행기를 관리하며 각 worker의 명령을 해당 창·확장 ID에 묶는다. `ui.render`는 내용 갱신, `ui.open/close`는 표시만 담당한다. 문서·워크스페이스 변경은 확장을 유지한 채 이전 문서 요청을 무효화하고 새 context 이벤트를 보낸다. 비활성화·필수 권한 철회·안전 모드·업데이트·제거·창 종료는 명령·UI·진행 요청과 실행기를 회수한다. 추가 문서 API와 schema 6 manifest 계약은 [호스트 API 참조](PLUGIN-HOST-API.md)를 따른다.
 
 `PluginManager`는 앱 프로세스 수명의 `@MainActor` registry다. 새 설치 slot을 셀 때는
 검증 실패 항목도 포함해 플러그인 폴더의 visible `.hwattakplugin` entry를 최대 32개로
@@ -429,9 +457,9 @@ Apple은 공유·iCloud 위치의 충돌 방지를 위해 [file coordination](ht
 
 ### 7.1 현재 주석 모델
 
-현재의 사용자 편집은 PDFKit annotation API를 사용한다.
+주석·이미지·필기 편집은 PDFKit annotation API를 사용한다. 본문 텍스트 편집은 아래의 별도 PDFium 경로를 사용한다.
 
-- FreeText: 새 텍스트와 HwattakPDF가 식별한 자유 텍스트 주석 수정
+- FreeText: 뷰어/학습 메모와 AI 검토 초안 추가, 기존 자유 텍스트 주석 수정
 - Highlight: 선택한 텍스트 줄의 bounds별 강조
 - Ink: 펜과 서명 선
 - Stamp 하위 클래스: 새 이미지 오버레이와 정규화된 crop 영역
@@ -443,11 +471,13 @@ Apple은 공유·iCloud 위치의 충돌 방지를 위해 [file coordination](ht
 
 #### 에디팅 모드의 인라인 텍스트
 
-`PDFInlineTextEditingOverlay`는 페이지 좌표의 FreeText bounds 위에 AppKit `NSTextView`와 글꼴·크기·색상·정렬·배경 control을 놓는다. 새 텍스트와 앱 소유 FreeText의 이중 클릭 수정은 같은 model path를 사용하고, draft는 문자/UTF-16 안전 상한 안에서만 유지한다. commit 시에만 PDFAnnotation과 22단계 문서 이력에 반영하며 mode·탭·저장·휴면 경계에서는 live control 값을 먼저 동기화한다.
+`PDFInlineTextEditingOverlay`는 페이지 좌표 위에 AppKit `NSTextView`와 글꼴·크기·색상·정렬·배경 control을 놓는다. `PendingInlineTextEdit.purpose`가 본문 텍스트와 기존 FreeText/시각적 교체 주석을 구분한다. 본문 editor는 선택 범위를 포함한 호환되는 텍스트 묶음을 표시하고, 본문 편집(가T)을 누를 때 원래 드래그 범위를 TextKit 선택과 키보드 포커스로 넘긴다. 선택한 첫 줄을 보이는 영역 위에서 38% 지점으로 한 번 이동하며 확대율을 유지한다. 선택 후 도구 전환에서는 영역 선택이 사라지기 전에 원문 대상을 확보한다. draft는 문자/UTF-16 안전 상한 안에서 유지한다.
+
+본문 적용은 `PDFBodyTextEditor`가 분리된 한 페이지에 수행한다. 기존 객체를 제거하고 CoreText가 글꼴과 Unicode 매핑을 포함해 만든 새 텍스트를 넣은 뒤 PDFKit으로 다시 연다. 빈 본문 초안의 적용은 기존 객체 삭제이며, 새 빈 초안과 무변경 적용은 편집 이력을 만들지 않는다. 성공한 페이지 교체만 문서의 22단계 이력에 반영하고 한 페이지 보관 비용으로 계산한다. 주석 적용은 기존 PDFAnnotation 경로를 유지한다. mode·탭·저장·휴면 경계에서는 live control 값을 먼저 동기화한다.
 
 뷰어·학습의 주석 검토 sheet와 AI가 만든 텍스트 초안은 다른 transaction이다. 입력은 `PendingTextEdit`에 bounded plain text로 동기화해 탭 전환 뒤에도 보존하지만 Apply 전에는 PDF·dirty·undo를 바꾸지 않는다. Save도 이 초안을 암묵 적용하지 않으며, 미결 초안이 있는 workspace/tab/window를 닫거나 다른 문서로 재사용하려는 동작은 Apply 또는 Cancel을 명시할 때까지 거부한다.
 
-선택한 기존 글자를 “교체”하는 흐름도 실제로는 원문 위에 FreeText 배경을 그리는 **시각적 오버레이**다. PDF 콘텐츠 스트림을 수정·삭제하지 않으므로 원문은 검색·복사·접근성 추출에 남을 수 있다. 이 경로는 보안 redaction이 아니며, 민감정보 삭제를 주장해서는 안 된다.
+과거 버전에서 만든 시각적 교체는 FreeText 배경으로 원문을 가린 주석이다. 해당 주석을 편집할 때 원문이 남는다는 경고를 유지하며 자동으로 본문 수정으로 전환하지 않는다. 새로운 본문 편집은 대상 텍스트 객체 자체를 바꾸지만 문서 전체의 숨은 데이터·첨부·메타데이터 제거를 수행하지 않는다. 두 경로 모두 보안 redaction을 제공한다고 주장해서는 안 된다.
 
 #### 학습 표식과 bounded 메모 공유
 
@@ -647,9 +677,15 @@ document SHA-256
 
 ### 10.1 PDFKit 경계
 
-PDFKit은 렌더링, 선택, 검색, 페이지 관리와 annotation에는 유용하지만 콘텐츠 스트림의 텍스트 run이나 `/Resources`의 image XObject를 고수준 편집 객체로 제공하지 않는다. 현재 annotation 모델만 확장해서 Adobe/PDF Expert 수준의 본문 편집을 구현할 수는 없다.
+PDFKit은 렌더링, 선택, 검색, 페이지 관리와 annotation을 담당한다. 콘텐츠 스트림의 텍스트 객체는 `PDFBodyTextEditor`가 PDFium C API로 탐색·제거하고 CoreText로 다시 조판한다. 선택 범위를 포함한 호환되는 객체·문단을 함께 편집할 수 있으며 PDFKit annotation의 덮개와 구분한다. OCR 스캔의 별도 경로는 검사한 줄 영역에 클립과 새 본문을 추가하며 원본 image XObject를 그대로 둔다. 기존 image XObject 자체의 교체·자르기는 아직 제공하지 않는다.
 
-### 10.2 필요한 편집 모델
+### 10.2 현재 지원과 후속 편집 모델
+
+일반 본문 경로는 지원되는 수평 텍스트의 객체·서식·배치를 확인하고 편집한다. 회전·전단·반전·특수 렌더링과 기본값이 아닌 `/UserUnit` 등 지원하지 않는 구조는 변경 없이 거부한다. 같은 페이지에서 동일 Form 스트림을 여러 번 호출하는 경우 해당 페이지의 중첩 Form 텍스트 편집도 거부하며, 공유하지 않는 중첩 Form은 지원한다. 페이지당 직렬화 64MiB, 객체 50,000개, 텍스트 추출 250,000자, Form 탐색 깊이 16의 상한을 둔다. 사용 가능한 Mac 글꼴이나 표준 대체 글꼴을 사용하며 원본 embedded subset의 정확한 외형 보존은 보장하지 않는다.
+
+build 76의 `PDFScannedBodyTextEditor`는 원본 이미지와 보이지 않는 OCR 텍스트가 함께 있는 페이지를 별도로 처리한다. OCR 객체 안의 글자 간격·기준선, 밝고 균일한 종이색, 글자 위치와 맞지 않는 잉크를 검사한다. OCR 객체를 제거한 중간 페이지는 원본과 렌더를 비교하고, 대체 글자의 영역이 검사한 스캔 영역에 들어갈 때만 클립·종이색·검색 가능한 본문을 결합한다. 원본 이미지에는 수정 전 글자가 남으므로 보안 삭제가 아니다. 지원 한계와 최종 관련 검사·실문서 검증은 [선택한 본문 편집 기록](SELECTED-TEXT-EDITING-2026-10-17.md)에 남긴다.
+
+다음 항목은 지원 범위 확대에 필요한 모델이다.
 
 텍스트:
 
@@ -674,14 +710,11 @@ PDFKit은 렌더링, 선택, 검색, 페이지 관리와 annotation에는 유용
 - 암호화, 선형화, 서명된 문서의 변경 제한
 - redaction은 검은 사각형 주석이 아니라 실제 콘텐츠 제거와 hidden data 정리
 
-### 10.3 엔진 선택 게이트
+### 10.3 PDFium 의존성과 배포 경계
 
-두 경로를 비교해야 한다.
+본문 편집에는 PDFium 157.0.8086.0을 macOS arm64/x86_64 `CPDFium.xcframework`로 고정한다. V8와 XFA를 끈 upstream 사전 빌드 두 개를 checksum 검증 후 합친 것이며 앱이 PDF 문서 스크립트를 실행하는 경로는 추가하지 않는다. PDFium handle은 서비스 호출 밖으로 내보내지 않고 main actor에서 직렬로 사용한다. 일반 빌드는 저장소의 바이너리를 사용해 네트워크 다운로드를 하지 않는다.
 
-1. ISO 32000 수준의 자체 파서·rewriter를 구축한다.
-2. 검증된 네이티브 PDF 엔진을 도입하고 라이선스 조건을 수용한다.
-
-선택 전 평가 항목은 출력 호환성, Apple Silicon/iPad 지원, 메모리, 폰트·CJK, 양식, redaction, 인증서 서명, incremental save, 보안 이력, 오픈소스·상용 라이선스 총비용이다. 라이선스가 제품 배포 방식과 충돌할 수 있으므로 특정 엔진을 코드에 먼저 고정하지 않는다.
+원본 URL·두 archive의 SHA-256·재준비 스크립트는 [Vendor/PDFium/README.md](../Vendor/PDFium/README.md), MIT 패키징 고지와 PDFium BSD 및 구성 라이브러리 고지는 [의존성 공개 기록](ASSET-AND-DEPENDENCY-NOTICES.md)에 기록한다. 앱 빌드는 framework를 포함·서명하고 `Resources/Legal/PDFium`에 모든 고지를 복사한다. 보안 이력·메모리·폰트·CJK·양식 보존과 출력 호환성은 버전 갱신 때 다시 검증해야 한다.
 
 ## 11. iPad를 위한 목표 구조
 
@@ -730,7 +763,7 @@ HwattakPDFOCRProviders
 - 서로 다른 문서 프레임·뷰포트 사이의 스크롤 진행률 매핑, overscroll clamp와 스크롤 불가능한 축 처리
 - OCR checkpoint 저장/로드, schema 1·2 migration, generation 교체, 손상 페이지 격리와 page count 검증
 - 1,000페이지 증분 checkpoint의 파일 수·총 쓰기량·저장 및 로드 benchmark
-- 원자 교체 우선 overwrite(직접 쓰기 fallback 포함)와 searchable OCR 사본의 재개방·텍스트 추출
+- 일반 저장의 원자 교체와 폴더 권한 부족 시 원본 보존, searchable OCR 사본의 재개방·텍스트 추출
 - 외부 atomic replacement·원본 삭제 시 덮어쓰기 차단, 외부 bytes와 dirty 편집 보존, 별도 저장 복구, 저장 baseline 갱신과 clean 탭 재개
 - 같은 index에서 page identity가 바뀌는 이동, 선택/검색 무효화, 양식 widget dirty 추적
 - 문서 fingerprint가 결정적 SHA-256이며 알려진 test vector와 일치하는지
@@ -789,7 +822,7 @@ HwattakPDFOCRProviders
 다음 결정은 구현 전에 ADR로 남긴다.
 
 - ADR-001: 현재 세션 이전형 창 모델을 `NSDocument` 기반 범용 다중 창과 어떻게 결합할지
-- ADR-002: 실제 PDF 콘텐츠 편집 엔진의 자체 구현 대 외부 엔진
+- ADR-002: [PDFium 본문 편집 도입과 지원 범위](PDF-BODY-TEXT-2026-10-07.md), 후속 엔진 갱신·지원 범위 확대
 - ADR-003: OCR job schema 2와 provider/model identity
 - ADR-004: 검색 가능 PDF를 구조 보존형으로 만들 방법
 - ADR-005: 그래픽 서명 평탄화 및 인증서 서명 저장 방식
@@ -797,4 +830,4 @@ HwattakPDFOCRProviders
 - ADR-007: Mac/iPad 공통 코어의 모듈 및 최소 OS 버전
 - ADR-008: 공급자별 web/MCP 기능과 attribution·retention 고지 정책
 
-이 문서에서 “다음 설계”로 적힌 인터페이스와 모듈은 현재 구현 완료를 뜻하지 않는다. 특히 기존 본문 객체 편집, 이미지 XObject 편집, 인증서 서명, iPhone/iPad companion은 명시적인 후속 범위다.
+이 문서에서 “다음 설계”로 적힌 인터페이스와 모듈은 현재 구현 완료를 뜻하지 않는다. 특히 문단 전체 reflow와 복잡한 변형의 본문 편집, 이미지 XObject 편집, 인증서 서명, iPhone/iPad companion은 명시적인 후속 범위다. 현재 텍스트 객체 단위 본문 편집의 검증 범위는 별도 기록을 따른다.

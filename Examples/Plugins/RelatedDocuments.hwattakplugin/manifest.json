@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 4,
+  "identifier": "org.emberpdf.examples.related-documents",
+  "displayName": "Related Documents",
+  "version": "1.0.0",
+  "author": "EmberPDF community examples",
+  "description": "Find relevant passages in other PDFs that are already open.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "openDocumentsRead",
+    "currentPageText",
+    "workspaceNavigation"
+  ],
+  "actions": [
+    {
+      "id": "open-panel",
+      "title": "Find related passages",
+      "output": "relatedDocumentsPanel",
+      "template": ""
+    }
+  ]
+}
+

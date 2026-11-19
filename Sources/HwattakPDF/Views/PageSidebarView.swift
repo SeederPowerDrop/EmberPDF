@@ -13,12 +13,15 @@ struct PageSidebarView: View {
     @ObservedObject var workspace: PDFWorkspaceState
     let placement: PageOverviewPlacement
     @Binding var sidebarMode: DocumentSidebarMode
+    var onThumbnailScalePreview: (Double?) -> Void = { _ in }
     /// drag 시작 시 문서 revision과 난수 token을 함께 캡처한다. drop 시 이 값과
     /// provider payload를 모두 검증해 취소된 drag나 외부 텍스트가 페이지를
     /// 뜻밖에 이동시키지 못하게 한다.
     @State private var showingDisplayOptions = false
     @State private var pageDragSession: PDFPageDragSession?
     @State private var magnificationBaseline: Double?
+    @State private var liveThumbnailScaleValue: Double?
+    @State private var isThumbnailScaleSliderEditing = false
     @State private var searchHitCountsByPage: [Int: Int] = [:]
     @FocusState private var isPageStripFocused: Bool
     // 묶음 방식과 썸네일 배율은 PDF 내용이 아니라 사용자 보기 선호이므로
@@ -30,12 +33,12 @@ struct PageSidebarView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var layoutMode: PageSidebarLayoutMode {
         PageSidebarLayoutMode(rawValue: layoutModeValue) ?? .single
     }
     private var thumbnailScale: Double {
-        PageSidebarPreferences.clampedThumbnailScale(thumbnailScaleValue)
+        PageSidebarPreferences.clampedThumbnailScale(liveThumbnailScaleValue ?? thumbnailScaleValue)
     }
     /// Selecting and navigating pages is available in every mode. Reordering,
     /// rotating, and deleting change PDF structure and belong to Editing only.
@@ -55,6 +58,15 @@ struct PageSidebarView: View {
         .background(theme.sidebar)
         .foregroundStyle(theme.primaryText)
         .onAppear(perform: normalizeSavedPreferences)
+        .onDisappear {
+            // Cancel a gesture if its tab/panel is removed before mouse-up.
+            clearThumbnailScalePreview()
+        }
+        .onChange(of: showingDisplayOptions) { _, isPresented in
+            if !isPresented, isThumbnailScaleSliderEditing {
+                commitThumbnailScalePreview()
+            }
+        }
         .onChange(of: layoutModeValue) { _, _ in
             normalizeSavedPreferences()
         }
@@ -103,11 +115,13 @@ struct PageSidebarView: View {
 
     private var horizontalPagePanel: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 12) {
+            VStack(spacing: 4) {
                 sidebarHeader
                 PageJumpControl(workspace: workspace)
+                    .padding(.horizontal, 8)
             }
-            .frame(width: 174)
+            .padding(.bottom, 8)
+            .frame(width: 146)
             verticalDivider
             horizontalPageScroller
             if canEditPages {
@@ -181,7 +195,7 @@ struct PageSidebarView: View {
                     }
 
                     if workspace.pageCount > 1, canEditPages {
-                        pageEndDropTarget(horizontal: true)
+                        pageEndDropTarget(horizontal: true, availableHeight: panelHeight)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -256,33 +270,42 @@ struct PageSidebarView: View {
     }
 
     private var sidebarHeader: some View {
-        HStack(spacing: 8) {
-            DocumentSidebarModePicker(selection: $sidebarMode)
+        HStack(spacing: 4) {
+            // Keep both modes reachable when a small thumbnail size makes
+            // the panel narrower than the localized text segments.
+            ViewThatFits(in: .horizontal) {
+                DocumentSidebarModePicker(selection: $sidebarMode)
+                    .fixedSize(horizontal: true, vertical: false)
+                DocumentSidebarModePicker(selection: $sidebarMode, compact: true)
+            }
+            .frame(maxWidth: .infinity)
             Button { showingDisplayOptions.toggle() } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 12))
                     .foregroundStyle(theme.secondaryText)
-                    .frame(width: 26, height: 28)
+                    .frame(width: 24, height: 28)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(L10n.string("page.sidebar.layout", defaultValue: "페이지 묶음 보기"))
-            .accessibilityLabel(L10n.string("page.sidebar.layout", defaultValue: "페이지 묶음 보기"))
+            .help(L10n.string("page.sidebar.settings", defaultValue: "페이지 미리보기 설정"))
+            .accessibilityLabel(
+                L10n.string("page.sidebar.settings", defaultValue: "페이지 미리보기 설정")
+            )
             .accessibilityIdentifier("page-sidebar-options")
             .popover(isPresented: $showingDisplayOptions, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.string("page.sidebar.layout", defaultValue: "페이지 묶음 보기"))
+                    Text(L10n.string("page.sidebar.settings", defaultValue: "페이지 미리보기 설정"))
                         .font(.headline)
                         .padding(.horizontal, 12)
                     sidebarDisplayControls
                 }
                 .padding(.vertical, 14)
-                .frame(width: 250)
+                .frame(width: 280)
                 .foregroundStyle(theme.primaryText)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
     }
 
     private var sidebarDisplayControls: some View {
@@ -311,6 +334,18 @@ struct PageSidebarView: View {
                 )
             )
 
+            HStack {
+                Text(
+                    L10n.string("page.sidebar.thumbnail_size", defaultValue: "페이지 미리보기 크기")
+                )
+                Spacer()
+                Text("50%–300%")
+                    .monospacedDigit()
+                    .foregroundStyle(theme.secondaryText)
+            }
+            .font(.caption2)
+            .padding(.top, 4)
+
             HStack(spacing: 6) {
                 Button {
                     adjustThumbnailScale(by: -1)
@@ -330,13 +365,22 @@ struct PageSidebarView: View {
                     value: thumbnailScaleBinding,
                     in: PageSidebarPreferences.minimumThumbnailScale
                         ... PageSidebarPreferences.maximumThumbnailScale,
-                    step: 0.05
+                    step: 0.05,
+                    onEditingChanged: { isEditing in
+                        if isEditing {
+                            isThumbnailScaleSliderEditing = true
+                            previewThumbnailScale(thumbnailScale)
+                        } else {
+                            commitThumbnailScalePreview()
+                        }
+                    }
                 )
                 .controlSize(.small)
                 .accessibilityLabel(
                     L10n.string("page.sidebar.thumbnail_size", defaultValue: "페이지 미리보기 크기")
                 )
                 .accessibilityValue("\(thumbnailScalePercent)%")
+                .accessibilityIdentifier("page-sidebar-thumbnail-scale")
 
                 Button {
                     adjustThumbnailScale(by: 1)
@@ -352,11 +396,22 @@ struct PageSidebarView: View {
                     thumbnailScale >= PageSidebarPreferences.maximumThumbnailScale - 0.0001
                 )
 
-                Text("\(thumbnailScalePercent)%")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(width: 34, alignment: .trailing)
-                    .accessibilityHidden(true)
+                Button {
+                    setThumbnailScale(PageSidebarPreferences.defaultThumbnailScale)
+                } label: {
+                    Text("\(thumbnailScalePercent)%")
+                        .font(.caption2.monospacedDigit())
+                        .frame(width: 40, alignment: .trailing)
+                }
+                .buttonStyle(.borderless)
+                .help(
+                    L10n.string("page.sidebar.thumbnail_reset", defaultValue: "미리보기 크기를 100%로")
+                )
+                .accessibilityLabel(
+                    L10n.string("page.sidebar.thumbnail_reset", defaultValue: "미리보기 크기를 100%로")
+                )
+                .accessibilityValue("\(thumbnailScalePercent)%")
+                .accessibilityIdentifier("page-sidebar-thumbnail-reset")
             }
         }
         .padding(.horizontal, 12)
@@ -373,8 +428,13 @@ struct PageSidebarView: View {
     private var thumbnailScaleBinding: Binding<Double> {
         Binding(
             get: { thumbnailScale },
-            set: {
-                thumbnailScaleValue = PageSidebarPreferences.clampedThumbnailScale($0)
+            set: { value in
+                if isThumbnailScaleSliderEditing {
+                    previewThumbnailScale(value)
+                } else {
+                    // Keyboard/accessibility adjustments have no drag lifecycle.
+                    setThumbnailScale(value)
+                }
             }
         )
     }
@@ -493,18 +553,12 @@ struct PageSidebarView: View {
                 page: page,
                 pageIndex: index,
                 width: thumbnailWidth,
-                revision: workspace.revision
+                revision: workspace.revision,
+                fileSource: workspace.thumbnailFileSource
             )
             .frame(width: thumbnailWidth)
             .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(selected ? theme.dropHighlight.opacity(0.6) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(selected ? theme.accent : Color.clear, lineWidth: 1.5)
-            )
+            .modifier(PageThumbnailSelectionSurface(isSelected: selected, theme: theme))
             .overlay(alignment: .topTrailing) {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
@@ -522,7 +576,7 @@ struct PageSidebarView: View {
                         .padding(.vertical, 4)
                         .background(theme.card.opacity(0.96), in: Capsule())
                         .overlay {
-                            Capsule().stroke(theme.accent.opacity(0.55), lineWidth: 1)
+                            Capsule().stroke(theme.selectionBorder, lineWidth: 1)
                         }
                         .padding(7)
                         .accessibilityHidden(true)
@@ -621,7 +675,7 @@ struct PageSidebarView: View {
             ),
             title: L10n.string("panel.title.save_selected_pages_combined")
         ) {
-            workspace.exportSelectedPagesAsCombinedPDF(to: url)
+            Task { await workspace.exportSelectedPagesAsCombinedPDFAsynchronously(to: url) }
         }
     }
 
@@ -636,14 +690,24 @@ struct PageSidebarView: View {
                 workspace.selectedPages.count
             )
         ) {
-            workspace.exportSelectedPagesAsIndividualPDFs(to: directory)
+            Task { await workspace.exportSelectedPagesAsIndividualPDFsAsynchronously(to: directory) }
         }
     }
 
-    private func pageEndDropTarget(horizontal: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+    private func pageEndDropTarget(
+        horizontal: Bool,
+        availableHeight: CGFloat? = nil
+    ) -> some View {
+        let scrollerPadding = CGFloat(
+            PageSidebarLayoutMetrics.horizontalScrollerTopPadding
+                + PageSidebarLayoutMetrics.horizontalScrollerBottomPadding
+        )
+        let dropHeight = horizontal
+            ? min(150, max(36, (availableHeight ?? 150 + scrollerPadding) - scrollerPadding))
+            : 36
+        return RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(pageDragSession == nil ? Color.clear : theme.dropHighlight)
-            .frame(width: horizontal ? 74 : nil, height: horizontal ? 150 : 36)
+            .frame(width: horizontal ? 74 : nil, height: dropHeight)
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
@@ -710,7 +774,7 @@ struct PageSidebarView: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(theme.secondaryText)
-        .padding(.horizontal, 15)
+        .padding(.horizontal, 8)
         .padding(.vertical, 11)
     }
 
@@ -721,20 +785,50 @@ struct PageSidebarView: View {
                     magnificationBaseline = thumbnailScale
                 }
                 let baseline = magnificationBaseline ?? thumbnailScale
-                thumbnailScaleValue = PageSidebarPreferences.clampedThumbnailScale(
-                    baseline * Double(magnification)
-                )
+                previewThumbnailScale(baseline * Double(magnification))
             }
-            .onEnded { _ in
-                magnificationBaseline = nil
+            .onEnded { magnification in
+                if let baseline = magnificationBaseline {
+                    previewThumbnailScale(baseline * Double(magnification))
+                }
+                commitThumbnailScalePreview()
             }
     }
 
     private func adjustThumbnailScale(by steps: Int) {
-        thumbnailScaleValue = PageSidebarPreferences.adjustedThumbnailScale(
+        setThumbnailScale(PageSidebarPreferences.adjustedThumbnailScale(
             thumbnailScale,
             steps: steps
-        )
+        ))
+    }
+
+    /// Keep a gesture local to the visible panel. Writing AppStorage for every
+    /// slider/pinch pulse used to invalidate all tabs and windows, even though
+    /// only this panel is being resized. The parent still receives a live value
+    /// so panel bounds follow the pointer; one value is persisted on release.
+    private func previewThumbnailScale(_ value: Double) {
+        let clamped = PageSidebarPreferences.clampedThumbnailScale(value)
+        guard liveThumbnailScaleValue != clamped else { return }
+        liveThumbnailScaleValue = clamped
+        onThumbnailScalePreview(clamped)
+    }
+
+    private func setThumbnailScale(_ value: Double) {
+        let clamped = PageSidebarPreferences.clampedThumbnailScale(value)
+        if thumbnailScaleValue != clamped { thumbnailScaleValue = clamped }
+        clearThumbnailScalePreview()
+    }
+
+    private func commitThumbnailScalePreview() {
+        if let value = liveThumbnailScaleValue { setThumbnailScale(value) }
+        else { clearThumbnailScalePreview() }
+    }
+
+    private func clearThumbnailScalePreview() {
+        liveThumbnailScaleValue = nil
+        magnificationBaseline = nil
+        isThumbnailScaleSliderEditing = false
+        onThumbnailScalePreview(nil)
     }
 
     private func normalizeSavedPreferences() {
@@ -762,6 +856,31 @@ struct PageSidebarView: View {
             workspace.selectedPages = [index]
         }
         workspace.setCurrentPage(index)
+    }
+}
+
+/// Selection stays quiet around the page; hover only changes the surrounding
+/// surface, so the document preview itself keeps its original colors.
+private struct PageThumbnailSelectionSurface: ViewModifier {
+    let isSelected: Bool
+    let theme: HwattakPDFTheme
+    @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                isSelected ? theme.selectionFill : (isHovering ? theme.hoverFill : Color.clear),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? theme.selectionBorder : Color.clear, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onHover { isHovering = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
     }
 }
 

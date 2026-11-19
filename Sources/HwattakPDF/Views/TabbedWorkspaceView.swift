@@ -22,10 +22,14 @@ struct TabbedWorkspaceView: View {
     private var loadedTabBudget = PDFTabMemorySettings.defaultLoadedTabBudget
     /// 뷰 재계산마다 새 manager를 만들지 않도록 창 수명 동안 한 번만 생성한다.
     @StateObject private var memoryManager: PDFTabMemoryManager
+    @StateObject private var extensionHost: PluginExtensionHost
     @State private var showingComparisonSetup = false
     @State private var isComparing = false
     @State private var comparisonConfiguration = PDFComparisonConfiguration()
     @State private var comparisonWorkspaceID: UUID
+    @State private var comparisonOpenTask: Task<Void, Never>?
+    @State private var isOpeningComparisonDocument = false
+    @State private var showingComparisonOpenError = false
     @State private var launchArgumentsHandled = false
     @State private var draggedTabID: UUID?
     @State private var isTabTearOutTargeted = false
@@ -34,6 +38,7 @@ struct TabbedWorkspaceView: View {
     /// Keeping it here lets the same state hide both the tab bar and the
     /// workspace chrome without changing any tab's saved sidebar preference.
     @State private var isFocusMode = false
+    @State private var isGalleryPresented = false
 
     init(
         workspace: MultiDocumentWorkspaceState,
@@ -60,52 +65,120 @@ struct TabbedWorkspaceView: View {
         _memoryManager = StateObject(
             wrappedValue: PDFTabMemoryManager(workspace: workspace)
         )
+        _extensionHost = StateObject(wrappedValue: PluginExtensionHost(collection: workspace))
     }
 
     private var comparisonDocuments: [ComparisonDocument] {
-        workspace.documentSessions.map {
-            ComparisonDocument(id: $0.id, title: $0.displayName, workspace: $0.workspace)
-        }
+        workspace.comparisonDocuments
     }
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     private var windowTitle: String {
-        guard let activeWorkspace = workspace.activeWorkspace else { return "HwattakPDF" }
+        guard let activeWorkspace = workspace.activeWorkspace else { return "EmberPDF" }
         return !activeWorkspace.hasOpenDocument
-            ? "HwattakPDF"
+            ? "EmberPDF"
             : activeWorkspace.windowTitle
     }
 
     var body: some View {
-        lifecycleWorkspace
+        HStack(spacing: 0) {
+            lifecycleWorkspace
+            if !isFocusMode, let item = extensionHost.selectedExtension {
+                Divider()
+                PluginExtensionSidebar(host: extensionHost, item: item, session: item.session)
+                    .id(item.session.id)
+            }
+        }
+        .environment(\.pluginCommandScope, extensionHost.id)
+        .focusedSceneValue(\.pluginExtensionScope, extensionHost.id)
+        .alert(
+            L10n.string("recent.reconnect.title"),
+            isPresented: Binding(
+                get: { workspace.recentDocumentRecovery != nil },
+                set: { if !$0 { workspace.recentDocumentRecovery = nil } }
+            ),
+            presenting: workspace.recentDocumentRecovery
+        ) { request in
+            Button(L10n.string("recent.reconnect.choose")) {
+                // Let the alert dismiss before presenting the system chooser.
+                DispatchQueue.main.async {
+                    reconnectRecentDocument(request)
+                }
+            }
+            Button(L10n.format("recent.remove", request.displayName), role: .destructive) {
+                workspace.removeRecentDocument(id: request.recentID)
+            }
+            Button(L10n.string("action.cancel"), role: .cancel) { }
+        } message: { request in
+            Text(L10n.format("recent.reconnect.message", request.displayName))
+        }
+        .alert(L10n.string("comparison.document.error"), isPresented: $showingComparisonOpenError) {
+            Button(L10n.string("action.confirm"), role: .cancel) { }
+        }
+        .onAppear {
+            extensionHost.documentCommandsAllowed = !isComparing && !isGalleryPresented
+            extensionHost.start()
+        }
+        .onChange(of: isComparing || isGalleryPresented) { _, readOnly in
+            extensionHost.documentCommandsAllowed = !readOnly
+        }
+        .onDisappear { extensionHost.stop() }
     }
 
     /// Split the large scene into smaller typed stages. Besides keeping the
     /// code readable, this avoids Swift's generic type-checker timing out as
     /// focused values, sheets and lifecycle observers are added over time.
     private var chromeWorkspace: some View {
-        VStack(spacing: 0) {
-            if !isFocusMode {
-                tabBar
+        ZStack {
+            // Keep the reader and its geometry mounted while the overview is
+            // open, preserving the exact zoom, scroll position and side panels.
+            VStack(spacing: 0) {
+                if !isFocusMode {
+                    tabBar
+                    if !extensionHost.extensions.isEmpty {
+                        PluginExtensionShelf(host: extensionHost)
+                    }
+                }
+                workspaceLayer
             }
-            workspaceLayer
+            .opacity(isGalleryPresented ? 0 : 1)
+            .disabled(isGalleryPresented)
+            .allowsHitTesting(!isGalleryPresented)
+            .accessibilityHidden(isGalleryPresented)
+
+            if isGalleryPresented {
+                PDFDocumentGalleryView(
+                    workspace: workspace,
+                    onSelect: selectGalleryDocument,
+                    onClose: closeGallery
+                )
+                .zIndex(3)
+            }
         }
         .background(theme.canvas)
+        .emberTint()
         .focusedSceneValue(
             \.documentSearchAvailable,
-            !isComparing && workspace.activeWorkspace?.document != nil
+            !isComparing && !isGalleryPresented && workspace.activeWorkspace?.document != nil
         )
         // Commands live outside this view hierarchy. Publish the presentation
         // boundary so menu clicks made after focusing the comparison toolbar
         // cannot mutate the hidden normal editor's workspace.
-        .focusedSceneValue(\.comparisonReadOnlyActive, isComparing)
+        .focusedSceneValue(\.comparisonReadOnlyActive, isComparing || isGalleryPresented)
+        .focusedSceneValue(
+            \.documentGalleryCommands,
+            DocumentGalleryCommandContext(
+                isPresented: isGalleryPresented,
+                canOpen: canOpenGallery,
+                toggle: toggleGallery
+            )
+        )
         .focusedSceneValue(
             \.workspacePresentationCommands,
             WorkspacePresentationCommandContext(
                 isFocusMode: isFocusMode,
+                canToggleFocusMode: canToggleFocusMode,
                 setFocusMode: setFocusMode
             )
         )
@@ -116,6 +189,10 @@ struct TabbedWorkspaceView: View {
                 configuration: $comparisonConfiguration,
                 onCancel: { showingComparisonSetup = false },
                 onStart: {
+                    // Preserve live form/inline edits before the normal
+                    // reader unmounts. Transactional study-note drafts remain
+                    // drafts; deactivation never implies their Apply action.
+                    workspace.activeWorkspace?.prepareForDeactivation()
                     showingComparisonSetup = false
                     memoryManager.setProtectedTabIDs(
                         Set(comparisonConfiguration.selectedDocumentIDs)
@@ -132,12 +209,15 @@ struct TabbedWorkspaceView: View {
             normalizeComparisonForAvailableDocuments(availableIDs)
         }
         .onChange(of: workspace.activeTabID) { oldValue, newValue in
+            if oldValue != newValue { closeGallery() }
             memoryManager.activeTabDidChange()
             if isComparing, oldValue != newValue {
-                isComparing = false
+                exitComparison()
             }
         }
         .onChange(of: workspace.activeWorkspaceID) { _, newWorkspaceID in
+            cancelComparisonOpen()
+            closeGallery()
             // Commit the outgoing workspace's last comparison snapshot before
             // replacing the local presentation state with the next workspace.
             persistComparisonPresentationState()
@@ -165,15 +245,25 @@ struct TabbedWorkspaceView: View {
         stateObservedWorkspace
         .onChange(of: isComparing) { _, newValue in
             if newValue {
+                closeGallery()
                 setFocusMode(false)
             }
             if !newValue {
-                memoryManager.setProtectedTabIDs([])
+                setFocusMode(false)
+                memoryManager.releaseComparisonProtectionAfterTransition()
             }
             persistComparisonPresentationState()
         }
         .onChange(of: comparisonConfiguration) { _, _ in
             persistComparisonPresentationState()
+        }
+        .onChange(of: comparisonConfiguration.selectedDocumentIDs) { _, ids in
+            guard isComparing else { return }
+            if ids.isEmpty {
+                exitComparison()
+            } else {
+                memoryManager.setProtectedTabIDs(Set(ids), deferCleanup: true)
+            }
         }
         .onChange(of: draggedTabID) { _, newValue in
             if newValue == nil {
@@ -181,7 +271,9 @@ struct TabbedWorkspaceView: View {
             }
         }
         .onExitCommand {
-            if isFocusMode {
+            if isGalleryPresented {
+                closeGallery()
+            } else if isFocusMode {
                 setFocusMode(false)
             } else {
                 clearTabDragState()
@@ -195,6 +287,7 @@ struct TabbedWorkspaceView: View {
             clearTabDragState()
         }
         .onDisappear {
+            cancelComparisonOpen()
             clearTabDragState()
             if windowID == nil {
                 AppExternalFileOpenCoordinator.shared.mainWindowDidDisappear()
@@ -238,12 +331,14 @@ struct TabbedWorkspaceView: View {
             isComparing: isComparing,
             comparisonAction: {
                 if isComparing {
-                    isComparing = false
+                    exitComparison()
                 } else {
                     prepareComparison()
                 }
             },
-            draggedTabID: $draggedTabID
+            draggedTabID: $draggedTabID,
+            galleryAction: toggleGallery,
+            isGalleryPresented: isGalleryPresented
         )
     }
 
@@ -266,7 +361,9 @@ struct TabbedWorkspaceView: View {
                     clearRecentDocuments: workspace.clearRecentDocuments,
                     isActive: true,
                     isFocusMode: isFocusMode,
-                    setFocusMode: setFocusMode
+                    setFocusMode: setFocusMode,
+                    canCompareDocuments: comparisonDocuments.count >= PDFComparisonConfiguration.minimumDocumentCount,
+                    compareDocuments: prepareComparison
                 )
                     .environmentObject(session.workspace)
                     .id(session.id)
@@ -278,7 +375,13 @@ struct TabbedWorkspaceView: View {
                     documents: comparisonDocuments,
                     configuration: $comparisonConfiguration,
                     onConfigure: { showingComparisonSetup = true },
-                    onExit: { isComparing = false }
+                    onExit: exitComparison,
+                    onSelectDocument: selectComparisonDocument,
+                    onOpenDocument: openComparisonDocument,
+                    onRemoveDocument: { comparisonConfiguration.removeDocument($0) },
+                    isOpeningDocument: isOpeningComparisonDocument,
+                    isFocusMode: isFocusMode,
+                    setFocusMode: setFocusMode
                 )
                 .zIndex(2)
             }
@@ -297,7 +400,7 @@ struct TabbedWorkspaceView: View {
         )
         .modifier(
             WorkspaceTabTearOutDropTargetModifier(
-                isEnabled: draggedTabID != nil,
+                isEnabled: !isGalleryPresented && draggedTabID != nil,
                 draggedTabID: $draggedTabID,
                 isTargeted: $isTabTearOutTargeted,
                 workspace: workspace,
@@ -332,7 +435,10 @@ struct TabbedWorkspaceView: View {
                                 )
                         }
                         .overlay {
-                            Label("새 HwattakPDF 창으로 분리", systemImage: "macwindow.badge.plus")
+                            Label(
+                                L10n.string("새 HwattakPDF 창으로 분리", defaultValue: "새 EmberPDF 창으로 분리"),
+                                systemImage: "macwindow.badge.plus"
+                            )
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(theme.chromeText)
                                 .padding(.horizontal, 16)
@@ -378,11 +484,11 @@ struct TabbedWorkspaceView: View {
             }
         }
         .animation(.easeOut(duration: 0.14), value: isWorkspaceFileDropTargeted)
-        .animation(.easeInOut(duration: 0.16), value: isFocusMode)
+        .animation(isComparing ? nil : .easeInOut(duration: 0.16), value: isFocusMode)
     }
 
     private func acceptWorkspaceFileDrop(providers: [NSItemProvider]) -> Bool {
-        guard !isComparing, let targetWorkspace = workspace.activeWorkspace else {
+        guard !isComparing, !isGalleryPresented, let targetWorkspace = workspace.activeWorkspace else {
             return false
         }
 
@@ -391,6 +497,7 @@ struct TabbedWorkspaceView: View {
         // and any diagnostics from this one drop still belong to the original
         // document surface.
         return WorkspaceExternalFileDropReceiver.receive(from: providers) { droppedFiles in
+            guard !isGalleryPresented else { return }
             WorkspaceFileDropCoordinator.handle(
                 droppedFiles,
                 workspace: targetWorkspace,
@@ -402,6 +509,14 @@ struct TabbedWorkspaceView: View {
     private func openPDFsInTabs() {
         let urls = WorkspaceFilePanels.chooseViewableFiles()
         workspace.beginOpeningViewableFilesInTabs(urls: urls)
+    }
+
+    private func reconnectRecentDocument(_ request: RecentDocumentRecoveryRequest) {
+        guard let url = WorkspaceFilePanels.chooseRecentPDF(
+            named: request.displayName,
+            suggestedURL: request.suggestedURL
+        ) else { return }
+        workspace.reopenRecentDocument(id: request.recentID, from: url)
     }
 
     private func openLaunchArgumentPDFsOnce() {
@@ -424,16 +539,103 @@ struct TabbedWorkspaceView: View {
         isTabTearOutTargeted = false
     }
 
+    private var canToggleFocusMode: Bool {
+        !isGalleryPresented && (isFocusMode || (isComparing
+            ? comparisonConfiguration.canContinueComparison
+            : workspace.activeWorkspace?.document != nil))
+    }
+
     private func setFocusMode(_ enabled: Bool) {
-        guard !enabled || (!isComparing && workspace.activeWorkspace?.document != nil) else {
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            isFocusMode = enabled
+        guard !enabled || canToggleFocusMode else { return }
+        if isComparing {
+            // Resize the resident PDFViews once, rather than relaying every
+            // animation frame through PDFKit's document layout and fitting.
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { isFocusMode = enabled }
+        } else {
+            withAnimation(.easeInOut(duration: 0.16)) { isFocusMode = enabled }
         }
     }
 
+    private func exitComparison() {
+        cancelComparisonOpen()
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isFocusMode = false
+            isComparing = false
+        }
+    }
+
+    private func selectComparisonDocument(_ id: UUID, replacing replacedID: UUID?) {
+        guard isComparing, !comparisonConfiguration.isSelected(id),
+              let candidate = comparisonDocuments.first(where: { $0.id == id }) else { return }
+        if let replacedID {
+            guard comparisonConfiguration.isSelected(replacedID) else { return }
+        } else {
+            guard comparisonConfiguration.selectedDocumentIDs.count < PDFComparisonConfiguration.maximumDocumentCount else { return }
+        }
+        let originWorkspaceID = workspace.activeWorkspaceID
+        guard candidate.prepareForDisplay() else {
+            // Password cancellation is not an error.
+            showingComparisonOpenError = candidate.workspace.presentedError != nil
+            return
+        }
+        // A password dialog can dispatch a nested AppKit event loop. Recheck
+        // ownership before replacing a pane in a potentially different view.
+        guard isComparing, workspace.activeWorkspaceID == originWorkspaceID else { return }
+        var updated = comparisonConfiguration
+        let changed = replacedID.map { updated.replaceDocument($0, with: id) }
+            ?? updated.addDocument(id)
+        guard changed else { return }
+        memoryManager.setProtectedTabIDs(Set(updated.selectedDocumentIDs), deferCleanup: true)
+        comparisonConfiguration = updated
+    }
+
+    private func openComparisonDocument(replacing replacedID: UUID?) {
+        guard isComparing, !isOpeningComparisonDocument else { return }
+        if let replacedID {
+            guard comparisonConfiguration.isSelected(replacedID) else { return }
+        } else {
+            guard comparisonConfiguration.selectedDocumentIDs.count < PDFComparisonConfiguration.maximumDocumentCount else { return }
+        }
+        guard let url = WorkspaceFilePanels.choosePDFs(allowsMultipleSelection: false, purpose: .openInTabs).first else { return }
+        let originWorkspaceID = workspace.activeWorkspaceID
+        let originalTabIDs = Set(workspace.allTabs.map(\.id))
+        let access = SecurityScopedAccess(url: url)
+        isOpeningComparisonDocument = true
+        comparisonOpenTask = Task { @MainActor in
+            defer { withExtendedLifetime(access) {} }
+            let id = await workspace.openPDFForComparison(url: url)
+            guard !Task.isCancelled else { return }
+            isOpeningComparisonDocument = false
+            comparisonOpenTask = nil
+            guard isComparing, workspace.activeWorkspaceID == originWorkspaceID else { return }
+            guard let id else {
+                showingComparisonOpenError = true
+                return
+            }
+            // Selecting a file already shown should be a harmless no-op.
+            selectComparisonDocument(id, replacing: replacedID)
+            // A newly opened encrypted/corrupt candidate that never became
+            // visible must not leave an unusable tab after a cancelled prompt.
+            if !originalTabIDs.contains(id), !comparisonConfiguration.isSelected(id),
+               let tab = workspace.allTabs.first(where: { $0.id == id }),
+               tab.workspace.document == nil, !tab.workspace.isDirty {
+                _ = workspace.closeTab(id)
+            }
+        }
+    }
+
+    private func cancelComparisonOpen() {
+        comparisonOpenTask?.cancel()
+        comparisonOpenTask = nil
+        isOpeningComparisonDocument = false
+    }
+
     private func restoreComparisonPresentationState(for workspaceID: UUID) {
+        isFocusMode = false
         comparisonWorkspaceID = workspaceID
         let restored = sessionCoordinator?.comparisonPresentationState(
             windowID: windowID,
@@ -445,9 +647,11 @@ struct TabbedWorkspaceView: View {
         normalizeComparisonForAvailableDocuments(
             comparisonDocuments.map(\.id)
         )
-        memoryManager.setProtectedTabIDs(
-            isComparing ? Set(comparisonConfiguration.selectedDocumentIDs) : []
-        )
+        if isComparing {
+            memoryManager.setProtectedTabIDs(Set(comparisonConfiguration.selectedDocumentIDs))
+        } else {
+            memoryManager.releaseComparisonProtectionAfterTransition()
+        }
     }
 
     private func persistComparisonPresentationState() {
@@ -465,13 +669,15 @@ struct TabbedWorkspaceView: View {
         comparisonConfiguration.normalize(
             availableDocumentIDs: Set(availableIDs)
         )
-        if isComparing && !comparisonConfiguration.canBeginComparison {
-            isComparing = false
+        if isComparing && !comparisonConfiguration.canContinueComparison {
+            exitComparison()
         }
     }
 
     private func prepareComparison() {
+        guard !isGalleryPresented else { return }
         let available = comparisonDocuments.map(\.id)
+        guard available.count >= PDFComparisonConfiguration.minimumDocumentCount else { return }
         comparisonConfiguration.normalize(availableDocumentIDs: Set(available))
         if comparisonConfiguration.selectedDocumentIDs.count < PDFComparisonConfiguration.minimumDocumentCount {
             comparisonConfiguration.selectedDocumentIDs = Array(
@@ -479,6 +685,48 @@ struct TabbedWorkspaceView: View {
             )
         }
         showingComparisonSetup = true
+    }
+
+    private var canOpenGallery: Bool {
+        !isComparing && !showingComparisonSetup
+            && workspace.allTabs.contains { $0.workspace.hasOpenDocument }
+    }
+
+    private func toggleGallery() {
+        if isGalleryPresented {
+            closeGallery()
+            return
+        }
+        guard canOpenGallery,
+              NSApp.keyWindow?.attachedSheet == nil,
+              NSApp.keyWindow?.sheetParent == nil else { return }
+        workspace.activeWorkspace?.prepareForDeactivation()
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        clearTabDragState()
+        isWorkspaceFileDropTargeted = false
+        isGalleryPresented = true
+    }
+
+    private func closeGallery() {
+        guard isGalleryPresented else { return }
+        isGalleryPresented = false
+        PDFDocumentGalleryPreviewService.shared.removeAllCachedPreviews()
+    }
+
+    private func selectGalleryDocument(
+        _ workspaceID: UUID,
+        _ tabID: UUID,
+        _ searchResult: PDFSearchResult?
+    ) {
+        guard workspace.sessions(inWorkspace: workspaceID).contains(where: {
+            $0.id == tabID && $0.workspace.hasOpenDocument
+        }) else { return }
+        closeGallery()
+        workspace.selectGalleryDocument(
+            workspaceID: workspaceID,
+            tabID: tabID,
+            searchResult: searchResult
+        )
     }
 }
 

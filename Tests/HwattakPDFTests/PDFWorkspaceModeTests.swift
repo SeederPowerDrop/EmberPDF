@@ -71,6 +71,8 @@ final class PDFWorkspaceModeTests: XCTestCase {
                 .appendingPathComponent("Sources/HwattakPDF/Views/WorkspaceView.swift"),
             encoding: .utf8
         )
+        let writingTools = try String(contentsOf: projectRoot
+            .appendingPathComponent("Sources/HwattakPDF/Views/WritingToolStrip.swift"), encoding: .utf8)
 
         XCTAssertTrue(toolbar.contains("ScrollView(.horizontal, showsIndicators: true)"))
         XCTAssertTrue(studyPalette.contains("ScrollView(.horizontal, showsIndicators: true)"))
@@ -78,9 +80,8 @@ final class PDFWorkspaceModeTests: XCTestCase {
         XCTAssertTrue(toolbar.contains("contextualToolbarRow"))
         XCTAssertTrue(toolbar.contains("if modeToolsVisible, workspace.mode != .study"))
         XCTAssertTrue(
-            workspaceView.contains(
-                "if !isFocusMode, modeToolsVisible, workspace.allows(.studyTools)"
-            ),
+            workspaceView.contains("if !isFocusMode, !workspace.isPageGalleryVisible,")
+                && workspaceView.contains("modeToolsVisible, workspace.allows(.studyTools)"),
             "Viewer, Editing and Study must share the same collapsible second-row policy."
         )
         XCTAssertTrue(toolbar.contains(".frame(minWidth: geometry.size.width, alignment: .center)"))
@@ -88,10 +89,11 @@ final class PDFWorkspaceModeTests: XCTestCase {
         XCTAssertFalse(toolbar.contains("systemImage: workspace.mode.systemImage"))
         XCTAssertFalse(studyPalette.contains("systemImage: \"graduationcap.fill\""))
         XCTAssertTrue(toolbar.contains("mode-tools-toggle"))
-        XCTAssertTrue(toolbar.contains("showingPenSettings = false"))
+        XCTAssertTrue(writingTools.contains("showingPenSettings = false"))
         XCTAssertTrue(toolbar.contains("showingHighlightSettings = false"))
         XCTAssertTrue(
-            studyPalette.contains("ForEach(workspace.mode.availableTools)"),
+            studyPalette.contains("WritingToolStrip(workspace: workspace)")
+                && writingTools.contains("ForEach(workspace.mode.availableTools)"),
             "Study's only tool picker must retain Select and Eraser as well as note and pen."
         )
         XCTAssertFalse(
@@ -735,12 +737,37 @@ final class PDFWorkspaceModeTests: XCTestCase {
         XCTAssertFalse(workspace.canUndo)
     }
 
-    func testNativePenSettingsExposeOnlyTheOpaqueColorThatPDFKitCanSave() {
+    func testPenOpacityDefaultsToOpaqueAndIgnoresColorPickerAlpha() {
         var settings = InkSettings()
         settings.color = NSColor.systemBlue.withAlphaComponent(0.2)
 
         let converted = settings.pdfInkColor.usingColorSpace(.deviceRGB)
         XCTAssertEqual(converted?.alphaComponent ?? -1, 1, accuracy: 0.001)
+    }
+
+    func testPenOpacityControlsInkAlphaWithAndWithoutPressure() {
+        var settings = InkSettings()
+        settings.color = NSColor.systemBlue.withAlphaComponent(0.8)
+        settings.opacity = 0.35
+
+        for pressureEnabled in [true, false] {
+            settings.pressureEnabled = pressureEnabled
+            let converted = settings.pdfInkColor.usingColorSpace(.deviceRGB)
+            XCTAssertEqual(converted?.alphaComponent ?? -1, 0.35, accuracy: 0.001)
+        }
+    }
+
+    func testPenOpacityClampsInvalidValuesAndBothSliderLimits() {
+        var settings = InkSettings()
+        let cases: [(CGFloat, CGFloat)] = [
+            (-1, 0.05), (0, 0.05), (0.05, 0.05), (1, 1), (2, 1),
+            (.nan, 1), (.infinity, 1), (-.infinity, 1)
+        ]
+        for (input, expected) in cases {
+            settings.opacity = input
+            XCTAssertEqual(settings.opacity, expected, accuracy: 0.001)
+            XCTAssertEqual(settings.pdfInkColor.alphaComponent, expected, accuracy: 0.001)
+        }
     }
 
     func testFinalSignatureStudyMarkupAndPenBoundariesRecheckLiveMode() throws {
@@ -989,6 +1016,43 @@ final class PDFWorkspaceModeTests: XCTestCase {
         XCTAssertNotNil(existingWorkspace.presentedError)
     }
 
+    func testMixedDropReturnsToOriginalDocumentForImageQualityApproval() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "EmberPDF-Mixed-Drop-Approval-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let originalURL = directory.appendingPathComponent("original.pdf")
+        let droppedURL = directory.appendingPathComponent("dropped.pdf")
+        let imageURL = directory.appendingPathComponent("photo.png")
+        try writeDropTestPDF(pageCount: 2, to: originalURL)
+        try writeDropTestPDF(pageCount: 1, to: droppedURL)
+        // Requesting approval must not decode or modify the image yet.
+        try Data("image content is prepared by the approval sheet".utf8).write(to: imageURL)
+        let collection = MultiDocumentWorkspaceState()
+        let originalTabID = try XCTUnwrap(collection.openPDFsInTabs(urls: [originalURL]).first)
+        let original = try XCTUnwrap(collection.activeWorkspace)
+        original.setMode(.editing)
+        let task = try XCTUnwrap(WorkspaceFileDropCoordinator.handle(
+            [WorkspaceDroppedFile(url: droppedURL), WorkspaceDroppedFile(url: imageURL)],
+            workspace: original, multiDocumentWorkspace: collection))
+
+        let openedIDs = await task.value
+
+        XCTAssertEqual(openedIDs.count, 1)
+        XCTAssertNotEqual(openedIDs.first, originalTabID)
+        XCTAssertEqual(collection.tabs.count, 2)
+        XCTAssertEqual(collection.activeTabID, originalTabID,
+            "The image destination must be visible so its approval sheet can be shown.")
+        XCTAssertEqual(original.pendingImageInsertion?.urls, [imageURL])
+        XCTAssertEqual(original.pendingImageInsertion?.pageIndex, 0)
+        XCTAssertEqual(original.document?.page(at: 0)?.annotations.count, 0)
+        XCTAssertFalse(original.isDirty)
+        XCTAssertFalse(original.canUndo)
+        XCTAssertNil(collection.tabs.first(where: { $0.id == openedIDs.first })?.workspace.pendingImageInsertion)
+        original.cancelImageInsertion()
+        XCTAssertFalse(original.isDirty)
+    }
+
     func testMutationSurfacesConsultCapabilitiesInsteadOfBypassingMode() throws {
         let sidebar = try source("Sources/HwattakPDF/Views/PageSidebarView.swift")
         let grid = try source("Sources/HwattakPDF/Views/PDFGridOverview.swift")
@@ -1042,7 +1106,10 @@ final class PDFWorkspaceModeTests: XCTestCase {
         XCTAssertTrue(
             tabbedWorkspace.contains("WorkspaceTabTearOutDropTargetModifier(")
         )
-        XCTAssertTrue(tabbedWorkspace.contains("isEnabled: draggedTabID != nil"))
+        XCTAssertTrue(
+            tabbedWorkspace.contains("isEnabled: !isGalleryPresented && draggedTabID != nil"),
+            "Only a local tab drag in the visible reader may enable the tear-out receiver."
+        )
         XCTAssertTrue(pageSidebar.contains("PageReorderDropTargetModifier("))
         XCTAssertTrue(pageSidebar.contains("PageEndDropTargetModifier("))
         XCTAssertTrue(grid.contains("GridPageReorderDropTargetModifier("))

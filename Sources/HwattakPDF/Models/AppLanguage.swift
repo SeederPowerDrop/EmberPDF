@@ -6,14 +6,14 @@ import SwiftUI
 enum AppLanguage: String, CaseIterable, Identifiable, Codable {
     case korean = "ko"
     case english = "en"
-    case french = "fr"
-    case german = "de"
-    case spanish = "es"
     case japanese = "ja"
     case simplifiedChinese = "zh-Hans"
-    case arabic = "ar"
-    case portuguese = "pt"
     case vietnamese = "vi"
+    case spanish = "es"
+    case french = "fr"
+    case german = "de"
+    case russian = "ru"
+    case arabic = "ar"
 
     var id: String { rawValue }
 
@@ -27,7 +27,7 @@ enum AppLanguage: String, CaseIterable, Identifiable, Codable {
         case .japanese: "日本語"
         case .simplifiedChinese: "简体中文"
         case .arabic: "العربية"
-        case .portuguese: "Português"
+        case .russian: "Русский"
         case .vietnamese: "Tiếng Việt"
         }
     }
@@ -42,7 +42,7 @@ enum AppLanguage: String, CaseIterable, Identifiable, Codable {
         case .japanese: "ja-JP"
         case .simplifiedChinese: "zh-Hans-CN"
         case .arabic: "ar"
-        case .portuguese: "pt-PT"
+        case .russian: "ru-RU"
         case .vietnamese: "vi-VN"
         }
     }
@@ -51,6 +51,13 @@ enum AppLanguage: String, CaseIterable, Identifiable, Codable {
 
     var layoutDirection: LayoutDirection {
         self == .arabic ? .rightToLeft : .leftToRight
+    }
+
+    /// Portuguese was available before build 30. Keep those users in a
+    /// readable fallback rather than silently switching their UI to Korean.
+    static func savedPreference(_ rawValue: String?) -> Self {
+        if rawValue == "pt" { return .english }
+        return rawValue.flatMap(Self.init(rawValue:)) ?? .korean
     }
 }
 
@@ -79,30 +86,44 @@ final class AppPreferences: ObservableObject {
         }
     }
 
+    @Published var readingTheme: PDFReadingTheme {
+        didSet {
+            guard readingTheme != oldValue else { return }
+            defaults.set(readingTheme.rawValue, forKey: PDFReadingTheme.defaultsKey)
+            applyAppearance()
+        }
+    }
+
+    /// Night reading changes native controls too, while remembering the base
+    /// appearance to restore when the reader returns to another paper color.
+    var effectiveAppearance: AppAppearance {
+        readingTheme == .night ? .dark : appearance
+    }
+
     init(
         defaults: UserDefaults = .standard,
         appearanceDidChange: @escaping @MainActor (AppAppearance) -> Void = { $0.apply() }
     ) {
         self.defaults = defaults
         self.appearanceDidChange = appearanceDidChange
-        language = defaults.string(forKey: Self.languageDefaultsKey)
-            .flatMap(AppLanguage.init(rawValue:)) ?? .korean
+        let storedLanguage = defaults.string(forKey: Self.languageDefaultsKey)
+        let restoredLanguage = AppLanguage.savedPreference(storedLanguage)
+        language = restoredLanguage
+        if storedLanguage == "pt" {
+            defaults.set(restoredLanguage.rawValue, forKey: Self.languageDefaultsKey)
+        }
         appearance = defaults.string(forKey: Self.appearanceDefaultsKey)
             .flatMap(AppAppearance.init(rawValue:)) ?? .system
+        readingTheme = defaults.string(forKey: PDFReadingTheme.defaultsKey)
+            .flatMap(PDFReadingTheme.init(rawValue:)) ?? .original
     }
 
     func applyAppearance() {
-        appearanceDidChange(appearance)
+        appearanceDidChange(effectiveAppearance)
     }
 
     nonisolated static var savedLanguage: AppLanguage {
-        guard
-            let rawValue = UserDefaults.standard.string(forKey: languageDefaultsKey),
-            let language = AppLanguage(rawValue: rawValue)
-        else {
-            return .korean
-        }
-        return language
+        AppLanguage.savedPreference(UserDefaults.standard.string(forKey: languageDefaultsKey))
     }
 }
 

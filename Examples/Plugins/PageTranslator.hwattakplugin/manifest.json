@@ -1,0 +1,23 @@
+{
+  "actions": [
+    {
+      "description": "현재 PDF 페이지를 번역하고, 그림과 문서 배치를 참고한 번역 페이지로 확인합니다.",
+      "id": "translate-current-page",
+      "output": "translatePanel",
+      "template": "{{page.text}}",
+      "title": "현재 페이지를 번역해서 보기"
+    }
+  ],
+  "author": "EmberPDF",
+  "capabilities": [
+    "currentPageText",
+    "clipboardWrite",
+    "translationService"
+  ],
+  "description": "현재 페이지의 글을 번역해 PDF 페이지 위에서 읽습니다. 원본은 그대로 보존합니다.",
+  "displayName": "페이지 번역",
+  "identifier": "dev.hwattakpdf.plugins.page-translator",
+  "minimumHostVersion": "0.9.0",
+  "schemaVersion": 2,
+  "version": "1.0.0"
+}

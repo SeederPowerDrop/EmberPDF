@@ -53,6 +53,13 @@ enum DocumentSidebarMode: String, CaseIterable, Identifiable {
 
 struct DocumentSidebarModePicker: View {
     @Binding var selection: DocumentSidebarMode
+    @Environment(\.locale) private var locale
+    var compact = false
+
+    private struct ControlIdentity: Hashable {
+        let localeIdentifier: String
+        let compact: Bool
+    }
 
     var body: some View {
         Picker(
@@ -60,11 +67,23 @@ struct DocumentSidebarModePicker: View {
             selection: $selection
         ) {
             ForEach(DocumentSidebarMode.allCases) { mode in
-                Label(mode.title, systemImage: mode.systemImage)
-                    .tag(mode)
+                Group {
+                    if compact {
+                        Image(systemName: mode.systemImage)
+                    } else {
+                        Label(mode.title, systemImage: mode.systemImage)
+                    }
+                }
+                .tag(mode)
+                .help(mode.title)
+                .accessibilityLabel(mode.title)
             }
         }
         .pickerStyle(.segmented)
+        // Native segments retain their labels while ForEach identities stay
+        // stable. Keep locale updates local to the control and distinguish
+        // the full/compact siblings mounted by the sidebar's ViewThatFits.
+        .id(ControlIdentity(localeIdentifier: locale.identifier, compact: compact))
         .labelsHidden()
         .accessibilityLabel(
             L10n.string("search.navigator.mode", defaultValue: "사이드바 내용")
@@ -91,7 +110,8 @@ enum SearchNavigatorEmptyContent: Equatable {
         completedPages: Int,
         totalPages: Int,
         requiresOCR: Bool,
-        unsearchablePageCount: Int
+        unsearchablePageCount: Int,
+        hasCompletedQuery: Bool = true
     ) -> SearchNavigatorEmptyContent {
         if isSearching { return .searching }
         if queryIsEmpty { return .queryPrompt }
@@ -101,6 +121,7 @@ enum SearchNavigatorEmptyContent: Equatable {
                 totalPages: totalPages
             )
         }
+        guard hasCompletedQuery else { return .queryPrompt }
         if requiresOCR { return .fullOCR }
         if unsearchablePageCount > 0 {
             return .partialOCR(unsearchablePageCount: unsearchablePageCount)
@@ -119,9 +140,10 @@ struct SearchNavigatorSidebarView: View {
     let onRequestOCR: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @State private var groups: [SearchNavigatorPageGroup] = []
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
+    @EmberTheme private var theme
     private var query: String {
         workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -130,20 +152,7 @@ struct SearchNavigatorSidebarView: View {
     private static func groupedResults(
         _ results: [PDFSearchResult]
     ) -> [SearchNavigatorPageGroup] {
-        var grouped: [Int: [SearchNavigatorIndexedResult]] = [:]
-        for (ordinal, result) in results.enumerated() {
-            grouped[result.pageIndex, default: []].append(
-                SearchNavigatorIndexedResult(result: result, ordinal: ordinal)
-            )
-        }
-        return grouped.keys.sorted().compactMap { pageIndex in
-            guard let results = grouped[pageIndex], let first = results.first else { return nil }
-            return SearchNavigatorPageGroup(
-                pageIndex: pageIndex,
-                pageLabel: first.result.pageLabel,
-                results: results
-            )
-        }
+        SearchNavigatorPageGroup.group(results)
     }
     private var activeResultID: PDFSearchResult.ID? {
         guard workspace.searchNavigatorResults.indices.contains(workspace.searchResultIndex) else {
@@ -251,7 +260,7 @@ struct SearchNavigatorSidebarView: View {
     @ViewBuilder
     private var navigatorStatus: some View {
         VStack(alignment: .leading, spacing: 9) {
-            if workspace.isSearching {
+            if workspace.isSearchBusy {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
@@ -265,36 +274,44 @@ struct SearchNavigatorSidebarView: View {
                     .font(.caption)
                 }
 
-                ProgressView(value: workspace.searchProgress.fraction)
-                    .progressViewStyle(.linear)
-                    .accessibilityLabel(
-                        L10n.string("search.navigator.progress_label", defaultValue: "검색 진행률")
-                    )
-                    .accessibilityValue(progressText)
-
-                Text(progressText)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(theme.secondaryText)
-            } else if !workspace.searchNavigatorResults.isEmpty {
-                HStack(spacing: 8) {
-                    Text(
-                        L10n.format(
-                            "search.navigator.current_position",
-                            workspace.searchResultIndex + 1,
-                            workspace.searchNavigatorResults.count
+                if workspace.isSearching {
+                    ProgressView(value: workspace.searchProgress.fraction)
+                        .progressViewStyle(.linear)
+                        .accessibilityLabel(
+                            L10n.string("search.navigator.progress_label", defaultValue: "검색 진행률")
                         )
-                    )
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .lineLimit(1)
+                        .accessibilityValue(progressText)
+
+                    Text(progressText)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(theme.secondaryText)
+                }
+            }
+
+            // Progress supplements navigation. Published matches remain usable
+            // while the rest of a large document is still being scanned.
+            if !workspace.searchNavigatorResults.isEmpty || workspace.isSearchBusy {
+                HStack(spacing: 8) {
+                    if !workspace.searchNavigatorResults.isEmpty {
+                        Text(
+                            L10n.format(
+                                "search.navigator.current_position",
+                                workspace.searchResultIndex + 1,
+                                workspace.searchNavigatorResults.count
+                            )
+                        )
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .lineLimit(1)
+                    }
 
                     Spacer(minLength: 4)
 
                     navigatorButton(backwards: true)
                     navigatorButton(backwards: false)
                 }
-            } else {
+            } else if !workspace.isSearchBusy {
                 Text(
-                    query.isEmpty
+                    !workspace.searchHasCompletedCurrentQuery
                         ? L10n.string(
                             "search.navigator.enter_query_message",
                             defaultValue: "⌘F로 검색어를 입력하세요."
@@ -407,6 +424,7 @@ struct SearchNavigatorSidebarView: View {
                 .overlay { Circle().stroke(theme.border, lineWidth: 1) }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(backwards ? "search-sidebar-previous" : "search-sidebar-next")
         .help(
             backwards
                 ? L10n.string("이전 검색 결과")
@@ -512,21 +530,43 @@ struct SearchNavigatorSidebarView: View {
     }
 
     private func resultGroupHeader(_ group: SearchNavigatorPageGroup) -> some View {
-        HStack(spacing: 6) {
+        let heading = L10n.format(
+            "search.navigator.page_heading", group.pageLabel, group.results.count
+        )
+        return HStack(spacing: 6) {
             Image(systemName: "doc.text")
                 .foregroundStyle(theme.accent)
-            Text(
-                L10n.format(
-                    "search.navigator.page_heading",
-                    group.pageLabel,
-                    group.results.count
-                )
-            )
-            .font(.caption.weight(.bold))
-            .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(heading)
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                if let detail = filePageDetail(pageIndex: group.pageIndex, pageLabel: group.pageLabel) {
+                    Text(detail)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            // Refresh only these display labels when the app language changes.
+            .id(locale.identifier)
             Spacer(minLength: 2)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(pageAccessibilityLabel(heading, pageIndex: group.pageIndex, pageLabel: group.pageLabel))
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Keep the PDF's printed label while explaining its physical file position.
+    /// Ordinary sequential labels need no duplicate number or extra AX text.
+    private func filePageDetail(pageIndex: Int, pageLabel: String) -> String? {
+        guard pageIndex >= 0, pageIndex < workspace.pageCount,
+              pageLabel != String(pageIndex + 1) else { return nil }
+        return L10n.format("search.navigator.file_page_detail", pageIndex + 1, workspace.pageCount)
+    }
+
+    private func pageAccessibilityLabel(_ label: String, pageIndex: Int, pageLabel: String) -> String {
+        guard let detail = filePageDetail(pageIndex: pageIndex, pageLabel: pageLabel) else { return label }
+        return label + ". " + detail
     }
 
     private func resultRow(_ indexedResult: SearchNavigatorIndexedResult) -> some View {
@@ -543,7 +583,7 @@ struct SearchNavigatorSidebarView: View {
                         .frame(width: 20, height: 20)
                     Text("\(globalIndex + 1)")
                         .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(isActive ? Color.white : theme.primaryText)
+                        .foregroundStyle(isActive ? theme.accentForeground : theme.primaryText)
                         .minimumScaleFactor(0.65)
                 }
                 .accessibilityHidden(true)
@@ -580,12 +620,15 @@ struct SearchNavigatorSidebarView: View {
         .buttonStyle(.plain)
         .id(result.id)
         .accessibilityLabel(
-            L10n.format(
-                "search.navigator.result_accessibility",
-                result.pageLabel,
-                globalIndex + 1,
-                workspace.searchNavigatorResults.count,
-                result.snippet
+            pageAccessibilityLabel(
+                L10n.format(
+                    "search.navigator.result_accessibility",
+                    result.pageLabel,
+                    globalIndex + 1,
+                    workspace.searchNavigatorResults.count,
+                    result.snippet
+                ),
+                pageIndex: result.pageIndex, pageLabel: result.pageLabel
             )
         )
         .accessibilityHint(
@@ -649,7 +692,7 @@ struct SearchNavigatorSidebarView: View {
                 Text(
                     L10n.string(
                         "search.navigator.enter_query_message",
-                        defaultValue: "⌘F로 검색 필드를 열고 Enter를 누르세요."
+                        defaultValue: "⌘F로 검색 필드를 열고 검색어를 입력하세요."
                     )
                 )
                 .font(.caption)
@@ -744,13 +787,14 @@ struct SearchNavigatorSidebarView: View {
 
     private var emptyContent: SearchNavigatorEmptyContent {
         SearchNavigatorEmptyContent.resolve(
-            isSearching: workspace.isSearching,
+            isSearching: workspace.isSearchBusy,
             queryIsEmpty: query.isEmpty,
             wasCancelled: workspace.searchProgress.phase == .cancelled,
             completedPages: workspace.searchProgress.completedPages,
             totalPages: workspace.searchProgress.totalPages,
             requiresOCR: workspace.searchRequiresOCR,
-            unsearchablePageCount: workspace.searchUnsearchablePageCount
+            unsearchablePageCount: workspace.searchUnsearchablePageCount,
+            hasCompletedQuery: workspace.searchHasCompletedCurrentQuery
         )
     }
 
@@ -830,15 +874,33 @@ struct SearchNavigatorSidebarView: View {
     }
 }
 
-private struct SearchNavigatorPageGroup: Identifiable {
+struct SearchNavigatorPageGroup: Identifiable {
     let pageIndex: Int
     let pageLabel: String
     let results: [SearchNavigatorIndexedResult]
 
     var id: Int { pageIndex }
+
+    /// Preserve the search traversal order: the starting page through the end,
+    /// then the earlier pages. Numeric sorting would move new groups ahead of
+    /// the active result when the scan wraps to the start of the document.
+    static func group(_ results: [PDFSearchResult]) -> [Self] {
+        var pageOrder: [Int] = []
+        var grouped: [Int: [SearchNavigatorIndexedResult]] = [:]
+        for (ordinal, result) in results.enumerated() {
+            if grouped[result.pageIndex] == nil { pageOrder.append(result.pageIndex) }
+            grouped[result.pageIndex, default: []].append(
+                SearchNavigatorIndexedResult(result: result, ordinal: ordinal)
+            )
+        }
+        return pageOrder.compactMap { pageIndex in
+            guard let results = grouped[pageIndex], let first = results.first else { return nil }
+            return Self(pageIndex: pageIndex, pageLabel: first.result.pageLabel, results: results)
+        }
+    }
 }
 
-private struct SearchNavigatorIndexedResult: Identifiable {
+struct SearchNavigatorIndexedResult: Identifiable {
     let result: PDFSearchResult
     let ordinal: Int
 

@@ -15,9 +15,9 @@ worker_path="$script_directory/translation_argos_worker.py"
 runtime_directory="$HOME/Library/Application Support/HwattakPDF/LocalTranslation"
 runtime_python="$runtime_directory/venv/bin/python3"
 
-[[ -f "$worker_path" ]] || fail 'The translation helper is missing. Reinstall HwattakPDF or keep both helper files together.'
+[[ -f "$worker_path" ]] || fail 'The translation helper is missing. Reinstall EmberPDF or keep both helper files together.'
 
-printf '%s\n' 'HwattakPDF local translation' 'This window prepares a private Python environment on first use, then runs the helper on this Mac.' 'The first setup needs internet access. PDF text stays on this Mac during local translation.'
+printf '%s\n' 'EmberPDF local translation' 'This window prepares a private Python environment on first use, then runs the helper on this Mac.' 'The first setup needs internet access. PDF text stays on this Mac during local translation.'
 
 if [[ ! -x "$runtime_python" ]]; then
     python_candidate=''
@@ -43,5 +43,5 @@ if ! "$runtime_python" -c 'import argostranslate.package' >/dev/null 2>&1; then
     "$runtime_python" -m pip install --disable-pip-version-check --timeout 30 --retries 2 'argostranslate<2' || fail 'Argos Translate installation failed. Check your internet connection and retry. Python 3.12 is recommended if this Python version is unsupported.'
 fi
 
-printf '\n%s\n' 'Keep this window open while translating. Close it or press Control-C to stop.' 'In HwattakPDF, choose local language packs, check the connection, and explicitly download the language pairs you need.'
-"$runtime_python" "$worker_path" --serve || fail 'The helper stopped. If port 17862 is already in use, another helper may already be running; close this window and check the connection in HwattakPDF.'
+printf '\n%s\n' 'Keep this window open while translating. Close it or press Control-C to stop.' 'In EmberPDF, choose local language packs, check the connection, and explicitly download the language pairs you need.'
+"$runtime_python" "$worker_path" --serve || fail 'The helper stopped. If port 17862 is already in use, another helper may already be running; close this window and check the connection in EmberPDF.'

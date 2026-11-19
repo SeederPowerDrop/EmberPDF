@@ -12,12 +12,14 @@ struct WelcomeView: View {
     let clearRecentDocuments: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var iconManager: AppIconManager
     @State private var hoveredRecentDocumentID: UUID?
+    @State private var brandPressCount = 0
+    @State private var lastBrandPress: Date?
+    @State private var showsOrigin = false
 
-    private var theme: HwattakPDFTheme {
-        HwattakPDFTheme(colorScheme: colorScheme)
-    }
+    @EmberTheme private var theme
 
     init(
         openDocument: @escaping () -> Void,
@@ -36,43 +38,98 @@ struct WelcomeView: View {
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
-                VStack(spacing: 40) {
-                    openDocumentSection
-                    recentDocumentsSection
+                Group {
+                    if geometry.size.width >= 900 {
+                        HStack(alignment: .center, spacing: 56) {
+                            openDocumentSection
+                                .frame(width: 360)
+                            recentDocumentsSection
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        VStack(spacing: 44) {
+                            openDocumentSection
+                                .frame(maxWidth: 400)
+                            recentDocumentsSection
+                        }
+                        .frame(maxWidth: 640)
+                    }
                 }
-                .frame(maxWidth: 640)
                 .padding(.horizontal, 28)
-                .padding(.vertical, 40)
+                .padding(.vertical, 44)
+                .frame(maxWidth: 1120)
                 .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
         }
         .background(theme.canvas.ignoresSafeArea())
         .foregroundStyle(theme.primaryText)
         .tint(theme.accent)
+        .accessibilityIdentifier("ember-home")
+        .alert(L10n.string("brand.origin.title"), isPresented: $showsOrigin) {
+            Button(L10n.string("brand.origin.close"), role: .cancel) { }
+        } message: {
+            Text(L10n.string("brand.origin.message"))
+        }
+        .onDisappear {
+            brandPressCount = 0
+            lastBrandPress = nil
+            showsOrigin = false
+        }
     }
 
     private var openDocumentSection: some View {
-        VStack(spacing: 20) {
-            HStack(spacing: 10) {
-                Image(nsImage: iconManager.currentImage ?? NSApplication.shared.applicationIconImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 38, height: 38)
-                    .accessibilityHidden(true)
+        VStack(spacing: 26) {
+            VStack(spacing: 18) {
+                Button(action: pressBrand) {
+                    VStack(spacing: 20) {
+                        Image(nsImage: iconManager.currentImage ?? NSApplication.shared.applicationIconImage)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                            .frame(width: 200, height: 200)
+                            .accessibilityHidden(true)
 
-                Text("HwattakPDF")
-                    .font(.system(size: 24, weight: .medium))
+                        (
+                            Text("Ember")
+                                .font(.system(size: 34, weight: .semibold))
+                                .foregroundColor(theme.primaryText)
+                            + Text("PDF")
+                                .font(.system(size: 34, weight: .light))
+                                .foregroundColor(theme.accent)
+                        )
+                        .environment(\.layoutDirection, .leftToRight)
+                    }
+                    .padding(6)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("EmberPDF")
+                .accessibilityHint(L10n.string("brand.origin.hint"))
+                .accessibilityAction(named: Text(L10n.string("brand.origin.accessibility"))) {
+                    showsOrigin = true
+                }
+
+                VStack(spacing: 8) {
+                    Text(L10n.string("brand.tagline"))
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(theme.primaryText)
+                    Text(L10n.string("brand.detail"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.secondaryText)
+                }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(spacing: 10) {
                 Button(action: openDocument) {
                     Label(L10n.string("menu.open_document"), systemImage: "folder")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(theme.accentForeground)
                         .padding(.horizontal, 18)
                         .frame(height: 36)
                         .background(
-                            Color(red: 0.20, green: 0.39, blue: 0.62),
+                            theme.accent,
                             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                         )
                 }
@@ -86,8 +143,50 @@ struct WelcomeView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 20) { homeUtilityButtons }
+                VStack(spacing: 12) { homeUtilityButtons }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(theme.secondaryText)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var homeUtilityButtons: some View {
+        Button {
+            openWindow(id: PluginManagerContent.sceneID)
+        } label: {
+            Label(L10n.string("plugins.manage"), systemImage: "puzzlepiece.extension")
+                .fixedSize()
+        }
+        .accessibilityIdentifier("home-manage-plugins")
+
+        Button {
+            openWindow(id: AboutContent.sceneID)
+        } label: {
+            Label(L10n.string("about.title", defaultValue: "EmberPDF 정보"), systemImage: "info.circle")
+                .fixedSize()
+        }
+        .accessibilityIdentifier("home-about")
+    }
+
+    /// Keep the origin story out of everyday document work. A native button
+    /// lets keyboard users discover it too; VoiceOver also gets a named action.
+    private func pressBrand() {
+        let now = Date()
+        if let lastBrandPress, now.timeIntervalSince(lastBrandPress) > 2 {
+            brandPressCount = 0
+        }
+        lastBrandPress = now
+        brandPressCount += 1
+        if brandPressCount == 5 {
+            brandPressCount = 0
+            showsOrigin = true
+        }
     }
 
     private var recentDocumentsSection: some View {
@@ -152,34 +251,34 @@ struct WelcomeView: View {
                 HStack(spacing: 13) {
                     Image(systemName: "doc")
                         .font(.system(size: 22, weight: .light))
-                        .foregroundStyle(theme.secondaryText)
+                        .foregroundStyle(hoveredRecentDocumentID == document.id ? theme.accent : theme.secondaryText)
                         .frame(width: 30)
                         .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(document.displayName)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
                             .truncationMode(.middle)
 
-                        Text(document.locationDescription)
-                            .font(.system(size: 11))
-                            .foregroundStyle(theme.secondaryText)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
+                        HStack(spacing: 12) {
+                            Text(document.locationDescription)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Spacer(minLength: 4)
-
-                    Text(document.lastOpenedAt, style: .date)
+                            Text(document.lastOpenedAt, format: .dateTime.year().month(.abbreviated).day())
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
                         .font(.system(size: 11))
                         .foregroundStyle(theme.secondaryText)
-                        .lineLimit(1)
-                        .layoutPriority(-1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.leading, 10)
-                .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -206,7 +305,7 @@ struct WelcomeView: View {
         .padding(.trailing, 6)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(hoveredRecentDocumentID == document.id ? theme.panel : Color.clear)
+                .fill(hoveredRecentDocumentID == document.id ? theme.selectionFill : Color.clear)
         }
         .onHover { isHovered in
             if isHovered {

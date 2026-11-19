@@ -6,16 +6,18 @@ import Foundation
 /// `Codable` raw value를 UserDefaults에 저장하므로 case 이름 변경은 기존 사용자의
 /// 설정 migration이 필요한 호환성 변경이라는 점에 유의한다.
 enum AppIconPreference: String, CaseIterable, Identifiable, Codable {
+    case ember
     case stackAndSelect
     case precisionMarkup
     case foldWorkspace
 
-    static let defaultValue: AppIconPreference = .foldWorkspace
+    static let defaultValue: AppIconPreference = .ember
 
     var id: String { rawValue }
 
     var resourceName: String {
         switch self {
+        case .ember: "AppIcon-Ember"
         case .stackAndSelect: "AppIcon-StackAndSelect"
         case .precisionMarkup: "AppIcon-PrecisionMarkup"
         case .foldWorkspace: "AppIcon-FoldWorkspace"
@@ -24,6 +26,7 @@ enum AppIconPreference: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
+        case .ember: L10n.string("settings.icon.ember.title")
         case .stackAndSelect: L10n.string("settings.icon.stack.title")
         case .precisionMarkup: L10n.string("settings.icon.markup.title")
         case .foldWorkspace: L10n.string("settings.icon.fold.title")
@@ -32,6 +35,7 @@ enum AppIconPreference: String, CaseIterable, Identifiable, Codable {
 
     var subtitle: String {
         switch self {
+        case .ember: L10n.string("settings.icon.ember.subtitle")
         case .stackAndSelect: L10n.string("settings.icon.stack.subtitle")
         case .precisionMarkup: L10n.string("settings.icon.markup.subtitle")
         case .foldWorkspace: L10n.string("settings.icon.fold.subtitle")
@@ -40,6 +44,7 @@ enum AppIconPreference: String, CaseIterable, Identifiable, Codable {
 
     var fallbackSystemImage: String {
         switch self {
+        case .ember: "flame"
         case .stackAndSelect: "rectangle.stack"
         case .precisionMarkup: "pencil.and.outline"
         case .foldWorkspace: "book.pages"

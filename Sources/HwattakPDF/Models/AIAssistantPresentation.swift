@@ -2,6 +2,11 @@
 
 import Foundation
 
+enum AIAssistantPreferences {
+    static let showsTransmissionNoticeKey = "ai.showsTransmissionNotice"
+    static let requiresTransmissionConfirmationKey = "ai.requiresTransmissionConfirmation"
+}
+
 /// User-facing AI tasks. Keeping these separate from provider request models
 /// prevents a quick-action button from silently changing network policy.
 enum AIQuickAction: String, CaseIterable, Identifiable, Sendable {

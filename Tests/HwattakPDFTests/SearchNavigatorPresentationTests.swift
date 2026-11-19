@@ -12,6 +12,37 @@ final class SearchNavigatorPresentationTests: XCTestCase {
         XCTAssertFalse(SearchKeyboardNavigation.isBackwards(modifiers: [.command]))
     }
 
+    func testResultGroupsKeepCurrentPageFirstOrderAndNavigationOrdinalsAfterWrapping() {
+        let results = [4, 4, 5, 0, 0, 3].enumerated().map { ordinal, pageIndex in
+            makeResult(pageIndex: pageIndex, sourceLocation: ordinal * 10)
+        }
+
+        let groups = SearchNavigatorPageGroup.group(results)
+
+        XCTAssertEqual(groups.map(\.pageIndex), [4, 5, 0, 3])
+        XCTAssertEqual(groups.map(\.pageLabel), ["5", "6", "1", "4"])
+        XCTAssertEqual(groups.flatMap(\.results).map(\.id), results.map(\.id))
+        XCTAssertEqual(groups.map { $0.results.map(\.ordinal) }, [[0, 1], [2], [3, 4], [5]])
+    }
+
+    func testPublishingEarlierPageMatchesKeepsExistingGroupsAndRowIdentifiersStable() {
+        let published = [4, 4, 5].enumerated().map { ordinal, pageIndex in
+            makeResult(pageIndex: pageIndex, sourceLocation: ordinal * 10)
+        }
+        let initialGroups = SearchNavigatorPageGroup.group(published)
+        let expandedGroups = SearchNavigatorPageGroup.group(
+            published + [makeResult(pageIndex: 0, sourceLocation: 10)]
+        )
+
+        XCTAssertEqual(Array(expandedGroups.prefix(2)).map(\.id), initialGroups.map(\.id))
+        XCTAssertEqual(
+            Array(expandedGroups.prefix(2)).flatMap(\.results).map(\.id),
+            initialGroups.flatMap(\.results).map(\.id)
+        )
+        XCTAssertEqual(expandedGroups.last?.results.first?.ordinal, published.count)
+        XCTAssertTrue(SearchNavigatorPageGroup.group([]).isEmpty)
+    }
+
     func testSearchModeKeepsAReadableMinimumPanelSize() {
         XCTAssertEqual(
             DocumentSidebarMode.search.minimumPanelDimension(for: .left),
@@ -33,19 +64,21 @@ final class SearchNavigatorPresentationTests: XCTestCase {
     }
 
     func testSearchResizePathsUseModeMinimumsInsteadOfThumbnailLayoutMinimums() {
-        let thumbnailScale = PageSidebarPreferences.maximumThumbnailScale
+        // Compact page panels can shrink below the readable search size.
+        // Every resize path must still honor the search-specific minimum.
+        let thumbnailScale = 1.35
         let layoutMode = PageSidebarLayoutMode.fourPages
         let verticalMinimum = DocumentSidebarMode.search.minimumPanelDimension(for: .left)!
         let horizontalMinimum = DocumentSidebarMode.search.minimumPanelDimension(for: .top)!
 
-        XCTAssertGreaterThan(
+        XCTAssertLessThan(
             PageSidebarResizeMetrics.minimumPanelDimension(
                 for: .left,
                 layoutMode: layoutMode,
                 thumbnailScale: thumbnailScale
             ),
             verticalMinimum,
-            "This setup must exercise the former thumbnail-derived minimum regression."
+            "Compact thumbnails must not lower the minimum for readable search results."
         )
         XCTAssertLessThan(
             PageSidebarResizeMetrics.minimumPanelDimension(
@@ -122,6 +155,16 @@ final class SearchNavigatorPresentationTests: XCTestCase {
             minimumDimensionOverride: 250
         )
 
+        let horizontalSearchResolved = PageSidebarResizeMetrics.resolvedDimension(
+            preferredDimension: 100,
+            placement: .top,
+            availableLength: 900,
+            layoutMode: layoutMode,
+            thumbnailScale: thumbnailScale,
+            minimumDimensionOverride: 210
+        )
+
+        XCTAssertEqual(horizontalSearchResolved, 210)
         XCTAssertEqual(pageModeResolved, pageMinimum)
         XCTAssertEqual(
             constrainedSearchResolved,
@@ -203,7 +246,7 @@ final class SearchNavigatorPresentationTests: XCTestCase {
 
         XCTAssertTrue(appSource.contains("keyboardShortcut(\"f\", modifiers: .command)"))
         XCTAssertTrue(appSource.contains("documentSearchAvailable != true"))
-        XCTAssertTrue(tabSource.contains("!isComparing && workspace.activeWorkspace?.document != nil"))
+        XCTAssertTrue(tabSource.contains("!isComparing && !isGalleryPresented && workspace.activeWorkspace?.document != nil"))
         XCTAssertTrue(toolbarSource.contains("for: .focusDocumentSearch"))
         XCTAssertTrue(toolbarSource.contains("target === workspace"))
     }
@@ -286,6 +329,17 @@ final class SearchNavigatorPresentationTests: XCTestCase {
         )
         XCTAssertTrue(horizontalResults.contains("ScrollView(.horizontal)"))
         XCTAssertTrue(verticalResults.contains("ScrollView(.vertical)"))
+    }
+
+    private func makeResult(pageIndex: Int, sourceLocation: Int) -> PDFSearchResult {
+        PDFSearchResult(
+            pageIndex: pageIndex,
+            pageLabel: "\(pageIndex + 1)",
+            snippet: "A needle in the document",
+            snippetMatchRanges: [NSRange(location: 2, length: 6)],
+            sourceRange: NSRange(location: sourceLocation, length: 6),
+            matchedText: "needle"
+        )
     }
 
     private func source(_ relativePath: String) throws -> String {

@@ -287,6 +287,29 @@ final class ImageAnnotationEditingTests: XCTestCase {
     }
 
     @MainActor
+    func testHiddenFreeTextCannotBeSelectedOrMovedThroughThePage() throws {
+        let fixture = try makeOverlayDragFixture()
+        defer { fixture.detachOverlays() }
+        fixture.annotation.shouldDisplay = false
+        let bounds = fixture.annotation.bounds
+        let note = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
+        note.contents = "Hidden note"
+        EditableAnnotationIdentity.assign(.freeText, to: note)
+        note.shouldDisplay = false
+        fixture.page.addAnnotation(note)
+        fixture.pdfView.configure(with: fixture.workspace)
+        let start = CGPoint(x: bounds.midX, y: bounds.midY)
+        let end = CGPoint(x: start.x + 30, y: start.y + 12)
+        fixture.overlay.mouseDown(with: try mouseEvent(.leftMouseDown, pagePoint: start, fixture: fixture))
+        fixture.overlay.mouseDragged(with: try mouseEvent(.leftMouseDragged, pagePoint: end, fixture: fixture))
+        fixture.overlay.mouseUp(with: try mouseEvent(.leftMouseUp, pagePoint: end, fixture: fixture))
+        assertBounds(note.bounds, equalTo: bounds)
+        assertBounds(fixture.annotation.bounds, equalTo: bounds)
+        XCTAssertFalse(fixture.workspace.isDirty)
+        XCTAssertFalse(fixture.workspace.canUndo)
+    }
+
+    @MainActor
     func testModeChangeDuringLiveImageResizeRollsBackExactly() throws {
         let fixture = try makeOverlayDragFixture()
         defer { fixture.detachOverlays() }
@@ -646,10 +669,31 @@ final class ImageAnnotationEditingTests: XCTestCase {
     }
 
     @MainActor
-    func testCancellingExistingExternalFreeTextDoesNotAdoptOrDirtyIt() {
+    func testCancellingExistingExternalFreeTextDoesNotAdoptOrDirtyIt() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Ember-cancel-external-note-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let image = NSImage(size: CGSize(width: 300, height: 400), flipped: false) { rect in
+            NSColor.white.setFill(); rect.fill(); return true
+        }
+        let source = PDFDocument()
+        let sourcePage = try XCTUnwrap(PDFPage(image: image))
+        let sourceAnnotation = annotation(type: .freeText, name: nil)
+        sourceAnnotation.contents = "External text"
+        sourcePage.addAnnotation(sourceAnnotation)
+        source.insert(sourcePage, at: 0)
+        XCTAssertTrue(source.write(to: url))
+
+        // Exercise the real live-document path. Detached annotations and a
+        // workspace with no PDF must be rejected before a draft is created.
         let workspace = PDFWorkspaceState()
-        let externalFreeText = annotation(type: .freeText, name: nil)
-        externalFreeText.contents = "External text"
+        defer { workspace.closeDiscardingChanges() }
+        XCTAssertTrue(workspace.open(url: url))
+        workspace.setMode(.editing)
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        let externalFreeText = try XCTUnwrap(page.annotations.first)
+        assertUnadopted(externalFreeText)
+        XCTAssertFalse(workspace.isDirty)
 
         workspace.requestTextEdit(
             pageIndex: 0,
@@ -664,7 +708,10 @@ final class ImageAnnotationEditingTests: XCTestCase {
 
         XCTAssertNil(workspace.pendingTextEdit)
         assertUnadopted(externalFreeText)
+        XCTAssertEqual(externalFreeText.contents, "External text")
+        XCTAssertTrue(page.annotations.first === externalFreeText)
         XCTAssertFalse(workspace.isDirty)
+        XCTAssertFalse(workspace.canUndo)
     }
 
     @MainActor

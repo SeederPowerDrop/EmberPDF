@@ -43,8 +43,14 @@ final class PageSidebarLayoutModeTests: XCTestCase {
     func testThumbnailScaleClampsInvalidAndOutOfRangeValues() {
         XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(.nan), 1)
         XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(.infinity), 1)
-        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(0.1), 0.65)
-        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(2), 1.35)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(0.1), 0.5)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(4), 3.0)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(3), 3.0)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(2.75), 2.75)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(0.5), 0.5)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(0.55), 0.55)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(2), 2.0)
+        XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(1.35), 1.35)
         XCTAssertEqual(PageSidebarPreferences.clampedThumbnailScale(1.15), 1.15)
     }
 
@@ -55,13 +61,13 @@ final class PageSidebarLayoutModeTests: XCTestCase {
             accuracy: 0.0001
         )
         XCTAssertEqual(
-            PageSidebarPreferences.adjustedThumbnailScale(0.67, steps: -1),
-            0.65,
+            PageSidebarPreferences.adjustedThumbnailScale(0.57, steps: -1),
+            0.5,
             accuracy: 0.0001
         )
         XCTAssertEqual(
-            PageSidebarPreferences.adjustedThumbnailScale(1.32, steps: 1),
-            1.35,
+            PageSidebarPreferences.adjustedThumbnailScale(2.97, steps: 1),
+            3.0,
             accuracy: 0.0001
         )
     }
@@ -71,7 +77,7 @@ final class PageSidebarLayoutModeTests: XCTestCase {
             let initialDimension = placement.usesHorizontalPageStrip ? 188.0 : 224.0
             let expandedDimension = placement.usesHorizontalPageStrip ? 400.0 : 440.0
             for mode in PageSidebarLayoutMode.allCases {
-                for scale in [0.65, 1.0, 1.35] {
+                for scale in [0.5, 0.65, 1.0, 1.35, 2.0, 3.0] {
                     let initial = PageSidebarLayoutMetrics.thumbnailWidth(
                         panelDimension: initialDimension,
                         placement: placement,
@@ -97,8 +103,8 @@ final class PageSidebarLayoutModeTests: XCTestCase {
     func testVerticalThumbnailsKeepSlotsAndGroupPaddingInsidePanel() {
         for placement in [PageOverviewPlacement.left, .right] {
             for mode in PageSidebarLayoutMode.allCases {
-                for dimension in [224.0, 320.0, 440.0, 520.0] {
-                    for scale in [0.65, 1.0, 1.35] {
+                for dimension in [124.0, 224.0, 320.0, 440.0, 520.0] {
+                    for scale in [0.5, 0.65, 1.0, 1.35, 2.0, 3.0] {
                         let width = PageSidebarLayoutMetrics.thumbnailWidth(
                             panelDimension: dimension,
                             placement: placement,
@@ -124,8 +130,8 @@ final class PageSidebarLayoutModeTests: XCTestCase {
     func testHorizontalThumbnailsReservePageNumbersForDifferentPageShapes() {
         for placement in [PageOverviewPlacement.top, .bottom] {
             for mode in PageSidebarLayoutMode.allCases {
-                for dimension in [188.0, 276.0, 400.0, 440.0] {
-                    for scale in [0.65, 1.0, 1.35] {
+                for dimension in [112.0, 188.0, 276.0, 400.0, 440.0] {
+                    for scale in [0.5, 0.65, 1.0, 1.35, 2.0, 3.0] {
                         // Landscape, portrait, and unusually tall crop boxes.
                         for aspect in [0.707, 1.414, 4.0, 8.0] {
                             let width = PageSidebarLayoutMetrics.thumbnailWidth(
@@ -156,7 +162,7 @@ final class PageSidebarLayoutModeTests: XCTestCase {
         for placement in PageOverviewPlacement.allCases {
             let dimension = placement.usesHorizontalPageStrip ? 400.0 : 320.0
             for mode in PageSidebarLayoutMode.allCases {
-                let widths = [0.65, 1.0, 1.35].map { scale in
+                let widths = [0.5, 1.0, 1.35, 3.0].map { scale in
                     PageSidebarLayoutMetrics.thumbnailWidth(
                         panelDimension: dimension,
                         placement: placement,
@@ -167,6 +173,8 @@ final class PageSidebarLayoutModeTests: XCTestCase {
 
                 XCTAssertLessThan(widths[0], widths[1], "\(placement), \(mode)")
                 XCTAssertLessThan(widths[1], widths[2], "\(placement), \(mode)")
+                // At 300%, the panel-fit cap can already have been reached.
+                XCTAssertGreaterThanOrEqual(widths[3], widths[2], "\(placement), \(mode)")
             }
         }
     }
@@ -235,7 +243,8 @@ final class PageSidebarLayoutModeTests: XCTestCase {
             maximumPageAspect: 1.414,
             isGrouped: false
         )
-        let minimum = PageSidebarPreferences.minimumHorizontalPanelHeight(
+        let automatic = PageSidebarResizeMetrics.automaticDimension(
+            for: .top,
             layoutMode: .single,
             thumbnailScale: scale
         )
@@ -245,8 +254,8 @@ final class PageSidebarLayoutModeTests: XCTestCase {
         XCTAssertEqual(PageSidebarLayoutMetrics.horizontalScrollerTopPadding, 8)
         XCTAssertEqual(PageSidebarLayoutMetrics.horizontalScrollerBottomPadding, 8)
         XCTAssertEqual(metrics.estimatedThumbnailCardHeight, 192.4408, accuracy: 0.001)
-        XCTAssertEqual(minimum, metrics.estimatedThumbnailCardHeight, accuracy: 0.001)
-        XCTAssertLessThan(minimum, PageSidebarResizeMetrics.legacyDefaultHorizontalPanelHeight)
+        XCTAssertEqual(automatic, metrics.estimatedThumbnailCardHeight, accuracy: 0.001)
+        XCTAssertLessThan(automatic, PageSidebarResizeMetrics.legacyDefaultHorizontalPanelHeight)
     }
 
     func testLegacyHorizontalPanelHeightMigratesOnceWithoutOverwritingCustomSizing() {
@@ -285,6 +294,10 @@ final class PageSidebarLayoutModeTests: XCTestCase {
             PageSidebarPreferences.verticalPanelWidthKey,
             PageSidebarPreferences.horizontalPanelHeightKey
         )
+        XCTAssertNotEqual(
+            PageSidebarPreferences.automaticallyFitsWidthKey,
+            PageSidebarPreferences.automaticallyFitsHeightKey
+        )
         XCTAssertEqual(
             PageSidebarResizeMetrics.defaultDimension(for: .left),
             PageSidebarResizeMetrics.defaultVerticalPanelWidth
@@ -295,19 +308,178 @@ final class PageSidebarLayoutModeTests: XCTestCase {
         )
     }
 
-    func testVerticalMinimumGrowsWithGroupedLargeThumbnails() {
-        let singleMinimum = PageSidebarPreferences.minimumVerticalPanelWidth(
-            layoutMode: .single,
-            thumbnailScale: 1
-        )
-        let groupedMinimum = PageSidebarPreferences.minimumVerticalPanelWidth(
-            layoutMode: .fourPages,
-            thumbnailScale: PageSidebarPreferences.maximumThumbnailScale
-        )
+    func testCompactMinimumAllowsManualShrinkingAtEveryThumbnailScale() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                for scale in [0.5, 1.0, 3.0] {
+                    XCTAssertEqual(
+                        PageSidebarResizeMetrics.minimumPanelDimension(
+                            for: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale
+                        ),
+                        placement.usesHorizontalPageStrip ? 112 : 124,
+                        "\(placement), \(mode), zoom \(scale)"
+                    )
+                }
+            }
+        }
+    }
 
-        XCTAssertGreaterThanOrEqual(singleMinimum, 196)
-        XCTAssertGreaterThanOrEqual(groupedMinimum, 220)
-        XCTAssertGreaterThan(groupedMinimum, singleMinimum)
+    func testAutomaticPanelDimensionFollowsThumbnailZoomInEveryPlacement() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                let dimensions = [0.5, 1.0, 3.0].map { scale in
+                    PageSidebarResizeMetrics.automaticDimension(
+                        for: placement,
+                        layoutMode: mode,
+                        thumbnailScale: scale
+                    )
+                }
+                XCTAssertLessThan(dimensions[0], dimensions[1], "\(placement), \(mode)")
+                XCTAssertLessThan(dimensions[1], dimensions[2], "\(placement), \(mode)")
+            }
+        }
+    }
+
+    func testAutomaticPanelFitsIntendedThumbnailSizeIncludingCompactControls() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                for scale in [0.5, 1.0, 3.0] {
+                    for aspect in [0.707, 1.414, 4.0] {
+                        let dimension = PageSidebarResizeMetrics.automaticDimension(
+                            for: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale,
+                            maximumPageAspect: aspect
+                        )
+                        let width = PageSidebarLayoutMetrics.thumbnailWidth(
+                            panelDimension: dimension,
+                            placement: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale,
+                            maximumPageAspect: aspect
+                        )
+                        let baseWidth = mode == .single
+                            ? (placement.usesHorizontalPageStrip ? 108.0 : 148.0)
+                            : 72.0
+                        XCTAssertEqual(
+                            width, baseWidth * scale, accuracy: 0.001,
+                            "\(placement), \(mode), zoom \(scale), aspect \(aspect)"
+                        )
+                        XCTAssertGreaterThanOrEqual(
+                            dimension,
+                            placement.usesHorizontalPageStrip ? 112 : 124
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func testManualPreferenceRemainsUntilAutomaticFitIsEnabledAgain() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                let manual = 300.0
+                for scale in [0.5, 1.0, 3.0] {
+                    XCTAssertEqual(
+                        PageSidebarResizeMetrics.preferredDimension(
+                            storedDimension: manual,
+                            automaticallyFitsThumbnails: false,
+                            placement: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale
+                        ),
+                        manual
+                    )
+                    XCTAssertEqual(
+                        PageSidebarResizeMetrics.preferredDimension(
+                            storedDimension: manual,
+                            automaticallyFitsThumbnails: true,
+                            placement: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale
+                        ),
+                        PageSidebarResizeMetrics.automaticDimension(
+                            for: placement,
+                            layoutMode: mode,
+                            thumbnailScale: scale
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    func testInvalidStoredManualDimensionFallsBackToAutomaticFit() {
+        for placement in PageOverviewPlacement.allCases {
+            for stored in [Double.nan, .infinity, -.infinity, -1, 0] {
+                XCTAssertEqual(
+                    PageSidebarResizeMetrics.preferredDimension(
+                        storedDimension: stored,
+                        automaticallyFitsThumbnails: false,
+                        placement: placement,
+                        layoutMode: .single,
+                        thumbnailScale: 0.5
+                    ),
+                    PageSidebarResizeMetrics.automaticDimension(
+                        for: placement,
+                        layoutMode: .single,
+                        thumbnailScale: 0.5
+                    )
+                )
+            }
+        }
+    }
+
+    func testMaximumAutomaticZoomKeepsSpaceForDocumentInSmallAndLargeWindows() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                let preferred = PageSidebarResizeMetrics.automaticDimension(
+                    for: placement,
+                    layoutMode: mode,
+                    thumbnailScale: 3
+                )
+                let compactWindow = placement.usesHorizontalPageStrip ? 500.0 : 700.0
+                for availableLength in [compactWindow, 2_000.0] {
+                    let resolved = PageSidebarResizeMetrics.resolvedDimension(
+                        preferredDimension: preferred,
+                        placement: placement,
+                        availableLength: availableLength,
+                        layoutMode: mode,
+                        thumbnailScale: 3
+                    )
+                    let documentMinimum = placement.usesHorizontalPageStrip ? 260.0 : 420.0
+                    let maximum = min(
+                        placement.usesHorizontalPageStrip ? 440.0 : 520.0,
+                        availableLength - documentMinimum - 10
+                    )
+                    XCTAssertEqual(resolved, min(preferred, maximum), accuracy: 0.001)
+                }
+            }
+        }
+    }
+
+    func testDraggingLargeAutomaticPanelCanReachCompactMinimumOnEveryEdge() {
+        for placement in PageOverviewPlacement.allCases {
+            for mode in PageSidebarLayoutMode.allCases {
+                let startingDimension = PageSidebarResizeMetrics.automaticDimension(
+                    for: placement,
+                    layoutMode: mode,
+                    thumbnailScale: 3
+                )
+                let translation = placement == .left || placement == .top ? -10_000.0 : 10_000.0
+                let resized = PageSidebarResizeMetrics.resizedDimension(
+                    startingDimension: startingDimension,
+                    translation: translation,
+                    placement: placement,
+                    availableLength: 1_200,
+                    layoutMode: mode,
+                    thumbnailScale: 3
+                )
+                XCTAssertEqual(resized, placement.usesHorizontalPageStrip ? 112 : 124)
+            }
+        }
     }
 
     func testResizeDragSignsFollowPhysicalPlacement() {
@@ -427,7 +599,7 @@ final class PageSidebarLayoutModeTests: XCTestCase {
         )
 
         XCTAssertEqual(invalid, PageSidebarResizeMetrics.defaultVerticalPanelWidth)
-        XCTAssertEqual(minimum, 196)
+        XCTAssertEqual(minimum, 124)
         XCTAssertEqual(maximum, PageSidebarResizeMetrics.maximumVerticalPanelWidth)
     }
 }

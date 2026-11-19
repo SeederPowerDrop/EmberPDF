@@ -7,6 +7,122 @@ import XCTest
 
 @MainActor
 final class InlineTextEditingTests: XCTestCase {
+    func testStudyNoteIsReadableOnDarkPageAutosizesAndSurvivesPDFReopening() throws {
+        let fixture = try makeWorkspace(background: .black)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = fixture.workspace
+        workspace.setMode(.study)
+        let text = (1...12).map { "Study note line \($0)" }.joined(separator: "\n")
+        workspace.addStudyNote()
+        workspace.commitPendingText(text)
+
+        let note = try XCTUnwrap(workspace.studyNotes(on: 0).first)
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        XCTAssertTrue(workspace.studyNotesVisible)
+        XCTAssertEqual(note.contents, text)
+        XCTAssertGreaterThan(note.annotation.bounds.height, 64)
+        XCTAssertTrue(page.bounds(for: .cropBox).contains(note.annotation.bounds))
+        let background = try XCTUnwrap(note.annotation.color.usingColorSpace(.sRGB))
+        let ink = try XCTUnwrap(note.annotation.fontColor?.usingColorSpace(.sRGB))
+        XCTAssertEqual(background.alphaComponent, 1, accuracy: 0.001)
+        XCTAssertGreaterThan(background.redComponent, 0.9)
+        XCTAssertLessThan(ink.redComponent, 0.2)
+
+        let savedURL = fixture.directory.appendingPathComponent("study-note.pdf")
+        XCTAssertTrue(workspace.saveSynchronously(as: savedURL))
+        let reopened = PDFWorkspaceState()
+        XCTAssertTrue(reopened.open(url: savedURL))
+        reopened.setMode(.study)
+        let savedNote = try XCTUnwrap(reopened.studyNotes(on: 0).first)
+        XCTAssertEqual(savedNote.contents, text)
+        XCTAssertEqual(savedNote.annotation.color.alphaComponent, 1, accuracy: 0.001)
+        XCTAssertGreaterThan(savedNote.annotation.bounds.height, 64)
+        XCTAssertFalse(reopened.canDeleteStudyNote(savedNote), "A persisted marker alone cannot authorize deletion.")
+
+        reopened.editStudyNote(savedNote)
+        XCTAssertEqual(reopened.pendingTextEdit?.initialText, text)
+        reopened.commitPendingText(text + "\nReviewed")
+        let revisedNote = try XCTUnwrap(reopened.studyNotes(on: 0).first)
+        XCTAssertFalse(revisedNote.annotation === savedNote.annotation,
+                       "Editing rebuilds the saved appearance to preserve background transparency.")
+        XCTAssertFalse(reopened.canDeleteStudyNote(savedNote), "The old note snapshot is no longer live.")
+        reopened.deleteStudyNote(savedNote)
+        XCTAssertTrue(reopened.studyNotes(on: 0).first?.annotation === revisedNote.annotation)
+        XCTAssertTrue(reopened.canDeleteStudyNote(revisedNote))
+        reopened.deleteStudyNote(revisedNote)
+        XCTAssertTrue(reopened.studyNotes(on: 0).isEmpty)
+        reopened.undo()
+        XCTAssertEqual(reopened.studyNotes(on: 0).first?.contents, text + "\nReviewed")
+    }
+
+    func testEditingLegacyOwnedStudyNoteRepairsVisibilityAndUndoRestoresAppearance() throws {
+        let fixture = try makeWorkspace(background: .black)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = fixture.workspace
+        workspace.setMode(.study)
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        let originalBounds = CGRect(x: 30, y: 200, width: 180, height: 64)
+        let annotation = PDFAnnotation(bounds: originalBounds, forType: .freeText, withProperties: nil)
+        annotation.contents = "test"
+        annotation.font = .systemFont(ofSize: 15)
+        annotation.fontColor = .black
+        annotation.color = .clear
+        EditableAnnotationIdentity.assign(.freeText, to: annotation)
+        page.addAnnotation(annotation)
+        let note = try XCTUnwrap(workspace.studyNotes(on: 0).first)
+
+        workspace.editStudyNote(note)
+        let revisedText = (1...9).map { "Visible note \($0)" }.joined(separator: "\n")
+        workspace.commitPendingText(revisedText)
+        let revised = try XCTUnwrap(page.annotations.first)
+        XCTAssertFalse(revised === annotation)
+        XCTAssertEqual(revised.contents, revisedText)
+        XCTAssertGreaterThan(revised.bounds.height, 64)
+        XCTAssertEqual(PDFStudyNoteStyle(annotation: revised).backgroundOpacity, 1, accuracy: 0.001)
+        XCTAssertTrue(PDFTextColor(revised.color).visuallyEquals(PDFTextColor(PDFStudyNoteAppearance.background)))
+
+        workspace.undo()
+        XCTAssertTrue(page.annotations.first === annotation)
+        XCTAssertEqual(annotation.contents, "test")
+        XCTAssertEqual(annotation.bounds, originalBounds)
+        XCTAssertEqual(annotation.color.alphaComponent, 0, accuracy: 0.001)
+        XCTAssertTrue(PDFTextColor(annotation.fontColor).visuallyEquals(.black))
+        workspace.redo()
+        XCTAssertTrue(page.annotations.first === revised)
+        XCTAssertEqual(revised.contents, revisedText)
+        XCTAssertEqual(PDFStudyNoteStyle(annotation: revised).backgroundOpacity, 1, accuracy: 0.001)
+    }
+
+    func testStudyNoteQuoteStaysDraftAndStaleNoteCannotAffectAnotherDocument() throws {
+        let fixture = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = fixture.workspace
+        workspace.setMode(.study)
+        let document = try XCTUnwrap(workspace.document)
+        let page = try XCTUnwrap(document.page(at: 0))
+        workspace.currentSelection = PDFRegionTextSelection(document: document, page: page, fragments: [
+            PDFRegionTextFragment(text: "Selected source quotation", bounds: CGRect(x: 20, y: 300, width: 220, height: 20))
+        ])
+        workspace.addStudyNote(quotingSelection: true)
+        XCTAssertEqual(workspace.pendingTextEdit?.initialText, "Selected source quotation\n\n")
+        XCTAssertTrue(page.annotations.isEmpty)
+        XCTAssertFalse(workspace.isDirty)
+        workspace.commitPendingText(try XCTUnwrap(workspace.pendingTextEdit?.initialText))
+        let oldNote = try XCTUnwrap(workspace.studyNotes(on: 0).first)
+        let output = fixture.directory.appendingPathComponent("quoted.pdf")
+        XCTAssertTrue(workspace.saveSynchronously(as: output))
+        let other = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: other.directory) }
+        XCTAssertTrue(workspace.open(url: try XCTUnwrap(other.workspace.documentURL)))
+
+        XCTAssertFalse(workspace.revealStudyNote(oldNote))
+        workspace.editStudyNote(oldNote)
+        workspace.deleteStudyNote(oldNote)
+        XCTAssertNil(workspace.pendingTextEdit)
+        XCTAssertTrue(workspace.studyNotes(on: 0).isEmpty)
+        XCTAssertFalse(workspace.isDirty)
+    }
+
     func testKeyboardPolicyCommitsReturnAndCommandReturnButProtectsIME() {
         XCTAssertEqual(
             InlineTextEditorKeyIntent.resolve(
@@ -828,6 +944,78 @@ final class InlineTextEditingTests: XCTestCase {
         )
     }
 
+    func testReadingAndIdleConfigurationDoNotBuildInlineEditorControls() throws {
+        let fixture = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = fixture.workspace
+        let owner = InteractivePDFView(frame: CGRect(x: 0, y: 0, width: 500, height: 600))
+        owner.document = workspace.document
+        owner.configure(with: workspace)
+        let overlay = try XCTUnwrap(
+            owner.subviews.compactMap { $0 as? PDFInlineTextEditingOverlayView }.first
+        )
+
+        // Opening, changing tools/modes, selecting and scrolling all deliver
+        // configurations. None should instantiate an unused TextKit tree.
+        for mode in [PDFWorkspaceMode.viewer, .study, .editing] {
+            workspace.setMode(mode)
+            for _ in 0..<10 {
+                owner.configure(with: workspace)
+                overlay.layout()
+                XCTAssertNil(overlay.hitTest(CGPoint(x: 100, y: 100)))
+            }
+            XCTAssertTrue(overlay.isHidden)
+            XCTAssertTrue(overlay.subviews.isEmpty)
+            XCTAssertFalse(overlay.hasInstalledObservers)
+        }
+        owner.prepareInlineTextEditingOverlayForRemoval()
+        XCTAssertTrue(overlay.subviews.isEmpty)
+        XCTAssertFalse(workspace.isDirty)
+    }
+
+    func testFirstInlineDraftBuildsEditorOnceAndPreservesCommitAndReuse() throws {
+        let fixture = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let workspace = fixture.workspace
+        workspace.setMode(.editing)
+        let owner = InteractivePDFView(frame: CGRect(x: 0, y: 0, width: 500, height: 600))
+        owner.document = workspace.document
+        owner.configure(with: workspace)
+        let overlay = try XCTUnwrap(
+            owner.subviews.compactMap { $0 as? PDFInlineTextEditingOverlayView }.first
+        )
+        XCTAssertTrue(overlay.subviews.isEmpty)
+
+        XCTAssertTrue(workspace.requestInlineTextEdit(
+            pageIndex: 0, point: CGPoint(x: 30, y: 300), annotation: nil
+        ))
+        owner.configure(with: workspace)
+        let panel = try XCTUnwrap(overlay.subviews.compactMap { $0 as? PDFInlineTextEditorPanel }.first)
+        XCTAssertFalse(overlay.isHidden)
+        XCTAssertTrue(overlay.hasInstalledObservers)
+        panel.textView.string = "Created on the first edit"
+        panel.textDidChange(Notification(name: NSText.didChangeNotification, object: panel.textView))
+        overlay.commitBeforePointerAction()
+
+        XCTAssertNil(workspace.pendingInlineTextEdit)
+        XCTAssertTrue(overlay.isHidden)
+        XCTAssertFalse(overlay.hasInstalledObservers)
+        XCTAssertEqual(workspace.document?.page(at: 0)?.annotations.first?.contents,
+                       "Created on the first edit")
+        XCTAssertTrue(workspace.canUndo)
+
+        XCTAssertTrue(workspace.requestInlineTextEdit(
+            pageIndex: 0, point: CGPoint(x: 30, y: 180), annotation: nil
+        ))
+        for _ in 0..<10 { owner.configure(with: workspace) }
+        XCTAssertEqual(overlay.subviews.compactMap { $0 as? PDFInlineTextEditorPanel }.count, 1)
+        XCTAssertTrue(overlay.subviews.compactMap { $0 as? PDFInlineTextEditorPanel }.first === panel)
+        XCTAssertEqual(panel.currentText, "")
+        workspace.cancelPendingInlineText()
+        owner.configure(with: workspace)
+        owner.prepareInlineTextEditingOverlayForRemoval()
+    }
+
     func testOutgoingOverlayCannotCommitNewerDraftAndRemovesObservers() throws {
         let fixture = try makeWorkspace()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
@@ -1274,7 +1462,7 @@ final class InlineTextEditingTests: XCTestCase {
         XCTAssertFalse(workspace.canUndo)
     }
 
-    private func makeWorkspace() throws -> (
+    private func makeWorkspace(background: NSColor = .white) throws -> (
         workspace: PDFWorkspaceState,
         directory: URL
     ) {
@@ -1283,7 +1471,7 @@ final class InlineTextEditingTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("inline.pdf")
         let image = NSImage(size: CGSize(width: 320, height: 420), flipped: false) { rect in
-            NSColor.white.setFill()
+            background.setFill()
             rect.fill()
             return true
         }

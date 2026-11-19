@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AppKit
+import CoreText
 import PDFKit
 import XCTest
 @testable import HwattakPDF
@@ -34,6 +35,100 @@ final class PDFRegionTextSelectionTests: XCTestCase {
                 "Readable text alone must not hide malformed font geometry at rotation \(rotation)."
             )
         }
+    }
+
+    @MainActor
+    func testUnbalancedFormGraphicsStateTriggersFallbackForFiniteDisplacedSelection() throws {
+        for rotation in [0, 90, 180, 270] {
+            let document = try formDocument(formContent: "1 0 0 1 0 0 cm q", rotation: rotation)
+            let page = try XCTUnwrap(document.page(at: 0))
+            let selection = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 6)))
+
+            XCTAssertEqual(selection.string, "Choose")
+            XCTAssertLessThan(selection.bounds(for: page).height, 40)
+            XCTAssertTrue(PDFTextSelectionGeometry.needsRegionSelection(on: page))
+        }
+    }
+
+    @MainActor
+    func testBalancedTranslatedFormsKeepNativeSelection() throws {
+        let document = try formDocument(formContent: "q 1 0 0 1 0 0 cm Q")
+        let page = try XCTUnwrap(document.page(at: 0))
+
+        XCTAssertFalse(PDFTextSelectionGeometry.needsRegionSelection(on: page))
+    }
+
+    @MainActor
+    func testUnusedUnbalancedFormDoesNotChangeNativeSelection() throws {
+        let document = try formDocument(formContent: "q", invokeForms: false)
+        let page = try XCTUnwrap(document.page(at: 0))
+
+        XCTAssertFalse(PDFTextSelectionGeometry.needsRegionSelection(on: page))
+    }
+
+    @MainActor
+    func testFormInspectionUsesOperatorsRatherThanTextOrCommentContents() throws {
+        let document = try formDocument(formContent: "q BT /F1 8 Tf (q q Q) Tj ET Q % q q\n")
+        let page = try XCTUnwrap(document.page(at: 0))
+
+        XCTAssertFalse(PDFFormGraphicsStateInspector.hasUnbalancedForm(on: page))
+    }
+
+    @MainActor
+    func testFormInspectionDetectsExtraRestoreAndNestedUnbalancedForms() throws {
+        for content in ["Q", "/Fm1 Do"] {
+            let document = try formDocument(formContent: content, secondFormContent: "q")
+            let page = try XCTUnwrap(document.page(at: 0))
+
+            XCTAssertTrue(PDFFormGraphicsStateInspector.hasUnbalancedForm(on: page))
+        }
+    }
+
+    @MainActor
+    func testFormInspectionStopsAtRepeatedResourceCycles() throws {
+        let document = try formDocument(formContent: "/Fm0 Do", secondFormContent: "q Q")
+        let page = try XCTUnwrap(document.page(at: 0))
+
+        XCTAssertFalse(PDFFormGraphicsStateInspector.hasUnbalancedForm(on: page))
+    }
+
+    @MainActor
+    func testLigaturesAndMultilingualFontMetricsKeepNativeSelection() throws {
+        // PDFKit's characterBounds and selection(for:) indices can diverge
+        // after a ligature. That alone is not evidence of shifted selections.
+        for name in ["Helvetica", "Times-Roman", "Times-Italic", "Courier", "AppleSDGothicNeo-Regular"] {
+            let data = NSMutableData()
+            var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+            let consumer = try XCTUnwrap(CGDataConsumer(data: data))
+            let context = try XCTUnwrap(CGContext(consumer: consumer, mediaBox: &box, nil))
+            context.beginPDFPage(nil)
+            for (row, size) in [8.0, 12.0, 24.0, 36.0].enumerated() {
+                context.textPosition = CGPoint(x: 40, y: 740 - row * 100)
+                let text = NSAttributedString(
+                    string: "Visual selection: office, fi ligature, ÁÉgj 123 한국어 선택 영역.",
+                    attributes: [.font: CTFontCreateWithName(name as CFString, size, nil)]
+                )
+                CTLineDraw(CTLineCreateWithAttributedString(text), context)
+            }
+            context.endPDFPage()
+            context.closePDF()
+            let document = try XCTUnwrap(PDFDocument(data: data as Data))
+            let page = try XCTUnwrap(document.page(at: 0))
+
+            XCTAssertFalse(PDFTextSelectionGeometry.needsRegionSelection(on: page), name)
+        }
+    }
+
+    @MainActor
+    func testOptionalReportedTextbookSelectsByVisibleGeometry() throws {
+        guard let path = ProcessInfo.processInfo.environment["EMBER_SELECTION_PDF_FIXTURE"] else {
+            throw XCTSkip("Set EMBER_SELECTION_PDF_FIXTURE to run the local textbook regression.")
+        }
+        let document = try XCTUnwrap(PDFDocument(url: URL(fileURLWithPath: path)))
+        let page = try XCTUnwrap(document.page(at: 11))
+
+        XCTAssertTrue(PDFFormGraphicsStateInspector.hasUnbalancedForm(on: page))
+        XCTAssertTrue(PDFTextSelectionGeometry.needsRegionSelection(on: page))
     }
 
     @MainActor
@@ -176,6 +271,26 @@ final class PDFRegionTextSelectionTests: XCTestCase {
         try XCTUnwrap(PDFDocument(data: fixtureData(ascent: ascent, rotation: rotation)))
     }
 
+    private func formDocument(formContent: String, secondFormContent: String? = nil,
+                              invokeForms: Bool = true, rotation: Int = 0) throws -> PDFDocument {
+        // Matches the report: two restored translations call empty forms whose
+        // unmatched saves cause PDFKit to apply both translations to later text.
+        let prefix = invokeForms
+            ? "q 1 0 0 1 -33 -33 cm /Fm0 Do Q q 1 0 0 1 -33 -33 cm /Fm1 Do Q " : ""
+        let content = prefix + "BT /F1 18 Tf 120 400 Td (Choose only this phrase.) Tj ET"
+        let second = secondFormContent ?? formContent
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 500] /CropBox [30 60 330 440] /Rotate \(rotation) /Resources << /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R /Fm1 7 0 R >> >> /Contents 5 0 R >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream",
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 400 500] /Length \(formContent.utf8.count) >>\nstream\n\(formContent)\nendstream",
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 400 500] /Length \(second.utf8.count) >>\nstream\n\(second)\nendstream"
+        ]
+        return try XCTUnwrap(PDFDocument(data: pdfData(objects: objects)))
+    }
+
     private func darkPixelCount(in image: CGImage) throws -> Int {
         let context = try XCTUnwrap(CGContext(
             data: nil,
@@ -210,6 +325,10 @@ final class PDFRegionTextSelectionTests: XCTestCase {
             "<< /Type /FontDescriptor /FontName /SelectionFixtureFont /Flags 32 /FontBBox [0 -200 1000 800] /ItalicAngle 0 /Ascent \(ascent) /Descent -200 /CapHeight 700 /StemV 80 >>",
             "<< /Length \(content.utf8.count) >>\nstream\n\(content)\nendstream"
         ]
+        return pdfData(objects: objects)
+    }
+
+    private func pdfData(objects: [String]) -> Data {
         var data = Data("%PDF-1.4\n".utf8)
         var offsets: [Int] = []
         for (index, object) in objects.enumerated() {

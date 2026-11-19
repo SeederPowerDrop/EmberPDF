@@ -241,23 +241,31 @@ protocol KeychainItemOperating {
 struct SystemKeychainItemOperator: KeychainItemOperating {
     func copyMatching(_ query: [CFString: Any]) -> KeychainCopyResult {
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = SystemKeychainAccess.perform(query: query) {
+            SecItemCopyMatching(query as CFDictionary, &result)
+        }
         return KeychainCopyResult(status: status, data: result as? Data)
     }
 
     func add(_ attributes: [CFString: Any]) -> OSStatus {
-        SecItemAdd(attributes as CFDictionary, nil)
+        SystemKeychainAccess.perform(query: attributes) {
+            SecItemAdd(attributes as CFDictionary, nil)
+        }
     }
 
     func update(
         _ query: [CFString: Any],
         attributes: [CFString: Any]
     ) -> OSStatus {
-        SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        SystemKeychainAccess.perform(query: query) {
+            SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        }
     }
 
     func delete(_ query: [CFString: Any]) -> OSStatus {
-        SecItemDelete(query as CFDictionary)
+        SystemKeychainAccess.perform(query: query) {
+            SecItemDelete(query as CFDictionary)
+        }
     }
 }
 
@@ -380,7 +388,7 @@ final class KeychainSecureSignatureStore: SecureSignatureStoring {
     func addAttributes(data: Data) -> [CFString: Any] {
         var attributes = baseQuery
         attributes[kSecValueData] = data
-        attributes[kSecAttrLabel] = "HwattakPDF Saved Signature"
+        attributes[kSecAttrLabel] = "EmberPDF Saved Signature"
         attributes[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         return attributes
     }
@@ -388,7 +396,7 @@ final class KeychainSecureSignatureStore: SecureSignatureStoring {
     func legacyAddAttributes(data: Data) -> [CFString: Any] {
         var attributes = legacyBaseQuery
         attributes[kSecValueData] = data
-        attributes[kSecAttrLabel] = "HwattakPDF Saved Signature"
+        attributes[kSecAttrLabel] = "EmberPDF Saved Signature"
         return attributes
     }
 

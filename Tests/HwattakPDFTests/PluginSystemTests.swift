@@ -106,6 +106,16 @@ final class PluginSystemTests: XCTestCase {
     }
 
     func testPluginPreferencesDecodeDefensivelyAndSearchAcrossUsefulMetadata() throws {
+        // UI localization and document translation have separate catalogs:
+        // Russian is a new valid target; saved Portuguese targets remain valid.
+        for code in ["ru", "pt"] {
+            let preferences = PluginPreferences(translationTargetLanguageCode: code)
+            let restored = try JSONDecoder().decode(
+                PluginPreferences.self,
+                from: JSONEncoder().encode(preferences)
+            )
+            XCTAssertEqual(restored.translationTargetLanguageCode, code)
+        }
         let encoded = Data(#"""
         {
             "translationProvider": "unknown-provider",
@@ -883,6 +893,55 @@ final class PluginSystemTests: XCTestCase {
         }
     }
 
+    func testPageTranslatorRequiresCurrentHostAndExactBundledManifest() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let package = projectRoot.appendingPathComponent("Examples/Plugins/PageTranslator.hwattakplugin")
+        let trustedDirectory = testRoot.appendingPathComponent("BundledPlugins")
+        try FileManager.default.createDirectory(at: trustedDirectory, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: package, to: trustedDirectory.appendingPathComponent(package.lastPathComponent))
+        let manifestURL = package.appendingPathComponent("manifest.json")
+        let validator = PluginPackageValidator(hostVersion: "0.9.0")
+        let inspection = try validator.inspectSourcePackage(at: package)
+        XCTAssertEqual(inspection.manifest.identifier, "dev.hwattakpdf.plugins.page-translator")
+        XCTAssertEqual(inspection.manifest.actions.count, 1)
+        XCTAssertEqual(inspection.manifest.actions[0].template, "{{page.text}}")
+        XCTAssertEqual(Set(inspection.manifest.capabilities), [.currentPageText, .clipboardWrite, .translationService])
+        do {
+            _ = try PluginPackageValidator(hostVersion: "0.8.0").inspectSourcePackage(at: package)
+            XCTFail("A host without translated-page support must reject the new plug-in")
+        } catch PluginSystemError.incompatibleHost(let required, let current) {
+            XCTAssertEqual(required, "0.9.0")
+            XCTAssertEqual(current, "0.8.0")
+        }
+
+        let manager = PluginManager(pluginsDirectory: pluginsDirectory, defaults: defaults,
+            hostVersion: "0.9.0", bundledPluginsDirectory: trustedDirectory)
+        try manager.install(manager.inspectPackage(at: package), replacingExisting: false)
+        let installed = try XCTUnwrap(manager.installedPlugins.first)
+        XCTAssertEqual(manager.configurationKind(for: installed), .translation)
+        XCTAssertTrue(manager.availableBundledPlugins.isEmpty)
+
+        var modifiedBytes = try Data(contentsOf: manifestURL)
+        modifiedBytes.append(0x0A)
+        let modified = try writeSourcePackage(manifestData: modifiedBytes)
+        assertInvalidPackage(try manager.inspectPackage(at: modified), contains: "exactly match")
+        let rawModified = try validator.inspectSourcePackage(at: modified)
+        XCTAssertThrowsError(try manager.install(rawModified, replacingExisting: true))
+        XCTAssertEqual(manager.installedPlugins.first?.manifestDigest, installed.manifestDigest)
+
+        let untrustedManager = PluginManager(pluginsDirectory: testRoot.appendingPathComponent("Untrusted"),
+            defaults: defaults, hostVersion: "0.9.0", bundledPluginsDirectory: nil)
+        assertInvalidPackage(try untrustedManager.inspectPackage(at: package), contains: "exactly match")
+
+        let spoofAction = makeAction(id: "translate-current-page", title: "Counterfeit page translation",
+            output: .showText, template: "Untrusted text")
+        let spoof = makeManifest(identifier: inspection.manifest.identifier,
+            minimumHostVersion: "0.9.0", actions: [spoofAction])
+        XCTAssertEqual(BundledPluginPresentation.displayName(for: spoof), spoof.displayName)
+        XCTAssertEqual(BundledPluginPresentation.actionTitle(spoofAction, in: spoof), spoofAction.title)
+    }
+
     func testReservedBundledIdentifierRejectsSchemaOneSpoofAtEveryBoundary() throws {
         let projectRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -931,7 +990,7 @@ final class PluginSystemTests: XCTestCase {
         // review can lend it legitimacy.
         assertInvalidPackage(
             try manager.inspectPackage(at: spoofPackage),
-            contains: "reserved HwattakPDF identities"
+            contains: "reserved EmberPDF identities"
         )
 
         // Keep the install boundary independently defensive against a caller
@@ -943,7 +1002,7 @@ final class PluginSystemTests: XCTestCase {
             try manager.install(rawInspection, replacingExisting: false)
             XCTFail("A schema-1 package must not claim a bundled identifier")
         } catch PluginSystemError.invalidPackage(let detail) {
-            XCTAssertTrue(detail.contains("reserved HwattakPDF identities"))
+            XCTAssertTrue(detail.contains("reserved EmberPDF identities"))
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
@@ -973,7 +1032,7 @@ final class PluginSystemTests: XCTestCase {
         }))
         XCTAssertTrue(manager.loadIssues.contains(where: {
             $0.packageName == installedSpoof.lastPathComponent
-                && $0.message.contains("reserved HwattakPDF identities")
+                && $0.message.contains("reserved EmberPDF identities")
         }))
 
         // Presentation also fails closed: a known identifier with the wrong
@@ -1694,13 +1753,13 @@ final class PluginSystemTests: XCTestCase {
         let capturedRevision = workspace.revision
 
         let translateAction = makeAction(
-            id: "translate-page",
+            id: "translate-current-page",
             output: .translatePanel,
             template: "{{page.text}}"
         )
         let translateManifest = makeManifest(
-            identifier: "org.example.translation",
-            minimumHostVersion: "0.8.0",
+            identifier: "dev.hwattakpdf.plugins.page-translator",
+            minimumHostVersion: "0.9.0",
             capabilities: [.currentPageText, .clipboardWrite, .translationService],
             actions: [translateAction]
         )
@@ -1740,6 +1799,8 @@ final class PluginSystemTests: XCTestCase {
         XCTAssertEqual(request.actionID, translateAction.id)
         XCTAssertEqual(request.kind, .translation)
         XCTAssertEqual(request.sourceText, sourceText)
+        XCTAssertEqual(try XCTUnwrap(request.pageLayout).pageNumber, 1)
+        XCTAssertEqual(request.pageLayout?.sourceText, request.sourceText)
         XCTAssertFalse(request.includesSelectedText)
         XCTAssertTrue(request.includesCurrentPageText)
         XCTAssertEqual(workspace.pluginPanelRequest, request)
@@ -1751,6 +1812,109 @@ final class PluginSystemTests: XCTestCase {
         XCTAssertNil(workspace.pluginPanelRequest)
         XCTAssertEqual(request.sourceText, sourceText, "The captured value is immutable")
         XCTAssertEqual(request.documentRevision, capturedRevision)
+    }
+
+    func testPageTranslationCapturesOnlyCurrentPageAndLeavesTheDocumentUnchanged() throws {
+        let firstURL = try writeTextPDF("First page stays private.")
+        let document = try XCTUnwrap(PDFDocument(url: firstURL))
+        let secondURL = try writeTextPDF("Only the second page is translated.")
+        let second = try XCTUnwrap(PDFDocument(url: secondURL)?.page(at: 0))
+        document.insert(second, at: 1)
+        let combinedURL = testRoot.appendingPathComponent("two-pages.pdf")
+        XCTAssertTrue(document.write(to: combinedURL))
+        let originalData = try Data(contentsOf: combinedURL)
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: combinedURL))
+        workspace.setCurrentPage(1)
+        let revision = workspace.revision
+        let action = makeAction(id: "translate-current-page", output: .translatePanel, template: "{{page.text}}")
+        let plugin = installedPlugin(manifest: makeManifest(
+            identifier: "dev.hwattakpdf.plugins.page-translator",
+            capabilities: [.currentPageText, .clipboardWrite, .translationService], actions: [action]))
+        let effect = try PluginActionRunner().run(plugin: plugin, action: action, workspace: workspace)
+        guard case .openedPanel(let request) = effect else { return XCTFail("Expected a translation panel") }
+        let layout = try XCTUnwrap(request.pageLayout)
+        XCTAssertEqual(layout.pageNumber, 2)
+        XCTAssertTrue(layout.sourceText.contains("second page"))
+        XCTAssertFalse(layout.sourceText.contains("First page"))
+        XCTAssertEqual(request.sourceText, layout.sourceText)
+        XCTAssertFalse(layout.blocks.isEmpty)
+        XCTAssertFalse(workspace.isDirty)
+        XCTAssertEqual(workspace.revision, revision)
+        workspace.setCurrentPage(0)
+        XCTAssertEqual(workspace.pluginPanelRequest?.pageLayout, layout,
+            "Navigation must not relabel the immutable source of an in-flight translation")
+        XCTAssertEqual(try Data(contentsOf: combinedURL), originalData)
+        workspace.close()
+    }
+
+    func testPageTranslationCannotCaptureGeometryFromCopyRestrictedPDF() throws {
+        let sourceURL = try writeTextPDF("Restricted page must not be captured.")
+        let document = try XCTUnwrap(PDFDocument(url: sourceURL))
+        let restrictedURL = testRoot.appendingPathComponent("restricted.pdf")
+        XCTAssertTrue(document.write(to: restrictedURL, withOptions: [
+            .ownerPasswordOption: "OwnerPass9", .userPasswordOption: "ReaderPass9",
+            .accessPermissionsOption: NSNumber(value: 0),
+            PDFDocumentWriteOption(rawValue: kCGPDFContextEncryptionKeyLength as String): 128
+        ]))
+        let workspace = PDFWorkspaceState(passwordProvider: { _, _ in "ReaderPass9" })
+        XCTAssertTrue(workspace.open(url: restrictedURL))
+        XCTAssertFalse(try XCTUnwrap(workspace.document).allowsCopying)
+        let action = makeAction(id: "translate-current-page", output: .translatePanel, template: "{{page.text}}")
+        let plugin = installedPlugin(manifest: makeManifest(
+            identifier: "dev.hwattakpdf.plugins.page-translator",
+            capabilities: [.currentPageText, .clipboardWrite, .translationService], actions: [action]))
+        XCTAssertThrowsError(try PluginActionRunner().run(plugin: plugin, action: action, workspace: workspace)) {
+            guard case PluginSystemError.actionUnavailable = $0 else {
+                return XCTFail("Expected copying permission rejection, got \($0)")
+            }
+        }
+        XCTAssertNil(workspace.pluginPanelRequest)
+        XCTAssertFalse(workspace.isDirty)
+        workspace.close()
+    }
+
+    func testPageTranslatorReportsMissingGeometryWhileTextCompanionCanStillTranslate() throws {
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: try writeTextPDF("A text page with unavailable visible text geometry.")))
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        page.setBounds(CGRect(x: 650, y: 40, width: 10, height: 10), for: .cropBox)
+        XCTAssertFalse(try XCTUnwrap(page.string).isEmpty)
+        XCTAssertThrowsError(try PageTranslationLayout.capture(page: page, pageNumber: 1))
+        let action = makeAction(id: "translate-current-page", output: .translatePanel, template: "{{page.text}}")
+        let capabilities: [PluginCapability] = [.currentPageText, .clipboardWrite, .translationService]
+        let pagePlugin = installedPlugin(manifest: makeManifest(
+            identifier: "dev.hwattakpdf.plugins.page-translator", capabilities: capabilities, actions: [action]))
+        XCTAssertThrowsError(try PluginActionRunner().run(plugin: pagePlugin, action: action, workspace: workspace))
+        XCTAssertNil(workspace.pluginPanelRequest)
+
+        let textPlugin = installedPlugin(manifest: makeManifest(
+            identifier: "dev.hwattakpdf.plugins.translation-companion", capabilities: capabilities, actions: [action]))
+        guard case .openedPanel(let request) = try PluginActionRunner().run(
+            plugin: textPlugin, action: action, workspace: workspace) else {
+            return XCTFail("The existing companion must retain its original text translation experience")
+        }
+        XCTAssertNil(request.pageLayout)
+        XCTAssertEqual(request.sourceText, page.string?.trimmingCharacters(in: .whitespacesAndNewlines))
+        workspace.close()
+    }
+
+    func testExistingCompanionKeepsTextOnlyRequestEvenWhenPageGeometryIsAvailable() throws {
+        let workspace = PDFWorkspaceState()
+        XCTAssertTrue(workspace.open(url: try writeTextPDF("Existing text and web preferences remain usable.")))
+        let page = try XCTUnwrap(workspace.document?.page(at: 0))
+        XCTAssertNoThrow(try PageTranslationLayout.capture(page: page, pageNumber: 1))
+        let action = makeAction(id: "translate-current-page", output: .translatePanel, template: "{{page.text}}")
+        let plugin = installedPlugin(manifest: makeManifest(
+            identifier: "dev.hwattakpdf.plugins.translation-companion",
+            capabilities: [.currentPageText, .clipboardWrite, .translationService], actions: [action]))
+        guard case .openedPanel(let request) = try PluginActionRunner().run(
+            plugin: plugin, action: action, workspace: workspace) else {
+            return XCTFail("Expected the existing translation companion")
+        }
+        XCTAssertNil(request.pageLayout)
+        XCTAssertEqual(request.sourceText, page.string?.trimmingCharacters(in: .whitespacesAndNewlines))
+        workspace.close()
     }
 
     func testTranslationSelectionIsNotSilentlyLimitedToShareNoteExcerpt() throws {
@@ -1768,6 +1932,7 @@ final class PluginSystemTests: XCTestCase {
         let effect = try PluginActionRunner().run(plugin: plugin, action: action, workspace: workspace)
         guard case .openedPanel(let request) = effect else { return XCTFail("Expected translation panel") }
         XCTAssertGreaterThan(try XCTUnwrap(request.sourceText).count, PDFShareNote.maximumExcerptCharacters)
+        XCTAssertNil(request.pageLayout, "Selected-text permission must never capture a complete page")
         workspace.close()
     }
 

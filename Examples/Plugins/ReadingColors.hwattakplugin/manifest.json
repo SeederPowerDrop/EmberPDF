@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 4,
+  "identifier": "org.emberpdf.examples.reading-colors",
+  "displayName": "Reading Colors",
+  "version": "1.0.0",
+  "author": "EmberPDF community examples",
+  "description": "Adjust EmberPDF and PDF paper colors for comfortable reading.",
+  "minimumHostVersion": "0.9.0",
+  "capabilities": [
+    "appearanceWrite"
+  ],
+  "actions": [
+    {
+      "id": "open-panel",
+      "title": "Open reading colors",
+      "output": "appearancePanel",
+      "template": ""
+    }
+  ]
+}
+

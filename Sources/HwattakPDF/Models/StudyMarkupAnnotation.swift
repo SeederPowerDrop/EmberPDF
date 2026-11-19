@@ -98,6 +98,25 @@ final class StudyMarkupAnnotation: PDFAnnotation {
         return nil
     }
 
+    /// PDFDocument snapshots must initialize Swift storage explicitly;
+    /// PDFAnnotation's Objective-C copy does not know these stored fields.
+    override func copy(with zone: NSZone? = nil) -> Any {
+        StudyMarkupAnnotation(copying: self)
+    }
+
+    private init(copying source: StudyMarkupAnnotation) {
+        markupKind = source.markupKind
+        markupColor = source.markupColor
+        markupThickness = source.markupThickness
+        markupOpacity = source.markupOpacity
+        var properties = source.annotationKeyValues
+        properties.removeValue(forKey: PDFAnnotationKey.page.rawValue)
+        properties.removeValue(forKey: PDFAnnotationKey.parent.rawValue)
+        super.init(bounds: source.bounds, forType: .stamp, withProperties: properties)
+        userName = source.userName
+        page = nil
+    }
+
     override func draw(with box: PDFDisplayBox, in context: CGContext) {
         guard !bounds.isEmpty else { return }
 

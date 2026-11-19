@@ -8,23 +8,16 @@ enum AboutContent {
     static let imageResourceName = "AboutAuthor-SeederPowerDrop-UserProvided"
     static let imageResourceExtension = "jpg"
 
-    // Keep the original Korean wording as the fallback and source of truth,
-    // while presenting a reviewed translation in the selected app language.
-    static let introductionParagraphs = [
-        "모 PDF 프로그램을 유로로 구입해서 사용하고 있는데 이제는 기본적인 기능 조차 구독으로 바뀌어서 화딱지나서 바이브 코딩으로 만들었습니다.",
-        "그 회사도 먹고 살기위해서 어쩔 수 없는 것을 알지만 기존에 유로 구입자에게 너무한 조치라서 만들었습니다.",
-        "많은 사람들이 편리하게 사용했으면 합니다.",
-        "그리고 평생 무료로 최대한 지원해드리며 소정의 tip만 받도록 하겠습니다.",
-        "그리고 ERW FWS WRG"
-    ]
+    static let windowSize = CGSize(width: 960, height: 740)
 
-    static let introductionLocalizationKeys = [
-        "about.introduction.1",
-        "about.introduction.2",
-        "about.introduction.3",
-        "about.introduction.4",
-        "about.introduction.5"
+    static let introductionParagraphs = [
+        "기존에 큰돈을 주고 구입한 PDF 뷰어·편집 앱이 구독제로 바뀌면서, 기존에 쓰던 기능을 더 이상 사용할 수 없게 되었습니다. 화가 나서 바이브 코딩으로 EmberPDF를 만들었습니다.",
+        "그렇게 화가 나서 만들기 시작했지만, 어느새 그 마음은 잉걸불처럼 잔잔해졌습니다. 저와 같은 일을 겪은 사람이 많을 것 같았습니다. 그런 분들을 위해 오랫동안 유지될 앱이 되기를 기원하며 만들었습니다.",
+        "PDF계의 Obsidian 같은 앱을 꿈꾸며 플러그인 기능도 넣었습니다. 각자에게 필요한 기능을 더하고, 함께 가능성을 넓혀 가면 좋겠습니다.",
+        "누구나 유용하게, 잉걸불처럼 오래도록 EmberPDF를 사용했으면 합니다. 제가 할 수 있는 한 무료로 오랫동안 배포하고 가꾸어 가겠습니다.",
+        "감사합니다.\n그리고 ERW FWS WRG"
     ]
+    static let introductionLocalizationKeys = (1...5).map { "about.introduction.\($0)" }
 
     static var localizedIntroductionParagraphs: [String] {
         zip(introductionLocalizationKeys, introductionParagraphs).map { key, fallback in
@@ -32,18 +25,12 @@ enum AboutContent {
         }
     }
 
-    static var supportTitle: String {
-        L10n.string(
-            "about.support.title",
-            defaultValue: "HwattakPDF를 계속 무료로 만드는 힘"
-        )
-    }
-
+    static var supportTitle: String { L10n.string("about.support.title", defaultValue: "후원하기") }
     static var supportDetail: String {
-        L10n.string(
-            "about.support.detail",
-            defaultValue: "HwattakPDF에는 구독료와 광고가 없습니다. 자발적인 후원은 무료 개발과 유지보수를 계속할 수 있는 유일한 지원 수단입니다."
-        )
+        L10n.string("about.support.detail", defaultValue: "제가 받은 도움을 다시 나누는 마음으로, 누구나 무료로 쓸 수 있는 도구를 만듭니다. 유용하게 쓰셨다면 작은 후원으로 개발과 유지보수를 응원해 주세요.")
+    }
+    static var rightsDetail: String {
+        L10n.string("about.rights.detail", defaultValue: "컴퓨터를 사용하는 데 필요한 기본 도구는 누구나 무료로, 자유롭게 쓸 수 있어야 한다고 생각합니다. 우리가 나누는 지식이 누군가의 시작이 되고, 사람과 AI가 함께 배우고 만들며 가능성을 넓혀 가길 바랍니다.")
     }
 
     static let githubURL = validatedExternalURL(
@@ -101,330 +88,280 @@ enum AboutContent {
     #endif
 }
 
+/// A self-contained classic dialog palette; reading paper colors should not
+/// tint its blue title bar, high-contrast copy, or the donation QR code.
+struct AboutClassicPalette {
+    let isDark: Bool
+    var canvas: Color { isDark ? Color(red: 0.15, green: 0.16, blue: 0.17) : Color(red: 0.93, green: 0.92, blue: 0.86) }
+    var text: Color { isDark ? Color(white: 0.94) : Color(white: 0.06) }
+    var secondary: Color { isDark ? Color(white: 0.72) : Color(white: 0.34) }
+    var card: Color { isDark ? Color(red: 0.19, green: 0.20, blue: 0.21) : Color(red: 0.98, green: 0.98, blue: 0.96) }
+    var border: Color { isDark ? Color(white: 0.38) : Color(red: 0.76, green: 0.75, blue: 0.70) }
+    var highlight: Color { isDark ? Color(white: 0.49) : .white }
+    var shadow: Color { isDark ? Color(white: 0.06) : Color(white: 0.50) }
+    var link: Color { isDark ? Color(red: 0.47, green: 0.70, blue: 1) : Color(red: 0, green: 0.28, blue: 0.94) }
+    var titleStart: Color { isDark ? Color(red: 0.03, green: 0.16, blue: 0.39) : Color(red: 0.01, green: 0.27, blue: 0.89) }
+    var titleEnd: Color { isDark ? Color(red: 0.10, green: 0.29, blue: 0.57) : Color(red: 0.20, green: 0.56, blue: 1) }
+}
+
 struct AboutView: View {
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
-
+    @State private var showsBitcoin = false
+    @State private var showsLicenses = false
     private let authorImage: NSImage?
+    private let version: String
+    private var palette: AboutClassicPalette { AboutClassicPalette(isDark: colorScheme == .dark) }
 
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
-    private var canvas: Color {
-        colorScheme == .dark ? theme.canvas : Color(red: 0.95, green: 0.94, blue: 0.86)
-    }
-    private var bodyText: Color {
-        colorScheme == .dark ? theme.primaryText : .black
-    }
-
-    init(authorImage: NSImage? = AboutContent.authorImage()) {
+    init(authorImage: NSImage? = AboutContent.authorImage(), version: String = HwattakPDFRelease.version) {
         self.authorImage = authorImage
+        self.version = version
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            classicTitleBar
-            mainContent
+            titleBar
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    introductionHeader
+                    ForEach(Array(AboutContent.localizedIntroductionParagraphs.dropFirst().dropLast().enumerated()), id: \.offset) { _, paragraph in
+                        Text(paragraph).fixedSize(horizontal: false, vertical: true)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.string("about.rights.title", defaultValue: "소프트웨어 기본권"))
+                            .font(.system(size: 16, weight: .bold))
+                        Text(AboutContent.rightsDetail).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(AboutContent.localizedIntroductionParagraphs.last ?? "")
+                        .fixedSize(horizontal: false, vertical: true)
+                    supportSection
+                }
+                .font(.system(size: 15))
+                .lineSpacing(3)
+                .foregroundStyle(palette.text)
+                .textSelection(.enabled)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             bottomBar
         }
-        .frame(width: 840, height: 690)
-        .background(canvas)
-        .overlay {
-            Rectangle()
-                .stroke(
-                    colorScheme == .dark ? theme.border : Color(red: 0.35, green: 0.36, blue: 0.37),
-                    lineWidth: 2
-                )
-        }
-        // Keep the classic dialog layout while following the app's appearance.
+        .frame(width: AboutContent.windowSize.width, height: AboutContent.windowSize.height)
+        .background(palette.canvas)
+        .background(AboutWindowChrome(title: L10n.string("about.title"), color: NSColor(palette.canvas)))
+        .overlay { Rectangle().stroke(palette.titleStart, lineWidth: 1).allowsHitTesting(false) }
+        // Extend the border with the content; applying this before the overlay
+        // places its top edge at the native title bar's safe-area boundary.
+        .ignoresSafeArea()
+        .tint(palette.link)
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showsLicenses) {
+            AboutLicensesView()
+        }
     }
 
-    private var classicTitleBar: some View {
-        HStack(spacing: 12) {
-            Text(L10n.string("about.title", defaultValue: "HwattakPDF 정보"))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+    private var titleBar: some View {
+        HStack {
+            Text(L10n.string("about.title", defaultValue: "EmberPDF 정보"))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
-                .lineLimit(1)
-
-            Spacer(minLength: 12)
-
-            Button {
-                dismissWindow(id: AboutContent.sceneID)
-            } label: {
+                .shadow(color: .black.opacity(0.3), radius: 0, x: 1, y: 1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .background(AboutTitlebarDragArea().accessibilityHidden(true))
+            Button { dismissWindow(id: AboutContent.sceneID) } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 21, weight: .black))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 38, height: 34)
-                    .background(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.42, blue: 0.31),
-                                Color(red: 0.78, green: 0.08, blue: 0.05)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(.white.opacity(0.9), lineWidth: 2)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .shadow(color: .black.opacity(0.55), radius: 0, x: 2, y: 2)
+                    .frame(width: 33, height: 33)
+                    .background(LinearGradient(colors: [Color(red: 1, green: 0.52, blue: 0.38), Color(red: 0.81, green: 0.14, blue: 0.09)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .overlay { RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.94), lineWidth: 1.5) }
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
             .help(L10n.string("about.close", defaultValue: "닫기"))
             .accessibilityLabel(L10n.string("about.close", defaultValue: "닫기"))
         }
-        .padding(.horizontal, 12)
-        .frame(height: 58)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.00, green: 0.28, blue: 0.88),
-                    Color(red: 0.18, green: 0.55, blue: 0.98)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.75))
-                .frame(height: 2)
-        }
+        .padding(.horizontal, 10)
+        .frame(height: 48)
+        .background(LinearGradient(colors: [palette.titleStart, palette.titleEnd], startPoint: .leading, endPoint: .trailing))
+        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.25)).frame(height: 1) }
     }
 
-    private var mainContent: some View {
-        ScrollView {
-            HStack(alignment: .top, spacing: 28) {
-                authorPortrait
-
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(
-                        Array(AboutContent.localizedIntroductionParagraphs.enumerated()),
-                        id: \.offset
-                    ) { _, paragraph in
-                        Text(paragraph)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    supportCard
-                        .padding(.top, 4)
-
-                    githubRow
+    private var introductionHeader: some View {
+        HStack(alignment: .top, spacing: 24) {
+            authorPortrait
+            VStack(alignment: .leading, spacing: 9) {
+                Text("EmberPDF \(version)")
+                    .font(.system(size: 29, weight: .bold))
+                    .environment(\.layoutDirection, .leftToRight)
+                Text(L10n.string("about.tagline", defaultValue: "누구나 자유롭게 쓰는 macOS PDF 도구."))
+                    .font(.system(size: 16))
+                    .foregroundStyle(palette.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 20) { guideLink; githubLink }
+                    VStack(alignment: .leading, spacing: 6) { guideLink; githubLink }
                 }
-                .font(.system(size: 17.5, weight: .regular, design: .default))
-                .foregroundStyle(bodyText)
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 15, weight: .medium))
+                .padding(.vertical, 2)
+                Text(AboutContent.localizedIntroductionParagraphs.first ?? "")
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 34)
-            .padding(.top, 30)
-            .padding(.bottom, 22)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    @ViewBuilder
+    private var guideLink: some View {
+        Button { openWindow(id: HelpTutorialContent.sceneID) } label: {
+            Text(L10n.string("about.guide", defaultValue: "사용 가이드")).underline()
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(palette.link)
+    }
+
+    @ViewBuilder private var githubLink: some View {
+        if let url = AboutContent.githubURL {
+            Link(destination: url) { Text(L10n.string("about.github", defaultValue: "GitHub · SeederPowerDrop")).underline() }
+                .foregroundStyle(palette.link)
+                .environment(\.layoutDirection, .leftToRight)
+                .help(url.absoluteString)
+        }
+    }
+
     private var authorPortrait: some View {
-        if let authorImage {
-            Image(nsImage: authorImage)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: 178, height: 178)
-                .background(.white)
-                .overlay(alignment: .topLeading) {
-                    Rectangle()
-                        .stroke(Color(red: 0.47, green: 0.47, blue: 0.49), lineWidth: 4)
-                }
-                .shadow(color: .white.opacity(0.95), radius: 0, x: 2, y: 2)
-                .accessibilityLabel(
-                    L10n.string(
-                        "about.image_accessibility",
-                        defaultValue: "제작자가 제공한 흑백 캐릭터 그림"
-                    )
-                )
-        } else {
-            ZStack {
-                Color.white
-                Image(systemName: "person.crop.square")
-                    .font(.system(size: 72, weight: .light))
-                    .foregroundStyle(Color.gray)
+        Group {
+            if let authorImage {
+                Image(nsImage: authorImage).resizable().interpolation(.high).scaledToFit()
+            } else {
+                Image(systemName: "person.crop.square").resizable().scaledToFit().padding(30).foregroundStyle(.gray)
             }
-            .frame(width: 178, height: 178)
-            .overlay {
-                Rectangle()
-                    .stroke(Color(red: 0.47, green: 0.47, blue: 0.49), lineWidth: 4)
-            }
-            .accessibilityLabel(
-                L10n.string("about.image_unavailable", defaultValue: "소개 이미지를 불러오지 못했습니다")
-            )
         }
+        .frame(width: 150, height: 150)
+        .background(.white)
+        .overlay { Rectangle().stroke(palette.border, lineWidth: 2) }
+        .accessibilityLabel(L10n.string("about.image_accessibility", defaultValue: "제작자가 제공한 흑백 캐릭터 그림"))
     }
 
-    private var supportCard: some View {
+    private var supportSection: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Label(AboutContent.supportTitle, systemImage: "heart.fill")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(
-                    colorScheme == .dark ? theme.warning : Color(red: 0.42, green: 0.08, blue: 0.04)
-                )
-
-            Text(AboutContent.supportDetail)
-                .font(.system(size: 15.5, weight: .medium))
-                .foregroundStyle(bodyText)
+            Rectangle().fill(palette.border).frame(height: 1).padding(.bottom, 5)
+            Text(AboutContent.supportTitle).font(.system(size: 18, weight: .bold))
+            Text(AboutContent.supportDetail).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                if let url = AboutContent.supportURL {
+                    Link(destination: url) { supportCard("Buy Me a Coffee", symbol: "cup.and.saucer", color: Color(red: 1, green: 0.84, blue: 0.27)) }
+                        .help(url.absoluteString)
+                }
+                Link(destination: AboutSupport.koFiURL) { supportCard("Ko-fi", symbol: "heart.fill", color: Color(red: 1, green: 0.83, blue: 0.87)) }
+                    .help(AboutSupport.koFiURL.absoluteString)
+                Button { showsBitcoin.toggle() } label: {
+                    supportCard("BlueWallet", symbol: "wallet.bifold", color: Color(red: 0.82, green: 0.89, blue: 1), subtitle: L10n.string("about.bitcoin", defaultValue: "Bitcoin (BTC)"), disclosure: true)
+                }
+                .accessibilityIdentifier("about-bitcoin-support")
+                .popover(isPresented: $showsBitcoin) { AboutBitcoinSupportView() }
+            }
+            .buttonStyle(.plain)
+            Text(L10n.string("about.support.optional", defaultValue: "후원은 자유롭게 선택할 수 있으며, 후원 여부에 따라 앱 기능이 달라지지 않습니다."))
+                .font(.system(size: 12))
+                .foregroundStyle(palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(15)
-        .background(colorScheme == .dark ? theme.panel : Color(red: 1.0, green: 0.96, blue: 0.72))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(
-                    colorScheme == .dark ? theme.warning.opacity(0.55) : Color(red: 0.42, green: 0.34, blue: 0.12),
-                    lineWidth: 2
-                )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder
-    private var githubRow: some View {
-        if let githubURL = AboutContent.githubURL {
-            Link(destination: githubURL) {
-                Label(
-                    L10n.string(
-                        "about.github",
-                        defaultValue: "GitHub · github.com/SeederPowerDrop/HwattakPDF"
-                    ),
-                    systemImage: "chevron.left.forwardslash.chevron.right"
-                )
+    private func supportCard(_ name: String, symbol: String, color: Color, subtitle: String? = nil, disclosure: Bool = false) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 23, weight: .medium)).foregroundStyle(Color(white: 0.16))
+                .frame(width: 48, height: 48).background(color, in: RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name).font(.system(size: 17, weight: .bold)).lineLimit(1).minimumScaleFactor(0.85)
+                if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(palette.secondary) }
             }
-            .font(.system(size: 15.5, weight: .medium))
-            .foregroundStyle(colorScheme == .dark ? theme.steel : Color(red: 0.0, green: 0.25, blue: 0.92))
-            .underline()
-            .help(githubURL.absoluteString)
-            .environment(\.layoutDirection, .leftToRight)
+            Spacer(minLength: 0)
+            if disclosure { Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)) }
         }
+        .foregroundStyle(palette.text)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 78)
+        .background(palette.card, in: RoundedRectangle(cornerRadius: 6))
+        .overlay { RoundedRectangle(cornerRadius: 6).stroke(palette.border, lineWidth: 1) }
+        .contentShape(Rectangle())
+        .environment(\.layoutDirection, .leftToRight)
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(colorScheme == .dark ? theme.border : Color(red: 0.53, green: 0.53, blue: 0.55))
-                .frame(height: 1)
-
-            HStack(spacing: 16) {
-                if let supportURL = AboutContent.supportURL {
-                    Link(destination: supportURL) {
-                        Label(
-                            L10n.string(
-                                "about.support",
-                                defaultValue: "HwattakPDF 후원하기"
-                            ),
-                            systemImage: "cup.and.saucer.fill"
-                        )
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                    }
-                    .buttonStyle(ClassicSupportButtonStyle())
-                    .help(supportURL.absoluteString)
-                }
-
-                Button {
-                    dismissWindow(id: AboutContent.sceneID)
-                } label: {
-                    Text(L10n.string("about.confirm", defaultValue: "확인"))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(bodyText)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                }
-                .buttonStyle(ClassicWindowsButtonStyle())
+        HStack(spacing: 14) {
+            Spacer(minLength: 10)
+            Button(L10n.string("about.licenses", defaultValue: "오픈소스 라이선스")) { showsLicenses = true }
+                .buttonStyle(AboutClassicButtonStyle(palette: palette))
+            Button(L10n.string("about.confirm", defaultValue: "확인")) { dismissWindow(id: AboutContent.sceneID) }
+                .buttonStyle(AboutClassicButtonStyle(palette: palette))
                 .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 17)
         }
-        .background(canvas)
-        // Keep the classic confirmation area from being compressed when the
-        // surrounding environment uses right-to-left layout direction.
-        .frame(maxWidth: .infinity, minHeight: 79, idealHeight: 79)
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
         .fixedSize(horizontal: false, vertical: true)
-        .layoutPriority(1)
     }
 }
 
-private struct ClassicSupportButtonStyle: ButtonStyle {
+struct AboutClassicButtonStyle: ButtonStyle {
+    let palette: AboutClassicPalette
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(
-                LinearGradient(
-                    colors: configuration.isPressed
-                        ? [
-                            Color(red: 0.95, green: 0.62, blue: 0.06),
-                            Color(red: 1.0, green: 0.84, blue: 0.18)
-                        ]
-                        : [
-                            Color(red: 1.0, green: 0.88, blue: 0.20),
-                            Color(red: 1.0, green: 0.67, blue: 0.08)
-                        ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(red: 0.32, green: 0.24, blue: 0.08), lineWidth: 2)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.45), radius: 0, x: 3, y: 4)
-            .offset(y: configuration.isPressed ? 2 : 0)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(palette.text)
+            .padding(.horizontal, 20)
+            .frame(minWidth: 84, minHeight: 36)
+            .background(palette.canvas)
+            .overlay(alignment: .top) { Rectangle().fill(configuration.isPressed ? palette.shadow : palette.highlight).frame(height: 2) }
+            .overlay(alignment: .leading) { Rectangle().fill(configuration.isPressed ? palette.shadow : palette.highlight).frame(width: 2) }
+            .overlay(alignment: .bottom) { Rectangle().fill(configuration.isPressed ? palette.highlight : palette.shadow).frame(height: 2) }
+            .overlay(alignment: .trailing) { Rectangle().fill(configuration.isPressed ? palette.highlight : palette.shadow).frame(width: 2) }
+            .offset(x: configuration.isPressed ? 1 : 0, y: configuration.isPressed ? 1 : 0)
     }
 }
 
-private struct ClassicWindowsButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var theme: HwattakPDFTheme { HwattakPDFTheme(colorScheme: colorScheme) }
-
-    private func gradientColors(isPressed: Bool) -> [Color] {
-        if colorScheme == .dark {
-            return isPressed ? [theme.panel, theme.card] : [theme.card, theme.panel]
+/// Apply only to the dedicated About window, keeping native window lifetime,
+/// keyboard handling and accessibility while using the custom title controls.
+private struct AboutWindowChrome: NSViewRepresentable {
+    let title: String
+    let color: NSColor
+    func makeNSView(context: Context) -> ChromeView {
+        let view = ChromeView()
+        view.dialogTitle = title
+        view.dialogColor = color
+        return view
+    }
+    func updateNSView(_ view: ChromeView, context: Context) {
+        view.dialogTitle = title
+        view.dialogColor = color
+        view.applyChrome()
+    }
+    final class ChromeView: NSView {
+        var dialogTitle = ""
+        var dialogColor = NSColor.windowBackgroundColor
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); applyChrome() }
+        func applyChrome() {
+            guard let window else { return }
+            window.title = dialogTitle
+            window.backgroundColor = dialogColor
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            // A transparent native title bar can still draw its separator over
+            // our custom title bar when content fills the window frame.
+            window.titlebarSeparatorStyle = .none
+            if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
+            for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                window.standardWindowButton(button)?.isHidden = true
+            }
         }
-        return isPressed
-            ? [Color(red: 0.84, green: 0.83, blue: 0.77), .white]
-            : [.white, Color(red: 0.88, green: 0.87, blue: 0.79)]
     }
+}
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                LinearGradient(
-                    colors: gradientColors(isPressed: configuration.isPressed),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(colorScheme == .dark ? theme.card : .white, lineWidth: 3)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        colorScheme == .dark ? theme.border : Color(red: 0.54, green: 0.54, blue: 0.57),
-                        lineWidth: 2
-                    )
-                    .padding(2)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.45), radius: 0, x: 3, y: 4)
-            .offset(y: configuration.isPressed ? 2 : 0)
+private struct AboutTitlebarDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ view: DragView, context: Context) {}
+    final class DragView: NSView {
+        override var acceptsFirstResponder: Bool { false }
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
 }

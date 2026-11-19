@@ -23,13 +23,19 @@ struct PDFNativeSelectionProxy {
             let writer = PDFSelectionPageWriter()
             let data = try writer.write(page: reference, rotation: source.rotation,
                 media: source.bounds(for: .mediaBox), crop: source.bounds(for: .cropBox))
-            guard writer.repairedMetricCount > 0,
+            guard writer.repairedMetricCount > 0 || writer.repairedFormCount > 0,
                   let document = PDFDocument(data: data),
                   let page = document.page(at: 0),
                   let sourceText = source.string, !sourceText.isEmpty,
-                  let proxyText = page.string,
-                  Self.equivalentText(sourceText, proxyText),
-                  Self.hasUsableGeometry(page) else { return nil }
+                  let proxyText = page.string, !proxyText.isEmpty,
+                  // A leaked form transform can clip valid source text out of
+                  // the crop box and scramble reading order. Closing only the
+                  // form's saves restores that text without changing any text
+                  // operator, font encoding, or glyph. Metric-only repairs
+                  // retain the stricter extracted-word equivalence check.
+                  (writer.repairedFormCount > 0 || Self.equivalentText(sourceText, proxyText)),
+                  Self.hasUsableGeometry(page),
+                  !PDFFormGraphicsStateInspector.hasUnbalancedForm(on: page) else { return nil }
             return Self(document: document, page: page)
         } catch {
             // Unusual resources, limits, or extraction differences preserve
@@ -66,7 +72,8 @@ struct PDFNativeSelectionProxy {
 }
 
 /// Serializing the original PDF objects preserves the original font encodings,
-/// ToUnicode maps, content bytes and coordinates. PDFPage.dataRepresentation()
+/// ToUnicode maps, text operators and coordinates. Unclosed form graphics saves
+/// are closed at the end of that form only. PDFPage.dataRepresentation()
 /// may redraw/re-encode glyphs and change extracted characters, so it cannot
 /// serve as the basis of this selection-only repair.
 private final class PDFSelectionPageWriter {
@@ -78,9 +85,17 @@ private final class PDFSelectionPageWriter {
     private var storedBytes = 0
     private var inlineBytes = 0
     private var visits = 0
+    private var parentContent: CGPDFContentStreamRef?
     private(set) var repairedMetricCount = 0
+    private(set) var repairedFormCount = 0
 
     func write(page: CGPDFPage, rotation: Int, media: CGRect, crop: CGRect) throws -> Data {
+        let content = CGPDFContentStreamCreateWithPage(page)
+        parentContent = content
+        defer {
+            parentContent = nil
+            CGPDFContentStreamRelease(content)
+        }
         guard let dictionary = page.dictionary,
               let contents = object(dictionary, "Contents"),
               let resources = inheritedObject(dictionary, "Resources") else {
@@ -148,7 +163,7 @@ private final class PDFSelectionPageWriter {
             try reserveInlineBytes(length * 2 + 2)
             return "<" + hex(UnsafeBufferPointer(start: bytes, count: length)) + ">"
         case .array, .dictionary, .stream:
-            let key = UInt(bitPattern: object.rawValue)
+            let key = pdfReferenceIdentity(object)
             if let id = identifiers[key] { return "\(id) 0 R" }
             guard bodies.count < Self.maximumObjects else { throw Failure.limitExceeded }
             let id = bodies.count + 1
@@ -187,7 +202,17 @@ private final class PDFSelectionPageWriter {
                     guard let decoded = CGPDFStreamCopyData(stream, &format), format == .raw else {
                         throw Failure.invalidObject
                     }
-                    let bytes = decoded as Data
+                    var bytes = decoded as Data
+                    guard bytes.count <= Self.maximumBytes - storedBytes else { throw Failure.limitExceeded }
+                    if dictionaryName(dictionary, "Subtype") == "Form" {
+                        let missing = try missingGraphicsRestores(in: stream, dictionary: dictionary)
+                        if missing > 0 {
+                            // Leading newline also terminates a trailing PDF
+                            // comment before the appended closing operators.
+                            bytes.append(Data(("\n" + String(repeating: "Q\n", count: missing)).utf8))
+                            repairedFormCount += 1
+                        }
+                    }
                     guard bytes.count <= Self.maximumBytes - storedBytes else { throw Failure.limitExceeded }
                     var output = try encodeDictionary(dictionary, depth: depth + 1,
                         dropping: ["Length", "Filter", "DecodeParms", "F", "FFilter", "FDecodeParms"],
@@ -204,6 +229,46 @@ private final class PDFSelectionPageWriter {
         }
     }
 
+    private func missingGraphicsRestores(in stream: CGPDFStreamRef,
+                                        dictionary: CGPDFDictionaryRef) throws -> Int {
+        guard let parentContent else { throw Failure.invalidObject }
+        let content = CGPDFContentStreamCreateWithStream(stream, dictionary, parentContent)
+        defer { CGPDFContentStreamRelease(content) }
+        let state = FormGraphicsState()
+        let table = CGPDFOperatorTableCreate()!
+        defer { CGPDFOperatorTableRelease(table) }
+        CGPDFOperatorTableSetCallback(table, "q") { scanner, info in
+            guard let info else { return }
+            let state = Unmanaged<FormGraphicsState>.fromOpaque(info).takeUnretainedValue()
+            state.saves += 1
+            if state.saves > 4_096 {
+                state.invalid = true
+                CGPDFScannerStop(scanner)
+            }
+        }
+        CGPDFOperatorTableSetCallback(table, "Q") { scanner, info in
+            guard let info else { return }
+            let state = Unmanaged<FormGraphicsState>.fromOpaque(info).takeUnretainedValue()
+            guard state.saves > 0 else {
+                // Adding saves at the start could change clipping/transforms.
+                // An unmatched restore must retain the visible OCR fallback.
+                state.invalid = true
+                CGPDFScannerStop(scanner)
+                return
+            }
+            state.saves -= 1
+        }
+        let scanner = CGPDFScannerCreate(content, table, Unmanaged.passUnretained(state).toOpaque())
+        defer { CGPDFScannerRelease(scanner) }
+        guard CGPDFScannerScan(scanner), !state.invalid else { throw Failure.invalidObject }
+        return state.saves
+    }
+
+    private final class FormGraphicsState {
+        var saves = 0
+        var invalid = false
+    }
+
     private func encodeDictionary(_ dictionary: CGPDFDictionaryRef, depth: Int,
                                   dropping: Set<String> = [], additions: [String] = []) throws -> Data {
         guard CGPDFDictionaryGetCount(dictionary) < 4_096 else { throw Failure.limitExceeded }
@@ -215,9 +280,9 @@ private final class PDFSelectionPageWriter {
                 guard strnlen(key, 4_096) < 4_096 else { throw Failure.limitExceeded }
                 let keyString = String(cString: key)
                 if !dropping.contains(keyString) {
-                    let encoded = try repairs[keyString].map { number($0) }
-                        ?? encode(value, depth: depth)
-                    values.append(try name(key) + " " + encoded)
+                    let encoded = try repairs[keyString].map { self.number($0) }
+                        ?? self.encode(value, depth: depth)
+                    values.append(try self.name(key) + " " + encoded)
                 }
                 return true
             } catch let caught {
