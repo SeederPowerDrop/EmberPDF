@@ -8,7 +8,7 @@ EmberPDF는 HwattakPDF의 새 이름입니다. 초기 소스와 릴리스 이력
 
 구독과 계정 없이도 내 Mac에서 핵심 기능이 동작하는 네이티브 PDF 학습·편집기 프로토타입입니다. 읽기·편집·OCR은 로컬 우선이며, 외부 AI는 사용자가 직접 API 키를 연결하고 요청별 전송 내용을 확인한 경우에만 사용합니다.
 
-현재 소스 버전은 **0.9.0 (build 90) Developer Preview**입니다. 앱 표시 이름과 SwiftPM 패키지·실행 제품은 **EmberPDF**입니다. 내부 Swift 모듈과 소스·테스트 경로는 기존 `HwattakPDF` 이름을 유지합니다. 홈과 작업 화면에는 따뜻한 숯빛·미색 바탕과 절제된 앰버 강조색을 사용합니다. 활성 탭·페이지와 키보드 포커스를 구분하고 집중 보기에 쉽게 접근할 수 있습니다. [Ember 화면 개선과 검증](Documentation/EMBER-DESIGN-2026-10-05.md)을 참고하세요. [2026-10-01 소스 갱신 기록](Documentation/SOURCE-UPDATE-2026-10-01.md)에 화면 간소화, 읽기 조작, OCR·번역과 검증 결과를 정리했습니다. GitHub Releases의 마지막 다운로드 배포본은 **0.8.0 (build 18)**이며, 0.9.0은 로컬 빌드와 소스 갱신 단계입니다.
+현재 소스 버전은 **1.0.0 (build 91) 배포 후보**입니다. 앱 표시 이름과 SwiftPM 패키지·실행 제품은 **EmberPDF**입니다. 내부 Swift 모듈과 소스·테스트 경로는 기존 `HwattakPDF` 이름을 유지합니다. 홈과 작업 화면에는 따뜻한 숯빛·미색 바탕과 절제된 앰버 강조색을 사용합니다. 활성 탭·페이지와 키보드 포커스를 구분하고 집중 보기에 쉽게 접근할 수 있습니다. [Ember 화면 개선과 검증](Documentation/EMBER-DESIGN-2026-10-05.md)을 참고하세요. [2026-10-01 소스 갱신 기록](Documentation/SOURCE-UPDATE-2026-10-01.md)에 화면 간소화, 읽기 조작, OCR·번역과 검증 결과를 정리했습니다. GitHub Releases의 마지막 다운로드 배포본은 **0.8.0 (build 18)**이며, 0.9.0은 로컬 빌드와 소스 갱신 단계입니다.
 
 **build 85 (2026-10-18)**는 분리한 저장 사본에서도 검증된 원래 PDF 그래프를 사용해 독일 경기장 책의 비동기 전체 저장을 보완합니다. 최종 고유 회귀 2,116개 중 2,096개 통과·조건부 20개 건너뜀·실패 0개입니다. 원본 30개의 추출·병합 출력 61개를 실제 비동기로 재저장해 25항목과 270/270 픽셀 일치를 확인했고, 별도 357쪽 저장본도 모든 페이지 픽셀이 일치합니다. 패키지 검증 후 설치했고 실제 앱 4권·8개 저장본도 외부 검사를 통과했습니다. 기존 작업 공간 3개·탭 26개·문서 24개와 설정을 보존해 재실행했고 build 85를 실행해 두었습니다.
 
@@ -244,7 +244,7 @@ EmberPDF의 소스 코드, 문서와 권리가 확인된 프로젝트 자산은 
 
 ## 배포 패키지와 설치
 
-GitHub 프리릴리스용 후보의 파일명은 `EmberPDF-0.9.0-build90-macOS-arm64.dmg`입니다. SHA-256 확인, Applications로 복사하는 방법, 첫 실행 경고는 [DMG 설치 안내](Documentation/INSTALL-DMG-macOS.txt)에 있습니다.
+GitHub 프리릴리스용 후보의 파일명은 `EmberPDF-1.0.0-build91-macOS-arm64.dmg`입니다. SHA-256 확인, Applications로 복사하는 방법, 첫 실행 경고는 [DMG 설치 안내](Documentation/INSTALL-DMG-macOS.txt)에 있습니다.
 
 이번 로컬 배포 파일은 `EmberPDF-0.9.0-macOS-arm64.zip`입니다. 함께 제공한 SHA-256 값과 비교한 뒤 압축을 풀고 `EmberPDF.app`을 응용 프로그램 폴더에 넣으세요. 기존 앱을 바꿀 때는 열린 문서를 저장하고 앱을 종료한 뒤 교체합니다. [GitHub Releases](https://github.com/SeederPowerDrop/HwattakPDF/releases)의 마지막 공개 배포본은 0.8.0이며, 이번 소스 갱신으로 0.9.0 Release 자산이 추가되는 것은 아닙니다.
 

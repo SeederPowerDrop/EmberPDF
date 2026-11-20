@@ -1,6 +1,6 @@
 # EmberPDF 플러그인 설치와 형식 참조
 
-> 현재 대상: **0.9.0 (build 90)** · 배포 전 검증 중. 아래 이전 빌드 기록은 이력이며, 최종 설치·지원 범위는 [품질 검사 기록](QUALITY_REPORT.md)을 확인하세요.
+> 현재 대상: **1.0.0 (build 91)** · 배포 전 검증 중. 아래 이전 빌드 기록은 이력이며, 최종 설치·지원 범위는 [품질 검사 기록](QUALITY_REPORT.md)을 확인하세요.
 
 처음 제작한다면 [제작 가이드](PLUGIN-DEVELOPMENT.md)에서 시작한다. [English](PLUGIN-DEVELOPMENT.en.md) · [호스트·실행형 SDK API](PLUGIN-HOST-API.md) · [보안](PLUGIN-SECURITY.md) · [호환성/확장 제안](PLUGIN-COMPATIBILITY.md) · [예제 지도](../Examples/Plugins/README.md). 이 문서는 공통 설치 관리, schema 1·2의 기존 형식과 schema 3~6 확장을 함께 설명한다.
 

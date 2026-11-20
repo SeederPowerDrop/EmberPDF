@@ -1,7 +1,7 @@
-EmberPDF 0.9.0 (build 90) — macOS 설치 안내
+EmberPDF 1.0.0 (build 91) — macOS 설치 안내
 
 지원 환경: Apple Silicon Mac, macOS 14 이상
-배포 파일: EmberPDF-0.9.0-build90-macOS-arm64.dmg
+배포 파일: EmberPDF-1.0.0-build91-macOS-arm64.dmg
 
 이 배포본은 개발용 ad-hoc 서명이며 Apple Developer ID 서명과 공증을
 받지 않았습니다. DMG로 포장해도 이 상태는 바뀌지 않으며, 다른 Mac에서
@@ -42,7 +42,7 @@ https://support.apple.com/ko-kr/102445
 DMG와 함께 제공된 .sha256 파일을 같은 폴더에 두고,
 터미널에서 그 폴더로 이동한 다음 아래 명령을 실행합니다.
 
-shasum -a 256 -c EmberPDF-0.9.0-build90-macOS-arm64.dmg.sha256
+shasum -a 256 -c EmberPDF-1.0.0-build91-macOS-arm64.dmg.sha256
 
 해당 DMG 이름 뒤에 OK가 나오는지 확인합니다. FAILED 또는 파일을 찾을 수
 없다는 메시지가 나오면 설치를 진행하지 말고 파일과 위치를 다시 확인하세요.

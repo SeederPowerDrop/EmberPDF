@@ -1,6 +1,6 @@
 EmberPDF 설치 안내
 
-대상: 0.9.0 Developer Preview (build 90)
+대상: 1.0.0 Release Candidate (build 91)
 
 지원 환경
 Apple Silicon(M 시리즈) Mac, macOS 14 Sonoma 이상을 지원합니다.
