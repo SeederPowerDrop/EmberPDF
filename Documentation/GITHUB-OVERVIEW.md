@@ -8,6 +8,8 @@
 
 EmberPDF는 여러 PDF를 읽고 비교하며 공부하거나 편집할 수 있는 macOS 앱입니다. 학생·연구자와 문서를 자주 다루는 사용자가 교재의 문장을 찾고, 필기하고, 여러 자료에서 필요한 페이지를 모으는 일을 한 작업 공간에서 할 수 있도록 만들었습니다. 기본 읽기·검색·편집·OCR은 Mac에서 동작합니다. 소스는 [MPL-2.0](../LICENSE)으로 공개합니다.
 
+EmberPDF는 HwattakPDF의 새 이름입니다. 초기 소스와 릴리스 이력은 기존 GitHub 저장소에서 볼 수 있습니다. [HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
+
 ### 개발 과정
 
 SwiftUI와 AppKit으로 작업 공간을 만들고 PDFKit으로 문서 보기와 탐색을 구현했습니다. 이후 탭·비교 보기·학습 도구를 추가하고, Apple Vision OCR과 PDFium을 이용한 일부 PDF 본문 편집으로 범위를 넓혔습니다. build 90에서는 대형 PDF의 비동기 저장과 수정한 페이지의 접근성 태그 보존을 집중적으로 검토했습니다. 원본 태그 연결을 확인할 수 없으면 해당 저장을 거부합니다.
@@ -33,6 +35,8 @@ DMG는 Apple Silicon 및 macOS 14 이상을 대상으로 합니다. 체크섬, �
 ### Purpose
 
 EmberPDF is a macOS workspace for reading, comparing, studying, and editing PDFs. It gives students, researchers, and people who work with documents one place to find passages, annotate source material, and assemble pages from different files. Core reading, search, editing, and OCR run on the Mac. The source is available under the [MPL-2.0](../LICENSE).
+
+EmberPDF continues the project originally released as HwattakPDF. Its earlier source and releases are available in the original GitHub repository. [HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
 
 ### Development
 
@@ -60,6 +64,8 @@ The DMG targets Apple Silicon and macOS 14 or later. Its checksum, mount, and co
 
 EmberPDF est un espace de travail macOS pour lire, comparer, étudier et modifier des PDF. Il permet aux étudiants, aux chercheurs et aux personnes qui travaillent régulièrement sur des documents de retrouver des passages, d’annoter leurs sources et de réunir des pages issues de plusieurs fichiers. La lecture, la recherche, la modification et l’OCR de base s’effectuent sur le Mac. Le code source est disponible sous licence [MPL-2.0](../LICENSE).
 
+EmberPDF est le nouveau nom du projet HwattakPDF. Le code et les versions antérieures restent consultables dans le dépôt GitHub d’origine. [HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
+
 ### Développement
 
 L’interface s’appuie sur SwiftUI et AppKit. PDFKit assure l’affichage et la navigation. Le projet s’est ensuite enrichi d’onglets, d’une vue côte à côte, d’outils d’étude, de l’OCR avec Apple Vision et de la modification de certains textes avec PDFium. Le build 90 a concentré les efforts sur l’enregistrement des gros PDF en arrière-plan et sur la conservation des balises d’accessibilité des pages modifiées. L’application refuse l’enregistrement si elle ne peut pas vérifier les liens concernés dans la structure de balisage d’origine.
@@ -86,6 +92,8 @@ Le DMG vise les Mac Apple Silicon sous macOS 14 ou ultérieur. La somme de contr
 
 EmberPDF — рабочая среда macOS для чтения, сравнения, изучения и редактирования PDF. Студенты, исследователи и другие пользователи могут искать нужные фрагменты, аннотировать материалы и собирать страницы из разных файлов в одном месте. Основные функции чтения, поиска, редактирования и OCR выполняются на Mac. Исходный код доступен по лицензии [MPL-2.0](../LICENSE).
 
+EmberPDF продолжает проект, который первоначально выходил под названием HwattakPDF. Ранние версии и исходный код доступны в первоначальном репозитории на GitHub. [HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
+
 ### Разработка
 
 Интерфейс построен на SwiftUI и AppKit, а просмотр и навигация опираются на PDFKit. Затем появились вкладки, просмотр документов рядом, учебные инструменты, OCR на основе Apple Vision и редактирование поддерживаемого текста с помощью PDFium. В сборке 90 основное внимание уделялось фоновому сохранению больших PDF и сохранению тегов доступности на изменённых страницах. Приложение отклоняет сохранение, если не удаётся проверить связи в исходной структуре тегов.
@@ -111,6 +119,8 @@ DMG предназначен для Mac с Apple Silicon и macOS 14 или но
 ### 项目目标
 
 EmberPDF 是一款用于阅读、对照、学习和编辑 PDF 的 macOS 应用。学生、研究人员和经常处理文档的用户可以在同一工作区查找段落、批注资料，并从多个文件中整理所需页面。基本阅读、搜索、编辑和 OCR 在 Mac 本地运行。源代码采用 [MPL-2.0](../LICENSE) 许可证。
+
+EmberPDF 是原 HwattakPDF 项目的新名称。早期源代码和历史版本可在原 GitHub 仓库中查看。[HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
 
 ### 开发过程
 
