@@ -240,6 +240,8 @@ EmberPDF의 소스 코드, 문서와 권리가 확인된 프로젝트 자산은 
 
 ## 배포 패키지와 설치
 
+GitHub 프리릴리스용 후보의 파일명은 `EmberPDF-0.9.0-build90-macOS-arm64.dmg`입니다. SHA-256 확인, Applications로 복사하는 방법, 첫 실행 경고는 [DMG 설치 안내](Documentation/INSTALL-DMG-macOS.txt)에 있습니다.
+
 이번 로컬 배포 파일은 `EmberPDF-0.9.0-macOS-arm64.zip`입니다. 함께 제공한 SHA-256 값과 비교한 뒤 압축을 풀고 `EmberPDF.app`을 응용 프로그램 폴더에 넣으세요. 기존 앱을 바꿀 때는 열린 문서를 저장하고 앱을 종료한 뒤 교체합니다. [GitHub Releases](https://github.com/SeederPowerDrop/HwattakPDF/releases)의 마지막 공개 배포본은 0.8.0이며, 이번 소스 갱신으로 0.9.0 Release 자산이 추가되는 것은 아닙니다.
 
 0.9.0은 **Apple Silicon 전용**, **macOS 14 이상**이며 Apple Developer ID 서명과 공증을 받지 않은 ad-hoc 빌드입니다. 최초 실행이 차단되면 출처와 체크섬을 확인한 뒤 `시스템 설정 > 개인정보 보호 및 보안`의 앱 실행 허용 절차를 사용할 수 있습니다. 자세한 설치 안내는 [릴리스 노트](Documentation/RELEASE-NOTES-0.9.0.md), macOS 절차는 [Apple 공식 안내](https://support.apple.com/ko-kr/guide/mac-help/mh40616/mac)를 확인하세요.
