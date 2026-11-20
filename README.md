@@ -1,5 +1,7 @@
 # EmberPDF
 
+[프로젝트 소개 및 검증 · Project overview and validation · Présentation · Обзор · 项目介绍](Documentation/GITHUB-OVERVIEW.md)
+
 **잉걸불처럼 오래도록, 든든한 PDF 도구.**
 
 구독과 계정 없이도 내 Mac에서 핵심 기능이 동작하는 네이티브 PDF 학습·편집기 프로토타입입니다. 읽기·편집·OCR은 로컬 우선이며, 외부 AI는 사용자가 직접 API 키를 연결하고 요청별 전송 내용을 확인한 경우에만 사용합니다.
