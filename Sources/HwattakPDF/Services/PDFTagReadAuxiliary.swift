@@ -292,8 +292,9 @@ final class PDFTagReadAuxiliary {
         defer { try? errors.fileHandleForReading.close(); try? errors.fileHandleForWriting.close() }
         var receipt = Data(), identity: WorkerIdentity?, failure: Error?, controlClosed = false
         let began = ProcessInfo.processInfo.systemUptime
+        let deadline = began + limits.seconds
         try PDFSaveCancellation.checkCurrent()
-        guard limits.seconds > 0, ProcessInfo.processInfo.systemUptime - began < limits.seconds else { throw Refusal.limit }
+        guard limits.seconds > 0, ProcessInfo.processInfo.systemUptime < deadline else { throw Refusal.limit }
         try process.run()
         // A child that finishes before identity capture cannot qualify. It is
         // still reaped; no reused/unobserved PID is ever used for signalling.
@@ -329,22 +330,22 @@ final class PDFTagReadAuxiliary {
                 try PDFSaveCancellation.checkCurrent()
                 try drain()
                 guard try FileIdentity(outputFD).size <= limits.outputBytes else { throw Refusal.limit }
-                let observed = WorkerIdentity.read(process.processIdentifier)
-                if observed == nil {
-                    // libproc stops exposing a child just before Foundation's
-                    // termination notification arrives. Require confirmed
-                    // Process termination (then exit status + exact receipt),
-                    // never infer completion from an unavailable observation.
-                    let notificationDeadline = ProcessInfo.processInfo.systemUptime + 0.1
-                    while process.isRunning && ProcessInfo.processInfo.systemUptime < notificationDeadline {
-                        try PDFSaveCancellation.checkCurrent()
-                        Thread.sleep(forTimeInterval: 0.005)
-                    }
-                    if !process.isRunning { break }
+                var observed = WorkerIdentity.read(process.processIdentifier)
+                // A libproc sample can be missing while the child is still
+                // running or while Foundation is registering its exit. Retry
+                // within the existing grace period and the worker deadline.
+                let observationDeadline = min(deadline, ProcessInfo.processInfo.systemUptime + 0.1)
+                while observed == nil && process.isRunning {
+                    try PDFSaveCancellation.checkCurrent()
+                    let remaining = observationDeadline - ProcessInfo.processInfo.systemUptime
+                    guard remaining > 0 else { break }
+                    Thread.sleep(forTimeInterval: min(0.005, remaining))
+                    observed = WorkerIdentity.read(process.processIdentifier)
                 }
+                if observed == nil && !process.isRunning { break }
                 guard let identity, let observed, observed.0 == identity,
                       observed.1 <= limits.residentBytes,
-                      ProcessInfo.processInfo.systemUptime - began < limits.seconds else {
+                      ProcessInfo.processInfo.systemUptime < deadline else {
                     #if DEBUG
                     if ProcessInfo.processInfo.environment["EMBER_NATIVE_STAGING_TRACE"] == "1" {
                         let row: [String: Any] = ["helperLimitRefusal": true, "identityCaptured": identity != nil,
