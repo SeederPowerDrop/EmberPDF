@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#161d18">
+  <meta name="description" content="EmberPDF 플러그인의 기능, 1.0.0 설치 방법, GitHub 소스와 직접 만드는 방법을 소개합니다.">
+  <title>플러그인 · EmberPDF</title>
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header wrap">
+    <a class="brand" href="../" aria-label="EmberPDF 첫 화면"><img src="../assets/icon.png" width="36" height="36" alt=""><span>EmberPDF</span></a>
+    <nav aria-label="주 메뉴">
+      <a href="../#features">기능</a>
+      <a href="./" aria-current="page">플러그인</a>
+      <a href="../journal/">개발 일지</a>
+      <a href="https://github.com/SeederPowerDrop/EmberPDF">GitHub</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap journal">
+    <div class="journal-heading">
+      <h1>EmberPDF 플러그인</h1>
+      <p class="lead">PDF를 읽는 자리에서 번역하고, 노트를 쓰고, 복습 카드를 만들 수 있습니다. 필요한 도구를 골라 설치하거나, 앱을 다시 빌드할 필요 없이 나만의 기능을 추가할 수 있습니다.</p>
+      <nav class="plugin-links" aria-label="플러그인 페이지 목차">
+        <a class="text-link" href="#bundled">기본 플러그인</a>
+        <a class="text-link" href="#examples">별도 설치 예제</a>
+        <a class="text-link" href="#create">직접 만들기</a>
+      </nav>
+    </div>
+
+    <section class="plugin-section" id="bundled" aria-labelledby="bundled-title">
+      <h2 id="bundled-title">1.0.0 기본 플러그인 13개</h2>
+      <p>앱의 <strong>플러그인 → 플러그인 관리</strong>를 열고 <strong>EmberPDF 기본 플러그인</strong>에서 원하는 항목의 권한을 확인한 뒤 설치하세요. 아래 이름을 누르면 각 패키지의 공개 소스가 열립니다.</p>
+      <ul class="plugin-catalog">
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/PageTranslator.hwattakplugin">페이지 번역</a></h3><p>현재 페이지의 배치 위에 번역문을 표시합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/TranslationCompanion.hwattakplugin">번역 도우미</a></h3><p>선택 문장이나 페이지를 검토한 뒤 번역 서비스에서 읽습니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/HoverTranslator.hwattakplugin">Hover Translator</a></h3><p>마우스를 올린 단어를 Mac에서 번역합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/MarkdownNotebook.hwattakplugin">Markdown Notebook</a></h3><p>PDF 옆에서 로컬 노트나 Markdown 파일을 엽니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/PageClipper.hwattakplugin">Page Clipper</a></h3><p>페이지의 일부를 잘라 PNG로 복사하거나 저장합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/RelatedDocuments.hwattakplugin">Related Documents</a></h3><p>이미 열린 다른 PDF에서 관련 구절을 찾고 이동합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/WebBrowser.hwattakplugin">웹 브라우저</a></h3><p>PDF 옆 패널에서 검색하거나 공개 HTTPS 사이트를 엽니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/StudyMarkup.hwattakplugin">Study Markup</a></h3><p>하이라이트와 밑줄 색상 프리셋을 적용합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/TabletTools.hwattakplugin">Tablet Tools</a></h3><p>태블릿이나 Sidecar 입력으로 필기할 때 학습 도구에 접근합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/ReadingNavigation.hwattakplugin">Reading Navigation</a></h3><p>긴 문서에서 페이지를 이동하고 읽기 모드를 바꿉니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/ReadingColors.hwattakplugin">Reading Colors</a></h3><p>앱과 PDF 용지의 읽기 색상을 조정합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/ReadingLab.hwattakplugin">Reading Lab · 독서 실험실</a></h3><p>페이지의 단어 빈도를 살펴보고 생각을 메모합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/ResearchTrail.hwattakplugin">Research Trail · 읽기 여정</a></h3><p>어떤 문서와 페이지를 읽었는지 기록합니다.</p></li>
+      </ul>
+    </section>
+
+    <section class="plugin-section" id="examples" aria-labelledby="examples-title">
+      <h2 id="examples-title">GitHub에서 받아 설치하는 예제 7개</h2>
+      <p><a href="https://github.com/SeederPowerDrop/EmberPDF/releases/download/v1.0.0/EmberPDF-1.0.0-build91-source.zip">1.0.0 소스 ZIP</a>을 풀면 <code>Examples/Plugins</code>에 예제가 있습니다. 앱의 <strong>플러그인 관리 → 플러그인 설치</strong>에서 원하는 <code>.hwattakplugin</code> 폴더를 선택하세요.</p>
+      <ul class="plugin-catalog">
+        <li id="ember-recall"><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/EmberRecall.hwattakplugin">Ember Recall · 복습 카드</a></h3><p>선택한 문장으로 로컬 질문·답 카드를 만들고, 답을 가려 복습합니다. 원문 탭이 열려 있으면 해당 페이지로 돌아갈 수 있습니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/HelloEmber.hwattakplugin">Hello Ember</a></h3><p>명령, 버튼이 있는 패널, 창마다 유지되는 카운터를 만드는 첫 JavaScript 예제입니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/CommunityStarter.hwattakplugin">Community Starter</a></h3><p>하이라이트, 밑줄, 펜, 학습 모드와 페이지 이동 명령을 한곳에 모읍니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/OfflineChecklist.hwattakplugin">Offline Checklist</a></h3><p>문서 내용이나 네트워크 접근 권한 없이 학습 체크리스트를 보여줍니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/MarkdownQuote.hwattakplugin">Markdown Quote</a></h3><p>선택 구절과 페이지 번호를 Markdown 인용문으로 복사합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/QuickCitation.hwattakplugin">Quick Citation</a></h3><p>짧은 인용을 표시하거나 복사하고, 사용자 확인 후 선택문을 웹에서 검색합니다.</p></li>
+        <li><h3><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/ReferenceSearch.hwattakplugin">Reference Search</a></h3><p>사용자 확인 후 선택 문장을 Wikipedia 또는 Google Scholar에서 검색합니다.</p></li>
+      </ul>
+      <p><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/YouTubeStudy.hwattakplugin">YouTube Study</a>는 PDF를 읽으면서 학습 영상을 보는 아이디어를 담은 검토용 소스입니다. 1.0.0에서는 이 예제를 설치할 수 없습니다.</p>
+    </section>
+
+    <section class="plugin-section" id="create" aria-labelledby="create-title">
+      <h2 id="create-title">직접 만들기</h2>
+      <p>선택한 글을 복사하거나 검색을 열어 주는 간단한 기능은 <code>manifest.json</code>에 동작을 정의하면 됩니다. 고유한 명령·화면·저장 기능이 필요하다면 JavaScript로 구현할 수 있습니다.</p>
+      <ol class="plugin-steps">
+        <li><a href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins/HelloEmber.hwattakplugin">Hello Ember 예제</a> 폴더를 복사해 <code>MyExtension.hwattakplugin</code>으로 이름을 바꿉니다.</li>
+        <li><code>manifest.json</code>에 고유한 <code>identifier</code>, 표시 이름, 작성자와 기능에 필요한 권한을 적습니다.</li>
+        <li><code>main.js</code>에서 EmberPDF가 제공하는 API로 명령과 창 안의 화면을 만들고, 코드가 바뀔 때마다 <code>shasum -a 256 main.js</code> 결과를 <code>runtime.sha256</code>에 반영합니다.</li>
+        <li>플러그인 관리에서 폴더를 설치한 뒤 <kbd>⇧⌘P</kbd>로 명령을 실행해 확인합니다.</li>
+      </ol>
+      <div class="plugin-links">
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/blob/main/Documentation/PLUGIN-DEVELOPMENT.md">단계별 제작 가이드</a>
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/blob/main/Documentation/PLUGIN-HOST-API.md">API 문서</a>
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/tree/v1.0.0/Examples/Plugins">1.0.0 전체 소스</a>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-layout">
+      <p><strong>EmberPDF</strong> · MPL-2.0</p>
+      <nav aria-label="프로젝트 링크">
+        <a href="../">앱 소개</a>
+        <a href="../journal/">개발 일지</a>
+        <a href="https://github.com/SeederPowerDrop/EmberPDF/issues">문제 제보</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

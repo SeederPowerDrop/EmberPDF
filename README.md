@@ -18,7 +18,7 @@ Ember는 오랫동안 은은하게 타는 잉걸불이라는 뜻입니다. 오�
 - **스캔 문서 OCR** · Apple Vision으로 글자를 인식해 검색 가능한 PDF 만들기
 - **워크스페이스와 확장** · 주제별 작업 공간, 선택한 문장이나 페이지로 AI에 질문, 기본 및 외부 플러그인
 
-**Ember Recall · 복습 카드**는 PDF의 선택 문장으로 질문·답 카드를 만드는 수동 설치 플러그인입니다. [Ember Recall 소스와 사용법](Examples/Plugins/EmberRecall.hwattakplugin) · [설치 안내](https://seederpowerdrop.github.io/EmberPDF/#ember-recall) · [전체 플러그인 소스](Examples/Plugins)
+**플러그인으로 읽는 방식을 확장하세요.** 페이지 번역, Markdown 노트, 복습 카드 등 필요한 도구를 설치하거나 직접 만들 수 있습니다. [플러그인 소개·설치·제작 안내](https://seederpowerdrop.github.io/EmberPDF/plugins/)
 
 ## Mac에 설치하기
 

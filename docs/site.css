@@ -132,10 +132,25 @@ figcaption { margin-top: .65rem; color: var(--muted); font-size: .9rem; }
   padding-block: clamp(3.75rem, 7vw, 6.75rem);
 }
 .screen-copy h2 + p { color: var(--muted); margin-top: 1.15rem; }
-.plugin-detail { border-top: 1px solid var(--line); margin-top: 1.6rem; padding-top: 1.25rem; }
-.plugin-detail p { margin-top: .65rem; color: var(--muted); }
-.plugin-detail code { overflow-wrap: anywhere; }
-.plugin-links { display: flex; flex-wrap: wrap; gap: 0 1rem; margin-top: .35rem; }
+.plugin-links { display: flex; flex-wrap: wrap; gap: 0 1rem; margin-top: .65rem; }
+.plugin-section { border-top: 1px solid var(--line); padding-block: 2rem 2.65rem; }
+.plugin-section:last-child { padding-bottom: 0; }
+.plugin-section h2 { font-size: clamp(1.8rem, 3.4vw, 2.75rem); }
+.plugin-section > p, .plugin-steps { color: var(--muted); margin-top: .9rem; }
+.plugin-section a { color: var(--ember); }
+.plugin-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0 1.6rem;
+  margin: 1.25rem 0;
+  padding: 0;
+  list-style: none;
+}
+.plugin-catalog li { border-top: 1px solid var(--line); padding-block: 1rem; }
+.plugin-catalog h3 { font-size: 1.15rem; }
+.plugin-catalog p { color: var(--muted); margin-top: .35rem; }
+.plugin-steps { padding-inline-start: 1.4rem; }
+.plugin-steps li + li { margin-top: .55rem; }
 .install {
   display: flex;
   align-items: center;
