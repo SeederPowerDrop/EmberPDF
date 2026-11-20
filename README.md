@@ -105,7 +105,7 @@ build 23에는 **열린 PDF 갤러리**를 추가했습니다. 탭 막대의 격
 
 </details>
 
-공식 저장소: [github.com/SeederPowerDrop/HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
+공식 저장소: [EmberPDF](https://github.com/SeederPowerDrop/EmberPDF)
 
 이 앱의 코드를 공부하려면 [HwattakPDF로 배우는 앱 개발과 Rust](Documentation/Learning/README.md)를 읽어 보세요. 처음 코드를 읽는 사람을 위한 기초 0장과 본문 7장, Swift·Rust 첫 실습, 실제 코드 해설·학습 주석·연습과 해설을 담았습니다.
 
@@ -240,7 +240,7 @@ EmberPDF의 소스 코드, 문서와 권리가 확인된 프로젝트 자산은 
 공식 EmberPDF는 구독료와 광고 없이 무료로 제공합니다. 자발적인 후원은 개발과 유지보수를 이어 가는 데 도움이 되며, 후원 여부가 기능·지원·이슈 우선순위를 바꾸지는 않습니다.
 
 - 후원: [buymeacoffee.com/master_chief](https://buymeacoffee.com/master_chief)
-- 소스: [github.com/SeederPowerDrop/HwattakPDF](https://github.com/SeederPowerDrop/HwattakPDF)
+- 소스: [EmberPDF](https://github.com/SeederPowerDrop/EmberPDF)
 
 ## 배포 패키지와 설치
 
