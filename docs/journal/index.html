@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#161d18">
+  <meta name="description" content="HwattakPDF에서 EmberPDF 1.0.0까지의 개발과 실제 검증 기록입니다.">
+  <title>개발 일지 · EmberPDF</title>
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header wrap">
+    <a class="brand" href="../" aria-label="EmberPDF 첫 화면"><img src="../assets/icon.png" width="36" height="36" alt=""><span>EmberPDF</span></a>
+    <nav aria-label="주 메뉴">
+      <a href="../#features">기능</a>
+      <a href="../#screens">앱 화면</a>
+      <a href="./" aria-current="page">개발 일지</a>
+      <a href="https://github.com/SeederPowerDrop/EmberPDF">GitHub</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap journal">
+    <div class="journal-heading">
+      <h1>개발 일지</h1>
+      <p class="lead">HwattakPDF의 첫 공개부터 EmberPDF 1.0.0까지, 구현한 기능과 배포 전에 확인한 사항을 기록합니다.</p>
+    </div>
+    <div class="journal-entries">
+      <article>
+        <p class="eyebrow">EmberPDF 1.0.0 · build 91</p>
+        <h2>첫 정식 버전</h2>
+        <p>저장 보조 프로세스의 상태를 일시적으로 읽지 못하면 다시 확인하도록 수정했습니다. 357쪽 태그 PDF로 저장·재열기와 취소를 확인했고, 마운트 및 서명 검증을 마친 DMG를 공개했습니다. 검수용 사본에서 Finder로 실행해 PDF가 표시되는 것도 확인했습니다.</p>
+        <p>전체 XCTest 2,788건에서 2,754건이 통과했고 33건은 조건부로 건너뛰었습니다. 직접 저장한 PDFKit 글꼴의 권한 정보에 관한 기존 진단 1건이 실패했습니다. 앱의 저장 경로로 같은 글꼴을 두 차례 저장·재열기하는 검사는 통과했습니다.</p>
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/releases/tag/v1.0.0">1.0.0 릴리스 기록</a>
+      </article>
+      <article>
+        <p class="eyebrow">EmberPDF 0.9.0 · build 90</p>
+        <h2>편집한 페이지와 대형 PDF 저장 검증</h2>
+        <p>본문을 편집한 페이지에서 원본 접근성 태그 연결을 보존할 수 없는 경우 저장을 중단하도록 보완했습니다. 여러 문서 구조를 비교하고, 실제 PDF 30종의 추출·병합과 결과 61개의 비동기 재저장을 검증했습니다.</p>
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/blob/v1.0.0/Documentation/RELEASE-NOTES-0.9.0.md">0.9.0 개발 기록</a>
+      </article>
+      <article>
+        <p class="eyebrow">HwattakPDF 0.8.0</p>
+        <h2>PDF를 읽고 정리하는 Mac 앱</h2>
+        <p>탭, 주석, 페이지 편집, OCR을 한 창에서 다루는 개발자 프리뷰로 시작했습니다. 이후 여러 PDF를 함께 읽는 작업과 저장 검증을 보완하며 EmberPDF라는 이름으로 이어졌습니다.</p>
+        <a class="text-link" href="https://github.com/SeederPowerDrop/EmberPDF/blob/v1.0.0/Documentation/RELEASE-NOTES-0.8.0.md">0.8.0 공개 기록</a>
+      </article>
+    </div>
+    <p class="journal-archive">이전 빌드별 변경과 개발 자료는 <a href="https://github.com/SeederPowerDrop/EmberPDF/blob/main/PROJECT-HISTORY.md">전체 프로젝트 기록</a>에 있습니다.</p>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-layout">
+      <p><strong>EmberPDF</strong> · MPL-2.0</p>
+      <nav aria-label="프로젝트 링크">
+        <a href="../">앱 소개</a>
+        <a href="https://github.com/SeederPowerDrop/EmberPDF/releases">릴리스</a>
+        <a href="https://github.com/SeederPowerDrop/EmberPDF/issues">문제 제보</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

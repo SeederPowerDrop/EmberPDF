@@ -81,6 +81,18 @@ OpenAI ImageGen으로 제작한 자산은 프로젝트 소유자의 지시에 �
 | `Documentation/Images/document-comparison.jpg` | 두 예제 PDF의 좌우 비교 | `3197578e49cf883559012943ecba0b5ae30881991b19e98bc64694a1b1d13380` |
 | `Documentation/Images/page-overview.jpg` | 편집 모드의 2×2 페이지 개요 | `2e3f4dee51bb3d93d269474dd2ee90c9c7bcd4edb68cef15fdce44814ab4d8aa` |
 
+## GitHub Pages 화면
+
+EmberPDF 1.0.0 (build 91)의 읽기 및 플러그인 관리자 UI를 격리된 AppKit 창에서
+렌더링해 캡처했습니다. 읽기 화면에는 이를 위해 작성한 예제 PDF를, 플러그인 관리자에는
+1.0.0 DMG에 포함된 플러그인을 사용했습니다. 아래 파일도 MPL-2.0으로 제공합니다.
+
+| 저장소 파일 | 화면과 출처 | SHA-256 |
+| --- | --- | --- |
+| `docs/assets/reading.jpg` | 예제 PDF를 탭으로 열어 본 EmberPDF 1.0.0 읽기 화면 | `0c2b3a71a4dc33597036fce3b18b742e41b912eea9ac0a4d7bff1424cde343e6` |
+| `docs/assets/plugins.jpg` | EmberPDF 1.0.0의 번들 플러그인 목록과 설치 화면 | `7023679436f9698a296460ba1c23157d7da162e88e0ee718ec8736a3de7ef0df` |
+| `docs/assets/icon.png` | Resources/AppIcon-Ember.png에서 만든 96px 사이트 아이콘 | `f683ec6c83cded9c3329d628cd0f686ad5800c1d4eabae2b828306b5e63e1584` |
+
 ## 0.9.0 화면 미리보기 (2026-09-30)
 
 EmberPDF 이름·문구·강조색 변경 전 시작 화면과 읽기 도구 배치를 확인하기 위해 실제 SwiftUI 뷰를 렌더링했습니다.
