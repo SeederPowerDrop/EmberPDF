@@ -132,7 +132,10 @@ figcaption { margin-top: .65rem; color: var(--muted); font-size: .9rem; }
   padding-block: clamp(3.75rem, 7vw, 6.75rem);
 }
 .screen-copy h2 + p { color: var(--muted); margin-top: 1.15rem; }
-.screen-copy .text-link { margin-top: .65rem; }
+.plugin-detail { border-top: 1px solid var(--line); margin-top: 1.6rem; padding-top: 1.25rem; }
+.plugin-detail p { margin-top: .65rem; color: var(--muted); }
+.plugin-detail code { overflow-wrap: anywhere; }
+.plugin-links { display: flex; flex-wrap: wrap; gap: 0 1rem; margin-top: .35rem; }
 .install {
   display: flex;
   align-items: center;

@@ -18,6 +18,8 @@ Ember는 오랫동안 은은하게 타는 잉걸불이라는 뜻입니다. 오�
 - **스캔 문서 OCR** · Apple Vision으로 글자를 인식해 검색 가능한 PDF 만들기
 - **워크스페이스와 확장** · 주제별 작업 공간, 선택한 문장이나 페이지로 AI에 질문, 기본 및 외부 플러그인
 
+**Ember Recall · 복습 카드**는 PDF의 선택 문장으로 질문·답 카드를 만드는 수동 설치 플러그인입니다. [Ember Recall 소스와 사용법](Examples/Plugins/EmberRecall.hwattakplugin) · [설치 안내](https://seederpowerdrop.github.io/EmberPDF/#ember-recall) · [전체 플러그인 소스](Examples/Plugins)
+
 ## Mac에 설치하기
 
 공개 버전은 **EmberPDF 1.0.0 (build 91)**입니다. Apple Silicon Mac과 macOS 14 이상이 필요합니다. Apple 공증을 받지 않은 빌드이므로 첫 실행 시 macOS 보안 경고가 표시될 수 있습니다. 설치 절차와 SHA-256은 [릴리스 노트](https://github.com/SeederPowerDrop/EmberPDF/releases/tag/v1.0.0)에 있습니다.
